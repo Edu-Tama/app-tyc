@@ -1175,7 +1175,15 @@ const CONCILIA={
 
 /* Lo que se va marcando EN EL SÚPER. Vive aquí y no en el DOM: si viviera en la
    casilla, salir de la pantalla borraría media compra hecha. */
-const MARCAS={};   // nombre → {cogido, g (cantidad real si difiere), noHabia}
+/* nombre → {cogido, g (cantidad real si difiere), noHabia, quien} */
+const MARCAS={};
+/* La lista de la compra es DE LA CASA: una sola, con las cantidades de los dos
+   sumadas. Marcar un artículo no es un estado de esta pantalla, es un hecho que
+   el otro tiene que ver en su móvil mientras empuja el carro. Cuando hay base
+   de datos, hidratar.js rellena este gancho y cada marca se guarda y se
+   propaga; sin base de datos el prototipo sigue funcionando en local. */
+let GUARDAR_MARCA = null;
+let CERRAR_LISTA  = null;
 
 /* Cadenas: cada una desvía distinto de mis precios de referencia, que son de
    Mercadona. Con tres o cuatro compras el factor deja de ser una suposición. */

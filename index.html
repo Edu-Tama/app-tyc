@@ -481,7 +481,7 @@ const DIAS_ATRAS=[0,-1,-2].map(o=>{const f=fechaDe(o);
 
 /* Saber qué versión corre en cada móvil deja de ser adivinar. Cuando algo
    «no se actualiza», este número lo dice en un vistazo. */
-const VERSION_APP = 'v9 · 23 ago 2026';
+const VERSION_APP = 'v10 · 23 ago 2026';
 const TYC_CONECTADO = () => typeof TYC !== 'undefined' && !!TYC.db && !TYC.demo;
 
 /* Descarta el service worker y las cachés y recarga: la salida de emergencia
@@ -1528,6 +1528,9 @@ function cerrarSinTicket(k, est){
   C.factor=+(((C.factor*C.compras)+nuevo)/(C.compras+1)).toFixed(3);
   C.compras++;
   LISTAS[k].estado='cerrada'; LISTAS[k].cerrada='hoy';
+  /* Cerrar la lista también es de la casa: si solo se cerrara en esta pantalla,
+     el otro seguiría viéndola abierta y volvería a comprar lo mismo. */
+  if(CERRAR_LISTA) CERRAR_LISTA(k);
   COMPRAS.unshift({id:'cx'+C.compras, sitio:c, fecha:'hoy', total:pagado, fid:'lista', lineas:null, pendientes:0});
   closeSheet(); pintarCompra();
   openSheet(`<h3>Compra cerrada</h3>
@@ -2207,6 +2210,8 @@ function pedirReceta(n){
 function marcarItem(n){
   const m=MARCAS[n]=MARCAS[n]||{};
   m.cogido=!m.cogido; if(m.cogido) delete m.noHabia; else delete m.g;
+  m.quien = m.cogido ? PERFILES[P].nombre : null;
+  if(GUARDAR_MARCA) GUARDAR_MARCA(n, m);
   pintarCompra();
 }
 /* Y si el formato de esta cadena no coincide, se corrige aquí: la lista pide
@@ -2239,6 +2244,8 @@ function marcarConCantidad(n,g){
   const m=MARCAS[n]=MARCAS[n]||{};
   m.cogido=true; delete m.noHabia;
   if(i && g===i.comprado) delete m.g; else m.g=g;
+  m.quien=PERFILES[P].nombre;
+  if(GUARDAR_MARCA) GUARDAR_MARCA(n, m);
   closeSheet(); pintarCompra();
 }
 function noHabia(n){
@@ -2252,6 +2259,8 @@ const MOTIVO_FALTA={sustituido:'sustituido en el menú', pendiente:'pendiente de
 function resolverFalta(n,motivo){
   const m=MARCAS[n]=MARCAS[n]||{};
   m.noHabia=MOTIVO_FALTA[motivo]; m.cogido=false; delete m.g;
+  m.motivo=motivo; m.quien=PERFILES[P].nombre;
+  if(GUARDAR_MARCA) GUARDAR_MARCA(n, m);
   const afectadas=Object.keys(R).filter(k=>R[k].ing.some(([x])=>x===n) &&
     [...MENU,...MENU2].some(d=>MOM.some(mo=>d[mo]===k)));
   closeSheet(); pintarCompra();
@@ -2379,6 +2388,8 @@ function pintarCompra(){
         return `<div class="card">
         <div class="row" style="margin-bottom:4px"><strong style="font-size:14.5px" class="grow">${L.n} · ${L.cadencia}</strong>
           <span class="chip acc">${eur(subt)}</span></div>
+        <div class="note" style="margin:0 0 4px">Lista de los dos: las cantidades ya suman
+          vuestras dos raciones, y lo que marque cualquiera aparece en el móvil del otro.</div>
         <div class="row" style="margin:2px 0 8px">
           <span class="grow note" style="margin:0">${L.estado==='abierta'
             ? `Abierta desde el ${L.abierta} · ${Math.min(L.cogidos,n)} de ${n} cogidos`
@@ -2397,7 +2408,9 @@ function pintarCompra(){
             ${i.n} <b style="color:var(--acc-txt)">${kg(i.comprado)}</b>
             <span class="note" style="margin:0; display:block">
               ${m.noHabia?'<b style="color:var(--crit)">no había · '+m.noHabia+'</b>'
-               :difiere?`<b style="color:var(--acc-txt)">cogido ${kg(real)}</b> · la lista pedía ${kg(i.comprado)}`
+               :difiere?`<b style="color:var(--acc-txt)">cogido ${kg(real)}</b> · la lista pedía ${kg(i.comprado)}${
+                   m.quien?' · '+m.quien:''}`
+               :m.cogido?`<b style="color:var(--good-ink)">cogido${m.quien?' · '+m.quien:''}</b>`
                /* El total en gramos manda; los envases son una pista. Poner «3 × 240 g»
                   delante hace que se compren 3 unidades y no 3 envases: pasó de verdad
                   con el atún en la primera compra. */

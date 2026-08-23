@@ -125,6 +125,124 @@ async function hidratarObjetivos(){
   return OBJETIVOS[yo].length;
 }
 
+
+/* ── la lista de la compra, de la casa ─────────────────────────────────────
+   La lista se calcula UNA VEZ y se guarda. Antes cada móvil la recalculaba de
+   su propio menú, y bastaba con que los menús no coincidieran para que uno
+   pidiera 4 kg de patata y el otro 2. Ahora hay una lista por casa: el primero
+   que abre la app la crea, el segundo lee la que hay, y lo que marque
+   cualquiera de los dos aparece en el otro.                                  */
+const LISTA_ID = {fresco:null, grande:null};
+const ITEM_ID  = {};        // nombre de ingrediente → id de la fila
+
+async function hidratarCompra(){
+  const {data: ings} = await TYC.db.from('ingredients').select('id, nombre');
+  const idIng = Object.fromEntries((ings || []).map(i => [i.nombre, i.id]));
+  const lista = listaCompra();
+
+  for (const [tipo, L] of Object.entries(LISTAS)){
+    /* ¿hay ya una lista abierta de este tipo? */
+    let {data: fila} = await TYC.db.from('shopping_lists')
+      .select('id, abierta_at, estado')
+      .eq('tipo', tipo).eq('estado', 'abierta').maybeSingle();
+
+    if (!fila){
+      const {data: creada} = await TYC.db.from('shopping_lists')
+        .insert({household_id: SESION.household, tipo, estado: 'abierta'})
+        .select('id, abierta_at, estado').maybeSingle();
+      if (creada){
+        fila = creada;
+        /* Los artículos se escriben con las cantidades ya sumadas de los dos.
+           A partir de aquí la lista no se recalcula: se lee. */
+        const filas = L.secciones.flatMap(sec => (lista[sec] || []).map(i => ({
+          shopping_list_id: creada.id, ingredient_id: idIng[i.n],
+          cantidad: i.comprado, unidad: 'g', seccion_super: sec,
+          envases: i.envases, formato_g: i.formato
+        }))).filter(f => f.ingredient_id);
+        if (filas.length) await TYC.db.from('shopping_items').insert(filas);
+      } else {
+        /* El otro móvil se adelantó: el índice único ha rechazado esta. */
+        const {data: otra} = await TYC.db.from('shopping_lists')
+          .select('id, abierta_at, estado').eq('tipo', tipo).eq('estado','abierta').maybeSingle();
+        fila = otra;
+      }
+    }
+    if (!fila) continue;
+    LISTA_ID[tipo] = fila.id;
+    L.estado = 'abierta';
+    L.abierta = fechaCorta(fila.abierta_at);
+  }
+
+  await leerMarcas();
+  GUARDAR_MARCA = guardarMarca;
+  CERRAR_LISTA  = cerrarListaBD;
+  escucharLista();
+  return Object.values(LISTA_ID).filter(Boolean).length;
+}
+
+/* Lo marcado, sea quien sea quien lo marcó. */
+async function leerMarcas(){
+  const ids = Object.values(LISTA_ID).filter(Boolean);
+  if (!ids.length) return;
+  const {data} = await TYC.db.from('shopping_items')
+    .select('id, cogido, no_habia, motivo_falta, cantidad_real, marcado_por, ingredients(nombre), profiles:marcado_por(nombre)')
+    .in('shopping_list_id', ids);
+  vaciar(MARCAS);
+  for (const it of (data || [])){
+    const n = it.ingredients?.nombre; if (!n) continue;
+    ITEM_ID[n] = it.id;
+    if (!it.cogido && !it.no_habia) continue;
+    MARCAS[n] = {
+      cogido: !!it.cogido,
+      g: it.cantidad_real != null ? +it.cantidad_real : undefined,
+      noHabia: it.no_habia ? (MOTIVO_FALTA[it.motivo_falta] || 'no había') : undefined,
+      motivo: it.motivo_falta || undefined,
+      quien: it.profiles?.nombre || undefined
+    };
+  }
+}
+
+/* Marcar es un hecho de la casa: se guarda con quién y cuándo. */
+async function guardarMarca(nombre, m){
+  const id = ITEM_ID[nombre];
+  if (!id) return;                        // artículo que no está en la lista guardada
+  const fila = {
+    id,
+    cogido: !!m.cogido,
+    no_habia: !!m.noHabia,
+    motivo_falta: m.motivo || null,
+    cantidad_real: m.g != null ? m.g : null,
+    marcado_por: (m.cogido || m.noHabia) ? SESION.id : null,
+    marcado_at: (m.cogido || m.noHabia) ? new Date().toISOString() : null
+  };
+  const {error} = await TYC.db.from('shopping_items').update(fila).eq('id', id);
+  if (error) console.warn('[T&C] no se ha podido guardar la marca:', error.message);
+}
+
+async function cerrarListaBD(tipo){
+  const id = LISTA_ID[tipo]; if (!id) return;
+  await TYC.db.from('shopping_lists')
+    .update({estado:'cerrada', cerrada:true, cerrada_at:new Date().toISOString(),
+             cerrada_por:SESION.id}).eq('id', id);
+  LISTA_ID[tipo] = null;
+}
+
+/* Y lo que marca uno tiene que aparecerle al otro mientras compra. */
+let CANAL_LISTA = null;
+function escucharLista(){
+  if (CANAL_LISTA) return;
+  CANAL_LISTA = TYC.db.channel('lista-compra')
+    .on('postgres_changes', {event:'*', schema:'public', table:'shopping_items'},
+        async () => { await leerMarcas(); if (typeof pintarCompra === 'function') pintarCompra(); })
+    .subscribe();
+}
+
+const fechaCorta = iso => {
+  if (!iso) return 'hoy';
+  const f = new Date(iso);
+  return `${f.getDate()} ${['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][f.getMonth()]}`;
+};
+
 /* ── la medicación, de la base ──────────────────────────────────────────── */
 const ORDEN_MOM = {ayunas:0, desayuno:1, comida:2, merienda:3, cena:4, noche:5};
 async function hidratarMedicacion(){
@@ -172,18 +290,36 @@ async function hidratarMenu(){
     if (!plan || !(plan.planned_meals || []).length){
       const gen = generarSemana();
       if (!gen) continue;                    // sin semana válida: se queda la de ejemplo
-      await guardarSemana(ini, gen.semana);
-      volcarSemana(destino, off, gen.semana);
-    } else {
-      const porFecha = {};
-      for (const pm of plan.planned_meals){
-        const m = MOM_APP[pm.momento] || pm.momento;
-        (porFecha[pm.fecha] = porFecha[pm.fecha] || {})[m] = pm.recipes?.clave;
+      const guardada = await guardarSemana(ini, gen.semana);
+      if (guardada){
+        volcarSemana(destino, off, gen.semana);
+      } else {
+        /* No se ha guardado porque el otro móvil ya había creado la semana:
+           `meal_plans` tiene unique(household_id, semana_inicio). Antes de esto
+           cada uno se quedaba con SU semana generada, y entonces el menú, la
+           tanda y la lista de la compra salían distintos en cada teléfono
+           (4 kg de patata en uno y 2 kg en el otro). El plan de la casa es uno:
+           se relee el que ya existe y se usa ese. */
+        const {data: otra} = await TYC.db.from('meal_plans')
+          .select('id, planned_meals(fecha, momento, recipe_id, recipes(clave))')
+          .eq('semana_inicio', ini).maybeSingle();
+        if (otra && (otra.planned_meals || []).length) plan = otra; else continue;
+        volcarDesdePlan(destino, off, plan);
       }
-      const dias = Object.keys(porFecha).sort();
-      volcarSemana(destino, off, dias.map(f => porFecha[f]));
+    } else {
+      volcarDesdePlan(destino, off, plan);
     }
   }
+}
+/* De las filas de planned_meals a la forma que usa la interfaz. */
+function volcarDesdePlan(destino, off, plan){
+  const porFecha = {};
+  for (const pm of plan.planned_meals){
+    const m = MOM_APP[pm.momento] || pm.momento;
+    (porFecha[pm.fecha] = porFecha[pm.fecha] || {})[m] = pm.recipes?.clave;
+  }
+  const dias = Object.keys(porFecha).sort();
+  volcarSemana(destino, off, dias.map(f => porFecha[f]));
 }
 function volcarSemana(destino, off, semana){
   const dias = diasDeSemana(off);
@@ -195,11 +331,13 @@ function volcarSemana(destino, off, semana){
       merienda: d.merienda, cena: d.cena, _c: d._c, _t: d._t});
   });
 }
+/* Devuelve true solo si esta llamada ha creado el plan. Si otro móvil se
+   adelantó, devuelve false y quien llama relee el de la casa. */
 async function guardarSemana(ini, semana){
-  const {data: plan} = await TYC.db.from('meal_plans')
+  const {data: plan, error} = await TYC.db.from('meal_plans')
     .insert({household_id: SESION.household, semana_inicio: ini, confirmado: true})
-    .select('id').single();
-  if (!plan) return;
+    .select('id').maybeSingle();
+  if (error || !plan) return false;
   const claves = [...new Set(semana.flatMap(d => MOM.map(m => d[m])))];
   const {data: recs} = await TYC.db.from('recipes').select('id, clave').in('clave', claves);
   const idDe = Object.fromEntries((recs || []).map(r => [r.clave, r.id]));
@@ -212,6 +350,7 @@ async function guardarSemana(ini, semana){
       profile_id: SESION.id }); });
   });
   if (filas.length) await TYC.db.from('planned_meals').insert(filas);
+  return true;
 }
 
 /* ── historial: si no hay, no se inventa ────────────────────────────────────
@@ -301,7 +440,10 @@ async function arrancarApp(){
     const fallos = [];
     for (const [nombre, fn] of [['objetivos', hidratarObjetivos], ['medicación', hidratarMedicacion],
                                 ['historial',  hidratarHistorial],
-                                ['menú',       hidratarMenu]]){
+                                ['menú',       hidratarMenu],
+                                /* la compra va DESPUÉS del menú: la lista sale
+                                   de lo que el menú de la casa necesita */
+                                ['compra',     hidratarCompra]]){
       try { await fn(); }
       catch(err){ fallos.push(nombre); console.error('T&C · falla '+nombre+':', err.message||err); }
     }

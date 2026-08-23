@@ -442,16 +442,23 @@ const fechaDe = off => { const f=new Date(); f.setDate(f.getDate()+off); return 
 const largo = f => `${DIA_SEM[f.getDay()]} ${f.getDate()} de ${MES_NOM[f.getMonth()]}`;
 const capi  = t => t.charAt(0).toUpperCase()+t.slice(1);
 const HOY_F = fechaDe(0);
+/* El plan arranca el lunes 31 de agosto. Antes de esa fecha no tiene sentido
+   enseñar «esta semana»: la semana que importa es la primera del plan. */
+const INICIO_PLAN = new Date(2026, 7, 31, 12);
+const isoDe = off => { const f=fechaDe(off); return f.toISOString().slice(0,10); };
+const HOY_ISO = isoDe(0);
+const antesDeEmpezar = () => HOY_F < INICIO_PLAN;
+const baseSemana = () => antesDeEmpezar() ? INICIO_PLAN : HOY_F;
 /* La semana empieza en lunes. Todo lo que rotula «semana» sale de aquí. */
 function lunesDe(f){ const x=new Date(f); const d=(x.getDay()+6)%7; x.setDate(x.getDate()-d); return x; }
 function rotuloSemana(off){
-  const a=lunesDe(HOY_F); a.setDate(a.getDate()+off*7);
+  const a=lunesDe(baseSemana()); a.setDate(a.getDate()+off*7);
   const b=new Date(a); b.setDate(b.getDate()+6);
   return a.getMonth()===b.getMonth()
     ? `${a.getDate()}-${b.getDate()} ${MES_NOM[a.getMonth()]}`
     : `${a.getDate()} ${MES_NOM[a.getMonth()].slice(0,3)} - ${b.getDate()} ${MES_NOM[b.getMonth()].slice(0,3)}`;
 }
-const diasDeSemana = off => { const a=lunesDe(HOY_F); a.setDate(a.getDate()+off*7);
+const diasDeSemana = off => { const a=lunesDe(baseSemana()); a.setDate(a.getDate()+off*7);
   return Array.from({length:7},(_,i)=>{const f=new Date(a); f.setDate(f.getDate()+i);
     return {d:LETRA_DIA[f.getDay()], n:String(f.getDate()), iso:f.toISOString().slice(0,10)};}); };
 const DIAS_ATRAS=[0,-1,-2].map(o=>{const f=fechaDe(o);
@@ -459,7 +466,7 @@ const DIAS_ATRAS=[0,-1,-2].map(o=>{const f=fechaDe(o);
 
 /* Saber qué versión corre en cada móvil deja de ser adivinar. Cuando algo
    «no se actualiza», este número lo dice en un vistazo. */
-const VERSION_APP = 'v5 · 23 ago 2026';
+const VERSION_APP = 'v7 · 23 ago 2026';
 const TYC_CONECTADO = () => typeof TYC !== 'undefined' && !!TYC.db && !TYC.demo;
 
 /* Descarta el service worker y las cachés y recarga: la salida de emergencia
@@ -484,10 +491,20 @@ const eur=v=>v.toFixed(2).replace('.',',')+' €';
 const kg=g=>g>=1000?(g/1000).toFixed(g%1000?1:0).replace('.',',')+' kg':Math.round(g)+' g';
 const MOMLAB={desayuno:'Desayuno',media:'Media mañana',comida:'Comida',merienda:'Merienda',cena:'Cena'};
 
+/* SIN_EJEMPLO lo enciende la hidratación: a partir de ahí no se inventa ni una
+   comida marcada ni una pastilla tomada. Antes esta función rellenaba el día
+   según la hora para que el prototipo se viera lleno, y eso en la app real es
+   mentir sobre lo que has hecho. */
+let SIN_EJEMPLO=false;
 function sembrarDia(h){
-  const d=MENU.find(x=>x.n===String(HOY_F.getDate()))||MENU[0];
+  const d=MENU.find(x=>x.n===String(HOY_F.getDate()))||MENU[0]||{};
   HOY={c:MOM.map(k=>({k,r:d[k],estado:null})),t:MOM.map(k=>({k,r:d[k],estado:null}))};
-  const n = h<9?0 : h<12?1 : h<14?2 : h<18?3 : h<21?4 : 4;   // cuántas comidas cabría haber hecho
+  const nMed=p=>(MEDICACION[p]||[]).length;
+  if(SIN_EJEMPLO){
+    MED.c=Array(nMed('c')).fill(false); MED.t=Array(nMed('t')).fill(false);
+    return;
+  }
+  const n = h<9?0 : h<12?1 : h<14?2 : h<18?3 : h<21?4 : 4;
   for(let i=0;i<n;i++){HOY.c[i].estado='hecho'; HOY.t[i].estado= i===2?'cambiado':'hecho';}
   MED.c=[h>=9,h>=21,h>=22]; MED.t=[h>=8,h>=22];
 }
@@ -614,15 +631,43 @@ function sheetRutina(){
     <div class="note">${r.nota}</div>
     <button class="cta" style="margin-top:14px" onclick="ACC.rutina=true; closeSheet(); pintarQuick(); pintarEntreno()">✓ Hecha</button>`);
 }
+/* Elegir una actividad tiene que dejar rastro: si marcas «remo» y la app se
+   olvida, no es una elección, es un folleto. Se guarda qué elegiste y después
+   si la hiciste — que es lo que alimenta la adherencia. */
+const CARDIO_HECHO={c:null, t:null};   // {i, estado:'elegida'|'hecha', real}
 function sheetCardio(){
+  const sel=CARDIO_HECHO[P];
   openSheet(`<h3>Cardio ${P==='c'?'del martes':'del sábado'} · Forus</h3>
-    <div class="meta" style="margin-bottom:16px">Complementa la fuerza, no sustituye a los pasos del día. Elige la que te apetezca:
-      todas cumplen el mismo objetivo.</div>
-    ${CARDIO_FORUS.map(x=>`<button class="opt" onclick="closeSheet()">
+    <div class="meta" style="margin-bottom:16px">Complementa la fuerza, no sustituye a los pasos del día.
+      Todas cumplen el mismo objetivo: elige la que te apetezca.</div>
+    ${CARDIO_FORUS.map((x,i)=>`<button class="opt" onclick="elegirCardio(${i})"
+      style="${sel&&sel.i===i?'border-color:var(--acc); background:color-mix(in srgb,var(--acc) 8%,transparent)':''}">
       <span class="thumb sm t-pescado">${x.e}</span>
       <span class="grow">${x.n}<small>${x.nota}</small></span>
-      <span class="chip acc">${x.obj}</span></button>`).join('')}
-    `);
+      <span class="chip ${sel&&sel.i===i?'acc':''}">${sel&&sel.i===i?'elegida':x.obj}</span></button>`).join('')}
+    <div class="note">Se queda apuntada en el bloque de Deporte de hoy. Al terminar, la marcas hecha
+      y puedes anotar el tiempo o la distancia de verdad.</div>`);
+}
+function elegirCardio(i){
+  CARDIO_HECHO[P]={i, estado:'elegida', real:null};
+  closeSheet(); pintarQuick(); pintarEntreno();
+}
+function sheetCardioHecho(){
+  const sel=CARDIO_HECHO[P]; if(!sel) return;
+  const x=CARDIO_FORUS[sel.i];
+  openSheet(`<h3>${x.e} ${x.n}</h3>
+    <div class="meta" style="margin-bottom:16px">Objetivo de hoy: ${x.obj}</div>
+    <div class="f" style="border-top:0"><label>¿Cuánto ha salido?
+      <div class="note" style="margin-top:2px">Opcional. Sirve para ver si el objetivo está bien puesto.</div></label>
+      <input id="cardio-real" placeholder="${x.obj}" style="flex:1; text-align:right"></div>
+    <button class="cta" style="margin-top:12px" onclick="marcarCardio()">✓ Hecha</button>
+    <button class="act" style="width:100%; margin-top:8px" onclick="CARDIO_HECHO[P]=null; closeSheet(); pintarQuick(); pintarEntreno()">
+      Cambiar de actividad</button>`);
+}
+function marcarCardio(){
+  const i=document.getElementById('cardio-real');
+  CARDIO_HECHO[P].estado='hecha'; CARDIO_HECHO[P].real=(i&&i.value)||null;
+  closeSheet(); pintarQuick(); pintarEntreno();
 }
 function sheetSesion(ex){
   const d=PERFILES[P];
@@ -1254,6 +1299,7 @@ function sheetNotif(){
    Lo informativo —presupuesto, palancas— puede esperar unos centímetros. */
 function avisoTicket(){
   const nueva=COMPRAS.find(c=>c.nueva);
+  if(!COMPRAS.length) return '';
   return nueva?`<div class="card tap" style="border-color:var(--acc); border-width:1.5px; margin-bottom:11px"
       onclick="sheetTicketDigital()">
     <div class="row"><div class="thumb t-legumbre">🧾</div>
@@ -1650,6 +1696,13 @@ function pintarQuick(){
           <div class="tx"><div class="when">Sesión de hoy</div><b>${e.titulo}</b></div>
           <div class="kc">${e.meta.split('·').pop().trim()}</div>
           <div class="check" style="${ACC.sesion?'background:var(--good);border-color:var(--good);color:#fff':''}">${ACC.sesion?'✓':''}</div></div>`}
+    ${CARDIO_HECHO[P]?(()=>{const sel=CARDIO_HECHO[P], x=CARDIO_FORUS[sel.i], h=sel.estado==='hecha';
+      return `<div class="qr ${h?'on':''}" onclick="sheetCardioHecho()">
+        <div class="thumb sm t-pescado">${x.e}</div>
+        <div class="tx"><div class="when">${h?'Cardio hecho':'Cardio elegido para hoy'}</div>
+          <b>${x.n}</b>
+          <div class="note" style="margin:1px 0 0">${h?(sel.real||x.obj):'Objetivo: '+x.obj}</div></div>
+        <div class="check">${h?'✓':''}</div></div>`})():''}
     ${RUTINA_DIARIA[P]?`<div class="qr ${ACC.rutina?'on':''}" onclick="sheetRutina()">
       <div class="thumb sm t-lacteo">${RUTINA_DIARIA[P].e}</div>
       <div class="tx"><div class="when">Rutina diaria · ${RUTINA_DIARIA[P].cuando}</div>
@@ -1741,7 +1794,7 @@ function pintarQuick(){
     bloque(`Comida <span class="r" onclick="ir('menu')">Ver menú ›</span>`, htmlComida,
            `${nComidas} comidas registradas · ${EXTRA_LOG[P].length} extras`, nComidas===5),
     bloque('Deporte', htmlDeporte, 'Sesión hecha y pasos al día', dep),
-    bloque('Medicación', htmlMed, `Todo tomado hoy · ${meds.length} de ${meds.length}`, tomadas===meds.length),
+    bloque('Medicación', htmlMed, `Todo tomado hoy · ${meds.length} de ${meds.length}`, meds.length>0 && tomadas===meds.length),
     bloque('Salud', htmlSaludFix, 'Todo al día', false),
     acc.length ? bloque((acc.some(a=>!a.when.startsWith('Caduca'))?'Preparativos · para mañana':'Preparativos')
       +' <span class="chip" style="margin-left:8px; font-size:10px; padding:3px 8px; text-transform:none; letter-spacing:0">🏠 de los dos</span>',
@@ -2309,6 +2362,7 @@ function pintarCompra(){
     const grupos={congelador:[],nevera:[],armario:[]};
     rows.forEach(r=>grupos[ubic(r[0])].push(r));
     const tirado=DESPERDICIO.reduce((a,x)=>a+x.eur,0);
+    const hayDesp=DESPERDICIO.length>0, haySobras=SOBRAS.length>0;
     $('#compra-body').innerHTML=`
       <div class="card" style="border-color:var(--acc)">
         <div class="row" style="margin-bottom:8px">
@@ -2324,6 +2378,10 @@ function pintarCompra(){
           <div class="kc"><span class="chip ${x.cad<'2026-08-24'?'warn':''}">cad. ${x.cad.slice(8)}/${x.cad.slice(5,7)}</span></div></div>`).join('')}
         <button class="fab" style="margin-top:10px" onclick="sheetAnadirDespensa()">＋ Añadir algo sin ticket</button></div>
       <div class="card"><div class="sec-h" style="margin-top:0">Listas para comer · sobras</div>
+        ${!haySobras?`<div class="qr" style="border-top:0"><div class="thumb sm t-off" style="color:var(--muted)">·</div>
+          <div class="tx"><b style="color:var(--muted)">Todavía no hay sobras</b>
+            <div class="note" style="margin:1px 0 0">Cuando sobre una ración, un toque la devuelve aquí
+              y el planificador la coloca en los próximos días.</div></div></div>`:''}
         ${SOBRAS.map(x=>{const r=R[x.r]; return `<div class="qr tap" onclick="sheetReceta('${x.r}')">
           <div class="thumb sm ${r.t}">${r.e}</div>
           <div class="tx"><div class="when">${x.raciones} ${x.raciones>1?'raciones':'ración'} · ${x.origen}</div><b>${r.n}</b></div>
@@ -2333,21 +2391,26 @@ function pintarCompra(){
       <div class="card"><div class="row">
         <div class="grow"><div class="meta">Productos en despensa</div>
           <div style="font-size:22px; font-weight:700; letter-spacing:-.03em">${rows.length}</div></div>
-        <span class="chip warn">2 caducan esta semana</span></div>
-        <div class="note">Entra con el ticket escaneado. Sale sola al marcar las comidas como hechas. El ajuste manual es una vez al mes.</div></div>
+        ${(()=>{const lim=new Date(); lim.setDate(lim.getDate()+7);
+          const n=rows.filter(([,[,cad]])=>cad && cad<=lim.toISOString().slice(0,10)).length;
+          return n?`<span class="chip warn">${n} caduca${n>1?'n':''} esta semana</span>`
+                  :'<span class="chip good">✓ nada caduca esta semana</span>';})()}</div>
+        <div class="note">Entra con la compra. Sale sola al marcar las comidas como hechas. El ajuste manual es una vez al mes.</div></div>
       <div class="card">
         <div class="row"><div class="grow"><div class="meta">Comida tirada este mes</div>
-          <div style="font-size:22px; font-weight:700; letter-spacing:-.03em">${eur(tirado)}</div></div>
-          <span class="chip ${tirado<3?'good':'warn'}">${DESPERDICIO.length} productos</span></div>
+          <div style="font-size:22px; font-weight:700; letter-spacing:-.03em">${hayDesp?eur(tirado):'Nada'}</div></div>
+          ${hayDesp?`<span class="chip ${tirado<3?'good':'warn'}">${DESPERDICIO.length} productos</span>`
+                   :'<span class="chip good">✓ de momento</span>'}</div>
         ${DESPERDICIO.map(x=>`<div class="ing" style="font-size:13px"><span class="grow">${x.n}
           <span class="note" style="margin:0; display:block">${x.fecha} · ${x.motivo} · ${kg(x.g)}</span></span>
           <span style="font-weight:650">${eur(x.eur)}</span></div>`).join('')}
-        <div class="note">A este ritmo, ${eur(tirado*12)} al año.</div></div>
+        <div class="note">${hayDesp?`A este ritmo, ${eur(tirado*12)} al año.`
+          :'Aquí irá lo que se estropee sin llegar a comerse, con su coste. Es el número que mide si la planificación funciona.'}</div></div>
       ${['congelador','nevera','armario'].map(u=>`
         <div class="card"><div class="sec-h" style="margin-top:0">${UB_LAB[u][0]} ${UB_LAB[u][1]}
           <span>${grupos[u].length} productos</span></div>
         ${grupos[u].map(([n,[g,cad]])=>{
-          const req=need[n]||0, pct=req?Math.min(100,g/req*100):100, pronto=cad<'2026-08-24';
+          const req=need[n]||0, pct=req?Math.min(100,g/req*100):100, pronto=cad && cad<=isoDe(2);
           return `<div class="stock"><div class="grow"><div style="font-size:14px; font-weight:600">${n}</div>
             <div class="note" style="margin:1px 0 0">${kg(g)}${req?` · la semana pide ${kg(req)}`:''}</div></div>
             ${pronto?'<span class="chip warn">caduca ya</span>':''}
@@ -2381,15 +2444,26 @@ function pintarEntreno(){
         <b>${RUTINA_DIARIA[P].n}</b>
         <div class="note" style="margin:1px 0 0">${RUTINA_DIARIA[P].min} min · ${RUTINA_DIARIA[P].pasos.length} ejercicios · ver cómo se hace</div></div>
       <div class="kc" style="color:var(--acc-txt); font-weight:650">ver ›</div></div>`:''}`+
-    d.semana.map(([dia,n,txt,tipo])=>`
+    d.semana.map(([dia,n,txt,tipo],i)=>{
+      /* Los días salen del calendario, no del array: antes la semana de
+         entrenamiento seguía marcando 17-23 aunque el rótulo dijera otra cosa. */
+      const real=diasDeSemana(0)[i]||{d:dia,n};
+      dia=real.d; n=real.n;
+      return `
     <div class="day"><div class="dcol ${n===String(HOY_F.getDate())?'today':''}"><b>${n}</b><span>${dia}</span></div>
       <div class="thumb sm ${col[tipo][0]}">${col[tipo][1]}</div>
       <div class="grow" style="padding-top:8px">
         <div style="font-size:14px; font-weight:${tipo==='off'?'400':'650'}; color:${tipo==='off'?'var(--muted)':'var(--ink)'}">${txt}</div>
         ${tipo==='work'?'<div class="meta" style="font-size:11.5px; color:var(--muted)">agenda ocupada · 20:00-21:30 · no se programa nada</div>':''}
-      </div></div>`).join('');
+      </div></div>`}).join('');
   /* adherencia al entrenamiento */
   const a=ADH_ENT[P], hechas=a.reduce((x,y)=>x+y,0), plan=a.length*2;
+  if(!a.length){
+    $('#ent-adh').innerHTML=`<div class="row"><div class="thumb sm t-off" style="color:var(--muted)">·</div>
+      <div class="grow"><b style="font-size:14px; color:var(--muted)">Sin sesiones registradas</b>
+        <div class="note" style="margin:1px 0 0">Se cuenta cada semana: sesiones hechas de las planificadas.
+          Por debajo del 80 % dos semanas seguidas, la app propone bajar de tres a dos y sostenerlo.</div></div></div>`;
+  } else
   $('#ent-adh').innerHTML=`
     <div class="row" style="margin-bottom:10px">
       <div class="grow"><div class="meta">Sesiones hechas de las planificadas</div>
@@ -2399,8 +2473,22 @@ function pintarEntreno(){
     <div class="bar"><i style="width:${100*hechas/plan}%"></i></div>
     <div class="note">Las 2 que faltaron: una por tiempo y otra por cansancio.</div>`;
 
-  /* progresión de cargas */
+  /* progresión de cargas · sin al menos dos sesiones no hay progresión que
+     enseñar. Una línea de un punto no es una gráfica, es un adorno. */
   const ejs=Object.keys(CARGAS[P]);
+  const hayHist=ejs.some(n=>CARGAS[P][n].length>1);
+  if(!hayHist){
+    $('#ent-cargas').innerHTML=`<div class="scan" style="margin:0">
+      <div style="font-size:30px">📈</div>
+      <div style="font-weight:650; margin-top:8px">Sin progresión todavía</div>
+      <div class="note" style="margin-top:4px">La gráfica de cada ejercicio aparece con la segunda sesión.
+        Lo que enseña es si la carga sube mientras el peso baja — que es la prueba de que lo que se
+        pierde es grasa y no músculo.</div></div>
+      ${ejs.length?`<div class="sec-h">Con lo que se empieza</div>
+      ${ejs.map(n=>`<div class="ing" style="font-size:13px"><span class="grow">${n}</span>
+        <span style="font-weight:650">${String(CARGAS[P][n][0]).replace('.',',')} kg</span></div>`).join('')}`:''}`;
+    return;
+  }
   $('#ent-cargas').innerHTML=ejs.map((n,idx)=>{
     const v=CARGAS[P][n], W=404,H=90,L=6,R2=44,T=10,B=10;
     const mn=Math.min(...v), mx=Math.max(...v);
@@ -2420,12 +2508,23 @@ function pintarEntreno(){
       : 'Con el peso estable y las cargas subiendo, la recomposición va por donde debe.'}</div>`;
 
   $('#ejercicios').innerHTML=`
-    <div class="card tap" onclick="sheetCardio()">
-      <div class="row"><div class="thumb t-pescado">🚴</div>
-        <div class="grow"><div class="when">${P==='c'?'Martes':'Sábado'} · sesión de cardio en Forus</div>
-          <div class="name" style="margin:2px 0 3px">Elegir actividad</div>
-          <div class="meta">6 opciones con objetivo de tiempo o distancia</div></div>
-        <span style="color:var(--muted); font-size:18px">›</span></div></div>
+    ${(()=>{const sel=CARDIO_HECHO[P];
+      if(!sel) return `<div class="card tap" onclick="sheetCardio()">
+        <div class="row"><div class="thumb t-pescado">🚴</div>
+          <div class="grow"><div class="when">${P==='c'?'Martes':'Sábado'} · sesión de cardio en Forus</div>
+            <div class="name" style="margin:2px 0 3px">Elegir actividad</div>
+            <div class="meta">${CARDIO_FORUS.length} opciones con objetivo de tiempo o distancia</div></div>
+          <span style="color:var(--muted); font-size:18px">›</span></div></div>`;
+      const x=CARDIO_FORUS[sel.i], hecha=sel.estado==='hecha';
+      return `<div class="card tap" style="border-color:${hecha?'var(--good)':'var(--acc)'}"
+        onclick="sheetCardioHecho()">
+        <div class="row"><div class="thumb t-pescado">${x.e}</div>
+          <div class="grow"><div class="when" style="color:${hecha?'var(--good-ink)':'var(--acc-txt)'}">
+            ${hecha?'✓ Cardio hecho':'Elegida para hoy'}</div>
+            <div class="name" style="margin:2px 0 3px">${x.n}</div>
+            <div class="meta">${hecha?(sel.real?sel.real:x.obj):'Objetivo: '+x.obj}</div></div>
+          ${hecha?'<span class="chip good">✓</span>':'<button class="act primary" style="flex:0 0 auto; padding:11px 15px">Hecha</button>'}
+        </div></div>`})()}
     <div class="card tap" style="border-color:var(--acc)" onclick="sheetSesion(0)">
       <div class="row"><div class="thumb t-gym">▶</div>
         <div class="grow"><div class="when">Hoy 19:00 · Forus o en casa</div>

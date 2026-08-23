@@ -1210,17 +1210,17 @@ function accionesDeHoy(){
       nota:MOM.filter(k=>R[dManana[k]].ing.some(([x])=>x===n)).map(k=>MOMLAB[k].toLowerCase()).join(' y ')+' de mañana'}));
   }
   // 2a. lo que ha entrado sin ticket se gasta antes que nada
-  ESPONTANEOS.filter(x=>x.cad<='2026-08-26').forEach(x=>{
+  ESPONTANEOS.filter(x=>x.cad<=isoDe(3)).forEach(x=>{
     const rec=recetasQueUsan(x.n)[0];
     acc.push({id:'esp_'+x.n, tipo:'menu', ing:x.n, g:x.g, e:ORIGENES[x.origen][0], t:'t-verdura',
       when:ORIGENES[x.origen][1]+' · gastar primero', txt:`${x.n} · ${kg(x.g)}`,
       nota:rec?`Se aprovecha en: ${R[rec].n}`:'Sin receta esta temporada · conservar o pedir recetas'});
   });
   // 2b. lo que caduca hoy o mañana, con la receta que lo aprovecha
-  Object.entries(DESPENSA).filter(([,[,cad]])=>cad<='2026-08-20').forEach(([n,[g,cad]])=>{
+  Object.entries(DESPENSA).filter(([,[,cad]])=>cad && cad<=isoDe(1)).forEach(([n,[g,cad]])=>{
     const rec=Object.keys(R).find(k=>R[k].ing.some(([x])=>x===n));
     acc.push({id:'cad_'+n, tipo:'menu', ing:n, g:g, e:'⏳', t:'t-fruta',
-      when:cad==='2026-08-19'?'Caduca hoy':'Caduca mañana',
+      when:cad===HOY_ISO?'Caduca hoy':cad<HOY_ISO?'Caducado':'Caduca mañana',
       txt:`${n} · ${kg(g)}`, nota:rec?`Se aprovecha en: ${R[rec].n}`:'Sin receta que lo use esta semana'});
   });
   // 3. el túper de la oficina: prepararlo y, sobre todo, acordarse de cogerlo

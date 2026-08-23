@@ -221,6 +221,43 @@ async function hidratarHistorial(){
   return {pesos: serie.length, cintura: cint.length};
 }
 
+/* ── fuera todo lo que era de ejemplo ───────────────────────────────────────
+   El fallo de diseño de la primera versión: hidrataba lo que sabía cargar y
+   dejaba intacto lo demás. Resultado: la app enseñaba comida tirada que nadie
+   tiró, túper que nadie cocinó y un ticket de Mercadona que no existe. Todo lo
+   que no tiene respaldo en la base se vacía, y la interfaz enseña un hueco
+   honesto. */
+function limpiarEjemplo(){
+  const vaciarArr = a => { if (Array.isArray(a)) a.length = 0; };
+  [DESPERDICIO, SOBRAS, COMPRAS, TICKET, HISTORIAL, CONSERVAS_HECHAS].forEach(vaciarArr);
+  vaciar(PRECIO_REAL); vaciar(PUNT); vaciar(MARCAS); vaciar(MIS_VIDEOS); vaciar(POR); vaciar(ACC);
+  EXCEPCIONES.s1.length = 0; EXCEPCIONES.s2.length = 0;
+  TANDA_ESTADO.s1 = null; TANDA_ESTADO.s2 = null;
+  EXTRA_LOG.c.length = 0; EXTRA_LOG.t.length = 0;
+
+  /* Adherencia, bienestar y pasos: no hay ni un registro todavía. */
+  ADH_ENT.c.length = 0; ADH_ENT.t.length = 0;
+  ['c','t'].forEach(p => { ['hambre','energia','sueno'].forEach(k => BIENESTAR[p][k].length = 0); });
+  PASOS.c = 0; PASOS.t = 0;
+
+  /* La conciliación del ticket y el aviso de compra entrante, a cero. */
+  CONCILIA.coincide = 0; CONCILIA.extra.length = 0;
+  CONCILIA.noHabia.length = 0; CONCILIA.precios = 0;
+
+  /* Las listas empiezan abiertas y sin nada cogido. */
+  Object.values(LISTAS).forEach(L => { L.estado = 'abierta'; L.cogidos = 0; L.abierta = 'hoy'; });
+
+  /* Cargas de fuerza: el bloque es real pero el histórico no. Se deja solo el
+     último valor, que es la prescripción de esta semana. */
+  ['c','t'].forEach(p => Object.keys(CARGAS[p]).forEach(ej => {
+    const v = CARGAS[p][ej]; CARGAS[p][ej] = [v[v.length-1]];
+  }));
+
+  CARDIO_HECHO.c = null; CARDIO_HECHO.t = null;
+
+  SIN_EJEMPLO = true;
+}
+
 /* ── arranque ───────────────────────────────────────────────────────────── */
 async function arrancarApp(){
   if (typeof supabase === 'undefined'){ return caerADemo('no se ha podido cargar la librería'); }
@@ -231,6 +268,7 @@ async function arrancarApp(){
 
   try {
     SESION = {id:session.user.id, email:session.user.email, perfil:'c'};
+    limpiarEjemplo();
     const yo = await hidratarPerfil();
     const cat = await hidratarCatalogo();
     const nd  = await hidratarDespensa();

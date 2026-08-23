@@ -981,16 +981,26 @@ const HISTORIAL=[
  {sem:'27 jul - 2 ago',adh:81,rango:64,coste:63,fav:'Pollo al horno',nota:''},
  {sem:'20-26 jul',adh:68,rango:47,coste:78,fav:'Lentejas',nota:'Primera semana, aún ajustando raciones'}];
 
-/* previsión de 4 semanas: esqueleto, no menú cerrado */
-const PREVISION=[
- {sem:'17-23 ago', estado:'confirmada', tanda:'Dom 16 · 85 min', compra:'cerrada · 15 ago', coste:62, nuevas:0,
-  avisos:['Cena tardía miércoles y viernes']},
- {sem:'24-30 ago', estado:'propuesta', tanda:'Dom 23 · 70 min', compra:'lista abierta', coste:58, nuevas:2,
-  avisos:['Caducan 2 productos el 24','Última semana de higos de temporada']},
- {sem:'31 ago - 6 sep', estado:'esqueleto', tanda:'Dom 30 · ~75 min', compra:'sin abrir', coste:60, nuevas:3,
-  avisos:['Cambio de temporada: entran pera, uva y calabaza','Fin del bloque de fuerza → semana de descarga']},
- {sem:'7-13 sep', estado:'esqueleto', tanda:'Dom 6 · ~75 min', compra:'sin abrir', coste:60, nuevas:2,
-  avisos:['Vuelta a horario de oficina: más recetas de túper']}];
+/* Previsión de 4 semanas: esqueleto, no menú cerrado.
+   Era una lista escrita a mano que empezaba el 17 de agosto —una semana que ya
+   ha pasado y que nunca formó parte del plan—. Las cuatro semanas salen ahora
+   de la misma base que el resto de la app: la primera es la que arranca el 31.
+   Lo que no se sabe todavía (coste, recetas nuevas) no se inventa. */
+const AVISOS_SEM=[
+ [],
+ ['Cambio de temporada: entran pera, uva y calabaza'],
+ ['Fin del bloque de fuerza → semana de descarga'],
+ []];
+function prevision(){
+  return [0,1,2,3].map(i => ({
+    sem: rotuloSemana(i),
+    estado: i===0 ? 'esta semana' : i===1 ? 'propuesta' : 'esqueleto',
+    tanda: textoTanda(i).replace('Domingo','Dom'),
+    compra: i===0 ? 'lista abierta' : 'sin abrir',
+    coste: null,             // sin compras reales todavía no hay coste previsto
+    avisos: AVISOS_SEM[i] || []
+  }));
+}
 
 /* guion de la tanda del domingo. La de la semana siguiente es más corta porque
    queda chili congelado: por eso no puede ser la misma ficha para las dos. */
@@ -1397,9 +1407,14 @@ function listaCompra(){
     const f=FORMATO[n]||falta, envases=Math.ceil(falta/f), comprado=envases*f;
     const sec=ING[n][2];
     (out[sec]=out[sec]||[]).push({n, g:Math.round(falta), envases, formato:f, comprado,
-      tengo:stock, precio:comprado*PRECIO[n]/1000, sobra:(comprado-falta)*PRECIO[n]/1000});
+      tengo:stock,
+      /* precio = lo que costaría el envase entero (para el sobrante);
+         precioReal = lo que cuesta lo que de verdad hace falta, que es lo que
+         se enseña ahora en la lista. */
+      precio:comprado*PRECIO[n]/1000, precioReal:falta*PRECIO[n]/1000,
+      sobra:(comprado-falta)*PRECIO[n]/1000});
   }
-  for(const s in out) out[s].sort((a,b)=>b.precio-a.precio);
+  for(const s in out) out[s].sort((a,b)=>b.precioReal-a.precioReal);
   return out;
 }
 /* lo que cuesta COMER esa semana, no lo que se paga en caja */

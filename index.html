@@ -481,7 +481,7 @@ const DIAS_ATRAS=[0,-1,-2].map(o=>{const f=fechaDe(o);
 
 /* Saber qué versión corre en cada móvil deja de ser adivinar. Cuando algo
    «no se actualiza», este número lo dice en un vistazo. */
-const VERSION_APP = 'v10 · 23 ago 2026';
+const VERSION_APP = 'v11 · 23 ago 2026';
 const TYC_CONECTADO = () => typeof TYC !== 'undefined' && !!TYC.db && !TYC.demo;
 
 /* Descarta el service worker y las cachés y recarga: la salida de emergencia
@@ -1482,7 +1482,7 @@ function sheetOtroSuper(k){
   const cogidos=items.filter(i=>(MARCAS[i.n]||{}).cogido);
   const faltan=items.filter(i=>(MARCAS[i.n]||{}).noHabia);
   const est=cogidos.reduce((a,i)=>{const m=MARCAS[i.n]||{};
-    return a + (m.g!=null ? i.precio*m.g/i.comprado : i.precio)},0);
+    return a + (m.g!=null ? i.precioReal*m.g/i.g : i.precioReal)},0);
   const C=CADENAS[COMPRA_EN_CURSO.comercio]||CADENAS.Otro;
   const prevista=est*C.factor;
   openSheet(`<h3>Cerrar sin ticket</h3>
@@ -1994,20 +1994,21 @@ function pintarMenu(){
       `;
   } else {
     $('#menu-body').innerHTML=`
-      <div class="card"><div class="meta">Coste previsto de las 4 semanas</div>
+      ${(()=>{const P4=prevision(), hayCoste=P4.every(p=>p.coste!=null);
+        return `<div class="card"><div class="meta">Coste previsto de las 4 semanas</div>
         <div style="font-size:22px; font-weight:700; letter-spacing:-.03em">
-          ${PREVISION.reduce((a,p)=>a+p.coste,0)} €
+          ${hayCoste?P4.reduce((a,p)=>a+p.coste,0)+' €':'—'}
           <span style="font-size:13px; color:var(--muted); font-weight:400">de 225 € objetivo</span></div>
-        <div class="bar" style="margin-top:9px"><i style="width:100%; background:var(--crit)"></i></div>
-        </div>
-      ${PREVISION.map(p=>`
+        ${hayCoste?'<div class="bar" style="margin-top:9px"><i style="width:100%; background:var(--crit)"></i></div>'
+          :'<div class="note" style="margin-top:6px">Sale de lo que se pague de verdad en caja. Con la primera compra hecha aparece aquí.</div>'}
+        </div>`})()}
+      ${prevision().map(p=>`
         <div class="card">
           <div class="row" style="margin-bottom:9px">
-            <div class="grow"><div class="name" style="margin:0">${p.sem}</div>
-              <div class="meta">${p.nuevas?p.nuevas+' recetas nuevas':'sin recetas nuevas'}</div></div>
+            <div class="grow"><div class="name" style="margin:0">${p.sem}</div></div>
             <span class="chip ${p.estado==='confirmada'?'good':p.estado==='propuesta'?'acc':''}">${p.estado}</span></div>
           <div class="ing" style="font-size:13px"><span class="grow">👨‍🍳 Tanda de cocina</span><span style="font-weight:650">${p.tanda}</span></div>
-          <div class="ing" style="font-size:13px"><span class="grow">🛒 Compra</span><span style="font-weight:650">${p.compra} · ~${p.coste} €</span></div>
+          <div class="ing" style="font-size:13px"><span class="grow">🛒 Compra</span><span style="font-weight:650">${p.compra}${p.coste!=null?' · ~'+p.coste+' €':''}</span></div>
           ${p.avisos.map(a=>`<div class="note" style="margin-top:8px">• ${a}</div>`).join('')}
         </div>`).join('')}
       `;
@@ -2223,27 +2224,29 @@ function sheetItem(n){
   const m=MARCAS[n]||{}, f=i.formato;
   const ops=[1,2,3,4].map(k=>k*f).filter(g=>g!==i.comprado);
   openSheet(`<h3>${n}</h3>
-    <div class="meta" style="margin-bottom:16px">La lista pide ${kg(i.comprado)}
-      (${i.envases} × ${fmt(f)}) para cubrir ${kg(i.g)} de recetas</div>
-    <button class="opt" onclick="marcarConCantidad('${n}',${i.comprado})">
-      ${m.cogido&&m.g==null?'✅':'⬜'} <span class="grow">Cogido, lo que pedía la lista
-        <small>${kg(i.comprado)} · ${eur(i.precio)}</small></span></button>
-    <div class="sec-h">Si el formato de este súper es otro</div>
+    <div class="meta" style="margin-bottom:16px">Hacen falta <b>${kg(i.g)}</b> para las recetas
+      de la semana${i.tengo?` · en casa hay ${kg(i.tengo)}`:''}</div>
+    <button class="opt" onclick="marcarConCantidad('${n}',${i.g})">
+      ${m.cogido&&m.g==null?'✅':'⬜'} <span class="grow">Cogido, lo que hacía falta
+        <small>${kg(i.g)} · ${eur(i.precioReal)}</small></span></button>
+    <div class="sec-h">O la cantidad que venga en este súper</div>
+    <div class="note" style="margin:-4px 0 8px">De referencia, en Mercadona va en ${fmt(f)}.
+      Da igual el formato: lo que se apunta es cuánto entra en casa.</div>
     ${ops.map(g=>`<button class="opt" onclick="marcarConCantidad('${n}',${g})">
-      ${m.g===g?'✅':'⬜'} <span class="grow">${kg(g)}<small>${g<i.g?'se queda corto para las recetas':
-        g<i.comprado?'justo para las recetas':'sobra y se queda en despensa'}</small></span></button>`).join('')}
+      ${m.g===g?'✅':'⬜'} <span class="grow">${kg(g)}<small>${g<i.g?'se queda corto · faltarían '+kg(i.g-g):
+        `sobran ${kg(g-i.g)} · se quedan en despensa`}</small></span></button>`).join('')}
     <div class="f"><label>Otra cantidad</label>
-      <input id="cant-otra" placeholder="${i.comprado}" style="width:80px; text-align:right">
+      <input id="cant-otra" placeholder="${Math.round(i.g)}" style="width:80px; text-align:right">
       <span class="meta" style="width:22px">g</span></div>
     <button class="cta" style="margin-top:10px"
-      onclick="marcarConCantidad('${n}', +document.getElementById('cant-otra').value || ${i.comprado})">Guardar</button>
+      onclick="marcarConCantidad('${n}', +document.getElementById('cant-otra').value || ${Math.round(i.g)})">Guardar</button>
     <button class="act" style="width:100%; margin-top:8px" onclick="noHabia('${n}')">No había</button>`);
 }
 function marcarConCantidad(n,g){
   const lista=listaCompra(), i=Object.values(lista).flat().find(x=>x.n===n);
   const m=MARCAS[n]=MARCAS[n]||{};
   m.cogido=true; delete m.noHabia;
-  if(i && g===i.comprado) delete m.g; else m.g=g;
+  if(i && Math.round(g)===Math.round(i.g)) delete m.g; else m.g=g;
   m.quien=PERFILES[P].nombre;
   if(GUARDAR_MARCA) GUARDAR_MARCA(n, m);
   closeSheet(); pintarCompra();
@@ -2346,13 +2349,15 @@ function regenerar(){
 }
 function pintarCompra(){
   const lista=listaCompra();
-  const total=Object.values(lista).flat().reduce((s,i)=>s+i.precio,0);
+  /* El total de la lista es lo que cuesta lo que hace falta, igual que las
+     líneas: si arriba sumara envases enteros y abajo cantidades, no cuadraría. */
+  const total=Object.values(lista).flat().reduce((s,i)=>s+i.precioReal,0);
   $('#compra-sub').textContent={lista:'Semana '+rotuloSemana(0)+' · calculado desde el menú y la despensa',
     despensa:'Lo que hay en casa ahora mismo'}[TAB];
   if(TAB==='lista'){
     const semanal=225/4.33, consumo=costeConsumo(), mes=consumo*4.33, exceso=Math.round((mes/225-1)*100);
     const sobra=Object.values(lista).flat().reduce((a,i)=>a+i.sobra,0);
-    const caros=Object.values(lista).flat().sort((a,b)=>b.precio-a.precio).slice(0,3);
+    const caros=Object.values(lista).flat().sort((a,b)=>b.precioReal-a.precioReal).slice(0,3);
     $('#compra-body').innerHTML=`
       ${avisoTicket()}
       <div class="card">
@@ -2374,13 +2379,13 @@ function pintarCompra(){
         El menú de esta semana es alto en proteína y en fruta, y eso se paga. Tres palancas concretas, calculadas sobre esta lista:
         <div style="margin-top:9px">${caros.map(c=>`<div class="ing" style="font-size:12.5px; padding:6px 0">
           <span class="grow">${c.n} — ${ALT_BARATO[c.n]||'reducir ración o alternar'}</span>
-          <span style="font-weight:700">−${eur(c.precio*0.45)}</span></div>`).join('')}</div>
-        <div style="margin-top:8px">Aplicando las tres, la semana baja a ${eur(total-caros.reduce((s,c)=>s+c.precio*0.45,0))} y el mes a
-        ${Math.round((total-caros.reduce((s,c)=>s+c.precio*0.45,0))*4.33)} €.</div></div>`:''}
+          <span style="font-weight:700">−${eur(c.precioReal*0.45)}</span></div>`).join('')}</div>
+        <div style="margin-top:8px">Aplicando las tres, la semana baja a ${eur(total-caros.reduce((s,c)=>s+c.precioReal*0.45,0))} y el mes a
+        ${Math.round((total-caros.reduce((s,c)=>s+c.precioReal*0.45,0))*4.33)} €.</div></div>`:''}
       ${bloqueEstadoCompra()}
       ${Object.entries(LISTAS).map(([k,L])=>{
         const secs=L.secciones;
-        const subt=secs.flatMap(x=>lista[x]||[]).reduce((a,i)=>a+i.precio,0);
+        const subt=secs.flatMap(x=>lista[x]||[]).reduce((a,i)=>a+i.precioReal,0);
         if(!subt) return '';
         const items=secs.flatMap(x=>lista[x]||[]);
         const n=items.length;
@@ -2388,8 +2393,11 @@ function pintarCompra(){
         return `<div class="card">
         <div class="row" style="margin-bottom:4px"><strong style="font-size:14.5px" class="grow">${L.n} · ${L.cadencia}</strong>
           <span class="chip acc">${eur(subt)}</span></div>
-        <div class="note" style="margin:0 0 4px">Lista de los dos: las cantidades ya suman
-          vuestras dos raciones, y lo que marque cualquiera aparece en el móvil del otro.</div>
+        <div class="note" style="margin:0 0 4px">Lista de los dos: cada cantidad es
+          <b>lo que hace falta comprar</b> para las recetas de la semana, ya sumadas vuestras dos
+          raciones y descontado lo que hay en casa. El formato lo eliges en el súper; en caja
+          pagarás algo más si el envase es mayor. Lo que marque cualquiera de los dos aparece
+          en el móvil del otro.</div>
         <div class="row" style="margin:2px 0 8px">
           <span class="grow note" style="margin:0">${L.estado==='abierta'
             ? `Abierta desde el ${L.abierta} · ${Math.min(L.cogidos,n)} de ${n} cogidos`
@@ -2399,24 +2407,23 @@ function pintarCompra(){
             : '<span class="chip good">✓ cerrada</span>'}</div>
         ${L.estado==='abierta'?`<div class="bar" style="margin-bottom:10px"><i style="width:${Math.min(100,Math.round(100*L.cogidos/n))}%"></i></div>`:''}
         ${secs.filter(x=>lista[x]).map(sec=>`
-        <div class="sec-h">${sec}<span>${eur(lista[sec].reduce((s,i)=>s+i.precio,0))}</span></div>
+        <div class="sec-h">${sec}<span>${eur(lista[sec].reduce((s,i)=>s+i.precioReal,0))}</span></div>
         ${lista[sec].map(i=>{const m=MARCAS[i.n]||{};
           const real=m.g!=null?m.g:i.comprado, difiere=m.g!=null && m.g!==i.comprado;
           return `<div class="item" style="${m.noHabia?'opacity:.5':''}">
           <span class="box ${m.cogido?'on':''}" onclick="marcarItem('${i.n}')">${m.cogido?'✓':''}</span>
           <span class="grow" onclick="sheetItem('${i.n}')" style="cursor:pointer">
-            ${i.n} <b style="color:var(--acc-txt)">${kg(i.comprado)}</b>
+            ${i.n} <b style="color:var(--acc-txt)">${kg(i.g)}</b>
             <span class="note" style="margin:0; display:block">
               ${m.noHabia?'<b style="color:var(--crit)">no había · '+m.noHabia+'</b>'
-               :difiere?`<b style="color:var(--acc-txt)">cogido ${kg(real)}</b> · la lista pedía ${kg(i.comprado)}${
-                   m.quien?' · '+m.quien:''}`
+               :difiere?`<b style="color:var(--acc-txt)">cogido ${kg(real)}</b>${m.quien?' · '+m.quien:''}`
                :m.cogido?`<b style="color:var(--good-ink)">cogido${m.quien?' · '+m.quien:''}</b>`
-               /* El total en gramos manda; los envases son una pista. Poner «3 × 240 g»
-                  delante hace que se compren 3 unidades y no 3 envases: pasó de verdad
-                  con el atún en la primera compra. */
-               :`${i.envases>1?i.envases+' envases de '+fmt(i.formato):'1 envase de '+fmt(i.formato)} ·
-                  necesitas ${kg(i.g)}${i.tengo?` · tenías ${kg(i.tengo)}`:''}`}</span></span>
-          <span class="price">${eur(difiere?i.precio*real/i.comprado:i.precio)}</span>
+               /* Lo que manda es cuánto hace falta. El formato de venta lo decide
+                  el súper en el que se acabe comprando, y ponerlo delante ya hizo
+                  comprar 6 latas de atún donde hacían falta 3. Queda en la ficha,
+                  para cuando importe. */
+               :i.tengo?`ya tenías ${kg(i.tengo)} · esto es lo que falta`:''}</span></span>
+          <span class="price">${eur(difiere?i.precioReal*real/i.g:i.precioReal)}</span>
           <span class="chip" style="cursor:pointer" onclick="noHabia('${i.n}')">✕</span></div>`}).join('')}`).join('')}
         </div>`}).join('')}`;
   } else if(TAB==='despensa'){

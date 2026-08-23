@@ -274,10 +274,13 @@ const MOM_APP = Object.fromEntries(Object.entries(MOM_BD).map(([a,b])=>[b,a]));
    Se genera con el mismo motor que ya estaba probado y se guarda en la base,
    para que los dos móviles vean exactamente la misma semana. Si ya hay una
    guardada, se lee; solo se genera cuando no existe. */
+/* El lunes de la semana que la app tiene delante. Calculaba el lunes de HOY
+   (17 de agosto) mientras la interfaz pintaba la semana del 31: se buscaba y se
+   guardaba un plan con una fecha y se dibujaba con otra, así que el menú de la
+   base nunca llegaba a la pantalla y se quedaba el de ejemplo. Una sola fuente:
+   la misma que usa diasDeSemana(). */
 function lunesISO(off){
-  const f = new Date(); const d = (f.getDay() + 6) % 7;
-  f.setDate(f.getDate() - d + off * 7);
-  return f.toISOString().slice(0, 10);
+  return diasDeSemana(off)[0].iso;
 }
 async function hidratarMenu(){
   MES = new Date().getMonth() + 1;          // temporada real, no agosto fijo
@@ -290,7 +293,13 @@ async function hidratarMenu(){
     if (!plan || !(plan.planned_meals || []).length){
       const gen = generarSemana();
       if (!gen) continue;                    // sin semana válida: se queda la de ejemplo
-      const guardada = await guardarSemana(ini, gen.semana);
+      /* El plan puede existir pero estar vacío: se creó la cabecera y las
+         comidas no llegaron a insertarse. Antes esto dejaba la app con el menú
+         de ejemplo para siempre, porque el segundo intento chocaba con el
+         `unique` y se rendía. Si la cabecera ya está, se rellena. */
+      const guardada = plan
+        ? await rellenarSemana(plan.id, ini, gen.semana)
+        : await guardarSemana(ini, gen.semana);
       if (guardada){
         volcarSemana(destino, off, gen.semana);
       } else {
@@ -338,18 +347,27 @@ async function guardarSemana(ini, semana){
     .insert({household_id: SESION.household, semana_inicio: ini, confirmado: true})
     .select('id').maybeSingle();
   if (error || !plan) return false;
+  return await rellenarSemana(plan.id, ini, semana);
+}
+
+/* Las comidas de una cabecera de plan que ya existe. */
+async function rellenarSemana(planId, ini, semana){
   const claves = [...new Set(semana.flatMap(d => MOM.map(m => d[m])))];
   const {data: recs} = await TYC.db.from('recipes').select('id, clave').in('clave', claves);
   const idDe = Object.fromEntries((recs || []).map(r => [r.clave, r.id]));
   const filas = [];
   semana.forEach((d, i) => {
-    const f = new Date(ini); f.setDate(f.getDate() + i);
+    const f = new Date(ini + 'T12:00'); f.setDate(f.getDate() + i);
     const fecha = f.toISOString().slice(0, 10);
     MOM.forEach(m => { if (idDe[d[m]]) filas.push({
-      meal_plan_id: plan.id, fecha, momento: MOM_BD[m], recipe_id: idDe[d[m]],
+      meal_plan_id: planId, fecha, momento: MOM_BD[m], recipe_id: idDe[d[m]],
       profile_id: SESION.id }); });
   });
-  if (filas.length) await TYC.db.from('planned_meals').insert(filas);
+  if (!filas.length) return false;
+  /* El error de esta inserción se ignoraba. Si falla, el plan queda vacío y la
+     app enseña el menú de ejemplo sin decir nada: hay que enterarse. */
+  const {error} = await TYC.db.from('planned_meals').insert(filas);
+  if (error){ console.error('T&C · no se han guardado las comidas:', error.message); return false; }
   return true;
 }
 

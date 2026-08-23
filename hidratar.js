@@ -265,6 +265,41 @@ const fechaCorta = iso => {
   return `${f.getDate()} ${['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][f.getMonth()]}`;
 };
 
+/* ── los días de oficina de Tama ────────────────────────────────────────────
+   El calendario existía desde hace días pero no guardaba nada: al cerrar la app
+   los días marcados se perdían. Es de las pocas cosas que se registran con
+   antelación —te los comunican— así que perderlos duele más que perder un tic.
+   Se leen los dos perfiles: quién come fuera de casa lo tienen que saber los
+   dos, porque decide cuántos túper se preparan la noche antes. */
+async function hidratarOficina(){
+  const {data, error} = await TYC.db.from('office_days')
+    .select('fecha, lleva_desayuno, profiles(nombre)');
+  if (error) throw error;
+  OFICINA.t.length = 0; DESAYUNO_FUERA.t.length = 0;
+  for (const d of (data || [])){
+    const quien = (d.profiles?.nombre || '').toLowerCase().startsWith('c') ? 'c' : 't';
+    if (quien !== 't') continue;              // Cristina va todos los laborables
+    OFICINA.t.push(d.fecha);
+    if (d.lleva_desayuno) DESAYUNO_FUERA.t.push(d.fecha);
+  }
+  GUARDAR_OFICINA = guardarOficina;
+  return OFICINA.t.length;
+}
+
+async function guardarOficina(fecha, esOficina, llevaDesayuno){
+  if (!esOficina){
+    const {error} = await TYC.db.from('office_days')
+      .delete().eq('profile_id', SESION.id).eq('fecha', fecha);
+    if (error) console.warn('[T&C] no se ha podido borrar el día de oficina:', error.message);
+    return;
+  }
+  const {error} = await TYC.db.from('office_days').upsert({
+    profile_id: SESION.id, fecha,
+    lleva_desayuno: !!llevaDesayuno, lleva_comida: true, lleva_media: true
+  }, {onConflict: 'profile_id,fecha'});
+  if (error) console.warn('[T&C] no se ha podido guardar el día de oficina:', error.message);
+}
+
 /* ── la medicación, de la base ──────────────────────────────────────────── */
 const ORDEN_MOM = {ayunas:0, desayuno:1, comida:2, merienda:3, cena:4, noche:5};
 async function hidratarMedicacion(){
@@ -380,7 +415,7 @@ async function rellenarSemana(planId, ini, semana){
   const filas = [];
   semana.forEach((d, i) => {
     const f = new Date(ini + 'T12:00'); f.setDate(f.getDate() + i);
-    const fecha = f.toISOString().slice(0, 10);
+    const fecha = isoLocal(f);   // local, no UTC: si no, el plan se corre un día
     MOM.forEach(m => { if (idDe[d[m]]) filas.push({
       meal_plan_id: planId, fecha, momento: MOM_BD[m], recipe_id: idDe[d[m]],
       profile_id: SESION.id }); });
@@ -479,6 +514,7 @@ async function arrancarApp(){
        tiraba toda la hidratación al modo demostración. */
     const fallos = [];
     for (const [nombre, fn] of [['objetivos', hidratarObjetivos], ['medicación', hidratarMedicacion],
+                                ['días de oficina', hidratarOficina],
                                 ['historial',  hidratarHistorial],
                                 ['menú',       hidratarMenu],
                                 /* la compra va DESPUÉS del menú: la lista sale

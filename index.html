@@ -444,7 +444,13 @@ const HOY_F = fechaDe(0);
 /* El plan arranca el lunes 31 de agosto. Antes de esa fecha no tiene sentido
    enseñar «esta semana»: la semana que importa es la primera del plan. */
 const INICIO_PLAN = new Date(2026, 7, 31, 12);
-const isoDe = off => { const f=fechaDe(off); return f.toISOString().slice(0,10); };
+/* La fecha en texto, en HORA LOCAL. toISOString() convierte a UTC, y en España
+   eso significa que entre medianoche y las dos de la mañana devolvía el día
+   ANTERIOR: la cabecera decía «Lunes 24 de agosto · Fin de semana» porque el
+   título miraba la fecha local y el resto preguntaba por el domingo 23. Todo
+   lo que hable de días tiene que pasar por aquí. */
+const isoLocal = f => `${f.getFullYear()}-${String(f.getMonth()+1).padStart(2,'0')}-${String(f.getDate()).padStart(2,'0')}`;
+const isoDe = off => isoLocal(fechaDe(off));
 const HOY_ISO = isoDe(0);
 const antesDeEmpezar = () => HOY_F < INICIO_PLAN;
 const baseSemana = () => antesDeEmpezar() ? INICIO_PLAN : HOY_F;
@@ -459,7 +465,7 @@ function rotuloSemana(off){
 }
 const diasDeSemana = off => { const a=lunesDe(baseSemana()); a.setDate(a.getDate()+off*7);
   return Array.from({length:7},(_,i)=>{const f=new Date(a); f.setDate(f.getDate()+i);
-    return {d:LETRA_DIA[f.getDay()], n:String(f.getDate()), iso:f.toISOString().slice(0,10)};}); };
+    return {d:LETRA_DIA[f.getDay()], n:String(f.getDate()), iso:isoLocal(f)};}); };
 /* Qué toca hoy y cuándo es lo siguiente. El plan de la semana ya está escrito
    por posición (lunes … domingo): basta con leerlo por el día que sea hoy, en
    vez de dar por hecho que hoy es el día de sesión. */
@@ -481,7 +487,7 @@ const DIAS_ATRAS=[0,-1,-2].map(o=>{const f=fechaDe(o);
 
 /* Saber qué versión corre en cada móvil deja de ser adivinar. Cuando algo
    «no se actualiza», este número lo dice en un vistazo. */
-const VERSION_APP = 'v12 · 23 ago 2026';
+const VERSION_APP = 'v13 · 24 ago 2026';
 const TYC_CONECTADO = () => typeof TYC !== 'undefined' && !!TYC.db && !TYC.demo;
 
 /* Descarta el service worker y las cachés y recarga: la salida de emergencia
@@ -1206,11 +1212,17 @@ function sheetOficina(){
       ${Array.from({length:hueco},()=>'<span></span>').join('')}
       ${Array.from({length:dias},(_,i)=>{const d=i+1, fe=f(d);
         const lab=esLaborable(fe), on=OFICINA.t.includes(fe), des=DESAYUNO_FUERA.t.includes(fe);
-        return `<button class="cal-d ${on?'on':''} ${lab?'':'fin'}" ${lab?`onclick="toggleOficina('${fe}')"`:'disabled'}>
+        /* Solo Tama puede marcar sus días: la base no deja escribir en el perfil
+           del otro, así que dejar los botones activos sería prometer algo que
+           luego se rechaza en silencio. Cristina los ve, que es lo que necesita
+           para saber cuántos túper hay que preparar. */
+        const puedo = P==='t';
+        return `<button class="cal-d ${on?'on':''} ${lab?'':'fin'}" ${lab&&puedo?`onclick="toggleOficina('${fe}')"`:'disabled'}>
           ${d}${des?'<i>🥣</i>':''}</button>`}).join('')}
     </div>
     <div class="note">${nOficina} ${nOficina===1?'día marcado':'días marcados'} en ${NOM[MES_CAL-1]}.
-      Cada toque avanza un estado: <b>libre → oficina → oficina y desayuno 🥣 → libre</b>.</div>
+      ${P==='t'?'Cada toque avanza un estado: <b>libre → oficina → oficina y desayuno 🥣 → libre</b>.'
+        :'Los marca Tama desde su móvil. Aquí los ves para saber cuántos túper hay que preparar.'}</div>
     <div class="banner info" style="margin-top:12px"><b class="t">La regla es que se lleva túper</b>
       Todos los días marcados se planifican con comida y media mañana para llevar. Si un día acabas
       comiendo fuera con compañeros, eso es la excepción y se marca en el cierre del día.</div>
@@ -1219,7 +1231,9 @@ function sheetOficina(){
       Lo que cambia es <b>cuántos túper se preparan</b> la noche antes, <b>qué desayunos y medias mañanas
       entran</b> —los de oficina tienen que poder llevarse— y <b>quién está en casa</b> para cocinar
       una cena que dé trabajo.</div>
-    <button class="cta" style="margin-top:14px" onclick="closeSheet(); render()">Guardar</button>`);
+    ${GUARDAR_OFICINA?'':`<div class="banner" style="margin-top:10px"><b class="t">⚠ Sin conexión con la base</b>
+      Lo que marques aquí se ve ahora pero no se guarda: al cerrar la app se pierde.</div>`}
+    <button class="cta" style="margin-top:14px" onclick="closeSheet(); render()">Listo</button>`);
 }
 /* Tres estados en un mismo toque: nada → oficina → oficina y desayuno → nada.
    Mantener pulsado en un móvil es un gesto que nadie descubre solo. */
@@ -1228,6 +1242,10 @@ function toggleOficina(fe){
   if(i<0)      OFICINA.t.push(fe);                       // nada → oficina
   else if(j<0) DESAYUNO_FUERA.t.push(fe);                // oficina → + desayuno
   else { OFICINA.t.splice(i,1); DESAYUNO_FUERA.t.splice(j,1); }   // → nada
+  /* Y se guarda. Hasta ahora el calendario solo cambiaba de color: al cerrar la
+     app, los días marcados desaparecían. */
+  if(GUARDAR_OFICINA) GUARDAR_OFICINA(fe,
+    OFICINA.t.includes(fe), DESAYUNO_FUERA.t.includes(fe));
   sheetOficina();
 }
 function sheetRitmo(){
@@ -2177,7 +2195,7 @@ function pintarAlta(mantenerFoco){
 function guardarAlta(){
   const {n,g,origen}=ALTA;
   const dias={huerta:7, regalo:10, otra:10, pesca:3}[origen]||7;
-  const cad=new Date(2026,7,19+dias).toISOString().slice(0,10);
+  const cad=isoLocal(new Date(2026,7,19+dias));
   ESPONTANEOS.push({n, g, origen, fecha:'hoy', cad});
   DESPENSA[n]=[(DESPENSA[n]?DESPENSA[n][0]:0)+g, cad];
   closeSheet(); pintarCompra(); pintarQuick();
@@ -2221,7 +2239,7 @@ function conservar(n, g, id){
   }
   const final=Math.round(g*c.merma);
   const d=new Date(2026,7,19); d.setMonth(d.getMonth()+c.meses);
-  const cad=d.toISOString().slice(0,10);
+  const cad=isoLocal(d);
   CONSERVAS_HECHAS.push({n, metodo:c.m, e:c.e, origen:g, g:final, ubic:c.ubic, cad, fecha:'hoy'});
   DESPENSA[n+' · '+c.m.toLowerCase()]=[final, cad];
   UBIC[n+' · '+c.m.toLowerCase()]=c.ubic;
@@ -2519,7 +2537,7 @@ function pintarCompra(){
         <div class="grow"><div class="meta">Productos en despensa</div>
           <div style="font-size:22px; font-weight:700; letter-spacing:-.03em">${rows.length}</div></div>
         ${(()=>{const lim=new Date(); lim.setDate(lim.getDate()+7);
-          const n=rows.filter(([,[,cad]])=>cad && cad<=lim.toISOString().slice(0,10)).length;
+          const n=rows.filter(([,[,cad]])=>cad && cad<=isoLocal(lim)).length;
           return n?`<span class="chip warn">${n} caduca${n>1?'n':''} esta semana</span>`
                   :'<span class="chip good">✓ nada caduca esta semana</span>';})()}</div>
         <div class="note">Entra con la compra. Sale sola al marcar las comidas como hechas. El ajuste manual es una vez al mes.</div></div>

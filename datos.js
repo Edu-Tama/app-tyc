@@ -1193,6 +1193,7 @@ const MARCAS={};
    propaga; sin base de datos el prototipo sigue funcionando en local. */
 let GUARDAR_MARCA = null;
 let CERRAR_LISTA  = null;
+let GUARDAR_OFICINA = null;
 
 /* Cadenas: cada una desvía distinto de mis precios de referencia, que son de
    Mercadona. Con tres o cuatro compras el factor deja de ser una suposición. */

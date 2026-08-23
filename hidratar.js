@@ -75,7 +75,7 @@ async function hidratarCatalogo(){
 /* ── el perfil: los objetivos salen de la base, no de una constante ─────── */
 async function hidratarPerfil(){
   const {data:p, error} = await TYC.db.from('profiles')
-    .select('id, nombre, sexo, altura_cm, kcal_min, kcal_max, kcal_suelo, proteina_min_g, estado')
+    .select('id, nombre, sexo, altura_cm, kcal_min, kcal_max, kcal_suelo, proteina_min_g, estado, household_id')
     .eq('id', SESION.id).single();
   if (error) throw error;
 
@@ -88,7 +88,7 @@ async function hidratarPerfil(){
   FACTOR[yo] = +(((p.kcal_min + p.kcal_max) / 2) / 1800).toFixed(2);
   OBJ[yo] = {min:p.kcal_min, max:p.kcal_max, prot:p.proteina_min_g};
 
-  SESION.perfil = yo; SESION.nombre = p.nombre;
+  SESION.perfil = yo; SESION.nombre = p.nombre; SESION.household = p.household_id;
   return yo;
 }
 
@@ -109,6 +109,118 @@ async function hidratarDespensa(){
   return Object.keys(DESPENSA).length;
 }
 
+/* ── la medicación, de la base ──────────────────────────────────────────── */
+const ORDEN_MOM = {ayunas:0, desayuno:1, comida:2, merienda:3, cena:4, noche:5};
+async function hidratarMedicacion(){
+  const {data, error} = await TYC.db.from('medications')
+    .select('nombre, dosis, momentos, con_comida, notas_admin').eq('activa', true);
+  if (error) throw error;
+  const yo = SESION.perfil;
+  MEDICACION[yo] = [];
+  for (const m of (data || []))
+    for (const mom of (m.momentos || []))
+      MEDICACION[yo].push({
+        n: m.nombre + (m.dosis ? ' ' + m.dosis : ''),
+        cuando: mom.charAt(0).toUpperCase() + mom.slice(1),
+        comida: m.con_comida, e: '💊',
+        nota: m.notas_admin || undefined,
+        _o: ORDEN_MOM[mom] ?? 9
+      });
+  MEDICACION[yo].sort((a,b) => a._o - b._o);
+  return MEDICACION[yo].length;
+}
+
+/* El enum de la base dice «media_manana»; la app, «media». Se traduce en la
+   frontera y no en medio del código, que es donde se pierde. */
+const MOM_BD  = {desayuno:'desayuno', media:'media_manana', comida:'comida',
+                 merienda:'merienda', cena:'cena'};
+const MOM_APP = Object.fromEntries(Object.entries(MOM_BD).map(([a,b])=>[b,a]));
+
+/* ── el menú de la semana ───────────────────────────────────────────────────
+   Se genera con el mismo motor que ya estaba probado y se guarda en la base,
+   para que los dos móviles vean exactamente la misma semana. Si ya hay una
+   guardada, se lee; solo se genera cuando no existe. */
+function lunesISO(off){
+  const f = new Date(); const d = (f.getDay() + 6) % 7;
+  f.setDate(f.getDate() - d + off * 7);
+  return f.toISOString().slice(0, 10);
+}
+async function hidratarMenu(){
+  MES = new Date().getMonth() + 1;          // temporada real, no agosto fijo
+  for (const [off, destino] of [[0, MENU], [1, MENU2]]){
+    const ini = lunesISO(off);
+    let {data: plan} = await TYC.db.from('meal_plans')
+      .select('id, planned_meals(fecha, momento, recipe_id, recipes(clave))')
+      .eq('semana_inicio', ini).maybeSingle();
+
+    if (!plan || !(plan.planned_meals || []).length){
+      const gen = generarSemana();
+      if (!gen) continue;                    // sin semana válida: se queda la de ejemplo
+      await guardarSemana(ini, gen.semana);
+      volcarSemana(destino, off, gen.semana);
+    } else {
+      const porFecha = {};
+      for (const pm of plan.planned_meals){
+        const m = MOM_APP[pm.momento] || pm.momento;
+        (porFecha[pm.fecha] = porFecha[pm.fecha] || {})[m] = pm.recipes?.clave;
+      }
+      const dias = Object.keys(porFecha).sort();
+      volcarSemana(destino, off, dias.map(f => porFecha[f]));
+    }
+  }
+}
+function volcarSemana(destino, off, semana){
+  const dias = diasDeSemana(off);
+  destino.length = 0;
+  semana.forEach((d, i) => {
+    if (!dias[i]) return;
+    destino.push({d: dias[i].d, n: dias[i].n, iso: dias[i].iso,
+      desayuno: d.desayuno, media: d.media, comida: d.comida,
+      merienda: d.merienda, cena: d.cena, _c: d._c, _t: d._t});
+  });
+}
+async function guardarSemana(ini, semana){
+  const {data: plan} = await TYC.db.from('meal_plans')
+    .insert({household_id: SESION.household, semana_inicio: ini, confirmado: true})
+    .select('id').single();
+  if (!plan) return;
+  const claves = [...new Set(semana.flatMap(d => MOM.map(m => d[m])))];
+  const {data: recs} = await TYC.db.from('recipes').select('id, clave').in('clave', claves);
+  const idDe = Object.fromEntries((recs || []).map(r => [r.clave, r.id]));
+  const filas = [];
+  semana.forEach((d, i) => {
+    const f = new Date(ini); f.setDate(f.getDate() + i);
+    const fecha = f.toISOString().slice(0, 10);
+    MOM.forEach(m => { if (idDe[d[m]]) filas.push({
+      meal_plan_id: plan.id, fecha, momento: MOM_BD[m], recipe_id: idDe[d[m]],
+      profile_id: SESION.id }); });
+  });
+  if (filas.length) await TYC.db.from('planned_meals').insert(filas);
+}
+
+/* ── historial: si no hay, no se inventa ────────────────────────────────────
+   Enseñar una gráfica de peso con datos que nadie ha registrado convierte la
+   app en una demo. Mejor un hueco honesto que un dibujo falso. */
+async function hidratarHistorial(){
+  const [{data: pesos}, {data: medidas}] = await Promise.all([
+    TYC.db.from('weight_logs').select('fecha, peso_kg').order('fecha'),
+    TYC.db.from('measurements').select('fecha, cintura_cm').order('fecha')
+  ]);
+  const yo = SESION.perfil;
+  const serie = (pesos || []).map(x => +x.peso_kg);
+  if (serie.length){ const d = yo === 'c' ? PESO_C : PESO_T; d.length = 0; d.push(...serie); }
+  else { PESO_C.length = 0; PESO_T.length = 0; }
+
+  const cint = (medidas || []).map(x => +x.cintura_cm).filter(Boolean);
+  CINTURA.c.length = 0; CINTURA.t.length = 0;
+  if (cint.length) CINTURA[yo].push(...cint);
+
+  /* Analíticas: solo las que estén cargadas de verdad. */
+  const {data: labs} = await TYC.db.from('lab_reports').select('id').limit(1);
+  if (!labs || !labs.length) LABS_EVO.length = 0;
+  return {pesos: serie.length, cintura: cint.length};
+}
+
 /* ── arranque ───────────────────────────────────────────────────────────── */
 async function arrancarApp(){
   if (typeof supabase === 'undefined'){ return caerADemo('no se ha podido cargar la librería'); }
@@ -122,12 +234,33 @@ async function arrancarApp(){
     const yo = await hidratarPerfil();
     const cat = await hidratarCatalogo();
     const nd  = await hidratarDespensa();
+    /* Cada bloque va por su cuenta: que falle el menú no debe dejar la
+       medicación o la despensa con datos de ejemplo. Antes un solo error
+       tiraba toda la hidratación al modo demostración. */
+    const fallos = [];
+    for (const [nombre, fn] of [['medicación', hidratarMedicacion],
+                                ['historial',  hidratarHistorial],
+                                ['menú',       hidratarMenu]]){
+      try { await fn(); }
+      catch(err){ fallos.push(nombre); console.error('T&C · falla '+nombre+':', err.message||err); }
+    }
+    if (fallos.length) avisoParcial(fallos);
     P = yo; DISPOSITIVO = yo;
     console.log(`T&C · ${cat.ing} ingredientes · ${cat.rec} recetas · ${nd} en despensa · ${SESION.nombre}`);
     ocultarAcceso(); sembrarDia(HORA); render();
   } catch (e) {
     caerADemo(e.message || e);
   }
+}
+
+/* Aviso cuando solo falla una parte: el resto de la app sí son datos reales. */
+function avisoParcial(fallos){
+  const av = document.getElementById('aviso-modo');
+  if (!av) return;
+  av.insertAdjacentHTML('afterbegin',
+    `<div class="banner" style="margin-bottom:11px"><b class="t">⚠ ${fallos.join(' y ')} sin cargar</b>
+      El resto son vuestros datos de verdad. Lo de ${fallos.join(' y ')} que veas es de ejemplo
+      y no se guarda. Pásaselo a quien lleva la app.</div>`);
 }
 
 /* Si la base falla, la app NO se queda en blanco: sigue con los datos de

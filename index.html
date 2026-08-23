@@ -276,12 +276,7 @@
     <span class="brand">T&amp;C</span>
     <div class="hdr-actions">
       <span class="quien" id="quien"></span>
-      <select id="hora" title="Solo en el prototipo: simular otra hora"
-        style="border:1px solid var(--border); background:var(--surface); color:var(--ink-2);
-        border-radius:999px; padding:7px 9px; font:inherit; font-size:12px; font-weight:650; box-shadow:var(--shadow)">
-        <option value="-1">🕐 ahora</option>
-        <option value="8">08:00</option><option value="11">11:00</option><option value="15">15:00</option>
-        <option value="19">19:00</option><option value="21">21:00</option><option value="22">22:30</option></select>
+
       <button class="icon-btn" id="notif">⚙</button>
       <button class="icon-btn" id="theme">◐</button>
     </div>
@@ -332,7 +327,7 @@
       <button data-t="progreso">Progreso</button>
     </div>
     <div data-tab-e="semana">
-      <h2 style="margin-top:14px">Semana 17-23 agosto</h2><div class="card" id="ent-semana"></div>
+      <h2 style="margin-top:14px" id="ent-sem-tit">Semana</h2><div class="card" id="ent-semana"></div>
       <div class="card" id="ent-logica"></div>
       <button class="cta" id="add-act" style="margin:2px 0 20px">+ Registrar actividad libre</button>
     </div>
@@ -435,6 +430,51 @@
    comidas del otro devuelve cero filas. Cristina entra como Cristina desde su
    móvil y Tama como Tama desde el suyo.
    Al conectar la base, SESION sale de db.auth.getUser() (ver supabase.js). */
+/* ═══ LA FECHA ES LA DE HOY ════════════════════════════════════════════════
+   Antes estaba escrito «Miércoles 19 de agosto» en cuatro sitios. Una app que
+   se usa a diario y enseña una fecha fija se lee como una maqueta, aunque los
+   datos de debajo sean reales. */
+const DIA_SEM=['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+const MES_NOM=['enero','febrero','marzo','abril','mayo','junio','julio','agosto',
+               'septiembre','octubre','noviembre','diciembre'];
+const LETRA_DIA=['D','L','M','X','J','V','S'];
+const fechaDe = off => { const f=new Date(); f.setDate(f.getDate()+off); return f; };
+const largo = f => `${DIA_SEM[f.getDay()]} ${f.getDate()} de ${MES_NOM[f.getMonth()]}`;
+const capi  = t => t.charAt(0).toUpperCase()+t.slice(1);
+const HOY_F = fechaDe(0);
+/* La semana empieza en lunes. Todo lo que rotula «semana» sale de aquí. */
+function lunesDe(f){ const x=new Date(f); const d=(x.getDay()+6)%7; x.setDate(x.getDate()-d); return x; }
+function rotuloSemana(off){
+  const a=lunesDe(HOY_F); a.setDate(a.getDate()+off*7);
+  const b=new Date(a); b.setDate(b.getDate()+6);
+  return a.getMonth()===b.getMonth()
+    ? `${a.getDate()}-${b.getDate()} ${MES_NOM[a.getMonth()]}`
+    : `${a.getDate()} ${MES_NOM[a.getMonth()].slice(0,3)} - ${b.getDate()} ${MES_NOM[b.getMonth()].slice(0,3)}`;
+}
+const diasDeSemana = off => { const a=lunesDe(HOY_F); a.setDate(a.getDate()+off*7);
+  return Array.from({length:7},(_,i)=>{const f=new Date(a); f.setDate(f.getDate()+i);
+    return {d:LETRA_DIA[f.getDay()], n:String(f.getDate()), iso:f.toISOString().slice(0,10)};}); };
+const DIAS_ATRAS=[0,-1,-2].map(o=>{const f=fechaDe(o);
+  return (o===0?'Hoy':o===-1?'Ayer':'Anteayer')+' · '+DIA_SEM[f.getDay()]+' '+f.getDate();});
+
+/* Saber qué versión corre en cada móvil deja de ser adivinar. Cuando algo
+   «no se actualiza», este número lo dice en un vistazo. */
+const VERSION_APP = 'v4 · 23 ago 2026';
+const TYC_CONECTADO = () => typeof TYC !== 'undefined' && !!TYC.db && !TYC.demo;
+
+/* Descarta el service worker y las cachés y recarga: la salida de emergencia
+   cuando un móvil se queda con una versión vieja. */
+async function forzarActualizacion(){
+  try{
+    if('serviceWorker' in navigator){
+      const rs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(rs.map(r => r.unregister()));
+    }
+    if(window.caches){ const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); }
+  }catch(e){}
+  location.reload(true);
+}
+
 let SESION={perfil:'c', email:'cristina@…'};
 let DISPOSITIVO=SESION.perfil;
 let P=SESION.perfil, DIA=0, HORA=new Date().getHours(), TAB='lista', TABM='s1', HOY={}, ACC={}, NOTA='', EXTRA_LOG={c:[],t:[]}, VER_HECHAS=false, VER_TICKET=false, MED={c:[false,false,false],t:[false,false]};
@@ -445,7 +485,7 @@ const kg=g=>g>=1000?(g/1000).toFixed(g%1000?1:0).replace('.',',')+' kg':Math.rou
 const MOMLAB={desayuno:'Desayuno',media:'Media mañana',comida:'Comida',merienda:'Merienda',cena:'Cena'};
 
 function sembrarDia(h){
-  const d=MENU.find(x=>x.n==='19');
+  const d=MENU.find(x=>x.n===String(HOY_F.getDate()))||MENU[0];
   HOY={c:MOM.map(k=>({k,r:d[k],estado:null})),t:MOM.map(k=>({k,r:d[k],estado:null}))};
   const n = h<9?0 : h<12?1 : h<14?2 : h<18?3 : h<21?4 : 4;   // cuántas comidas cabría haber hecho
   for(let i=0;i<n;i++){HOY.c[i].estado='hecho'; HOY.t[i].estado= i===2?'cambiado':'hecho';}
@@ -657,7 +697,7 @@ function sheetActividad(q=''){
 function sheetActividadForm(id){
   const d=DEPORTES.find(x=>x.id===id);
   openSheet(`<div class="row" style="margin-bottom:16px"><div class="thumb t-gym">${d.e}</div>
-    <div class="grow"><h3 style="font-size:18px">${d.n}</h3><div class="meta">Miércoles 19 de agosto</div></div>
+    <div class="grow"><h3 style="font-size:18px">${d.n}</h3><div class="meta">${capi(largo(HOY_F))}</div></div>
     <button class="icon-btn" onclick="sheetActividad()">↺</button></div>
     ${d.m.map(k=>`<div class="f"><label>${CAMPO[k][0]}</label><input placeholder="—"><span class="meta" style="width:38px">${CAMPO[k][1]}</span></div>`).join('')}
     <div class="f"><label>Esfuerzo percibido</label><div class="seg">${[2,4,6,8,10].map(n=>`<span class="chip${n===6?' on':''}">${n}</span>`).join('')}</div></div>
@@ -964,7 +1004,7 @@ function sheetInforme(){
 function sheetMedicacion(){
   const meds=MEDICACION[P];
   openSheet(`<h3>Medicación de hoy</h3>
-    <div class="meta" style="margin-bottom:16px">Miércoles 19 de agosto</div>
+    <div class="meta" style="margin-bottom:16px">${capi(largo(HOY_F))}</div>
     ${meds.map((m,i)=>`<div class="qr" ${i?'':'style="border-top:0"'} onclick="toggleMed(${i})">
       <div class="thumb sm t-lacteo">${m.e}</div>
       <div class="tx"><div class="when">${m.cuando}${m.comida?' · con comida':''}</div><b>${m.n}</b>
@@ -1029,7 +1069,13 @@ function sheetAjustes(){
     <button class="opt" onclick="sheetRitmo()">🛒 <span class="grow">Ritmo de compra y cocina<small>${AJUSTES_COMPRA.diaCompra?'Compra los '+DIA_LARGO[AJUSTES_COMPRA.diaCompra]:'Compra sin día fijo'} · tanda los ${DIA_LARGO[AJUSTES_COMPRA.diaTanda]}</small></span>›</button>
     <button class="opt" onclick="sheetOficina()">🏢 <span class="grow">Días de oficina de Tama<small>${OFICINA.t.length} marcados · se llevan túper</small></span>›</button>
     <button class="opt" onclick="sheetArranque()">🚀 <span class="grow">Asistente de arranque<small>Despensa, precios y primera semana</small></span>›</button>
-    <div class="ing" style="margin-top:14px"><span class="grow">Versión</span><span style="font-weight:650">Prototipo 2.4</span></div>
+    <div class="ing" style="margin-top:14px"><span class="grow">Versión</span>
+      <span style="font-weight:650">${VERSION_APP}</span></div>
+    <div class="ing"><span class="grow">Datos</span>
+      <span style="font-weight:650; color:${TYC_CONECTADO()?'var(--good-ink)':'var(--crit)'}">
+        ${TYC_CONECTADO()?'conectados a Supabase':'de ejemplo · sin conexión'}</span></div>
+    <button class="act" style="width:100%; margin-top:12px" onclick="forzarActualizacion()">
+      ↻ Buscar actualización</button>
     <div class="ing"><span class="grow">Sincronización</span><span style="font-weight:650; color:var(--good-ink)">✓ al día</span></div>
     <div class="ing"><span class="grow">Modo sin cobertura</span><span style="font-weight:650">activo · 12 cambios en cola</span></div>`);
 }
@@ -1479,7 +1525,7 @@ function pintarHero(){
         <div class="mini"><i style="width:${Math.min(100,prot/d.protMin*100)}%"></i></div></div>
       <div class="hstat">Registrado<b>${reg} de 5 comidas</b></div></div></div>`;
 }
-const DIAS_ATRAS=['Hoy · miércoles 19','Ayer · martes 18','Anteayer · lunes 17'];
+
 /* ═══ QUÉ ES DE LA CASA Y QUÉ ES DE CADA UNO ══════════════════════════════
    Sigue siendo la columna vertebral, aunque ya no haya que bloquear nada: es lo
    que decide qué cuelga de household_id y qué de profile_id en Supabase.
@@ -1728,7 +1774,7 @@ function semanaHTML(datos, editable, cocina, sem){
     const fueraC=!fuera&&(ac.kcal<OBJ.c.min||ac.kcal>OBJ.c.max), fueraT=!fuera&&(at.kcal<OBJ.t.min||at.kcal>OBJ.t.max);
     return `<div class="card">
       <div class="row" style="margin-bottom:6px">
-        <div class="dcol ${day.n==='19'?'today':''}" style="width:38px"><b>${day.n}</b><span>${day.d}</span></div>
+        <div class="dcol ${day.n===String(HOY_F.getDate())?'today':''}" style="width:38px"><b>${day.n}</b><span>${day.d}</span></div>
         <span class="grow"></span>
         <span class="chip" onclick="event.stopPropagation(); sheetCocinero('${day.n}')" style="cursor:pointer">
           👨‍🍳 ${QUIEN[(cocina||COCINA)[day.n]||'n'].split(' ·')[0]}</span>
@@ -1780,7 +1826,7 @@ function tarjetaTanda(sem){
       ${est?`<span class="chip ${est[1]}">${est[0]}</span>`:'<span style="color:var(--muted); font-size:18px">›</span>'}</div></div>`;
 }
 function pintarMenu(){
-  const sub={s1:'17-23 agosto · confirmada',s2:'24-30 agosto · propuesta, aún editable',
+  const sub={s1:rotuloSemana(0)+' · confirmada',s2:rotuloSemana(1)+' · propuesta, aún editable',
              prev:'Cuatro semanas vista · para anticipar cocina y compra',
              hist:'Lo que habéis comido · para repetir lo que funcionó'};
   $('#menu-sub').textContent=sub[TABM];
@@ -1799,7 +1845,7 @@ function pintarMenu(){
       <div class="banner info"><b class="t">Ración de cada uno: Cristina ×${FACTOR.c.toFixed(2).replace('.',',')} · Tama ×${FACTOR.t.toFixed(2).replace('.',',')}</b>
         Sale del objetivo calórico de cada uno. Como el aceite y las especias no escalan,
         la diferencia real de energía entre los dos platos es del ${(() => {
-          const d=MENU.find(x=>x.n==='19');
+          const d=MENU.find(x=>x.n===String(HOY_F.getDate()))||MENU[0];
           const a=MOM.reduce((x,k)=>x+nutre(d[k],'c').kcal,0), b=MOM.reduce((x,k)=>x+nutre(d[k],'t').kcal,0);
           return Math.round(100*(b/a-1));})()} %, no del ${Math.round(100*(FACTOR.t/FACTOR.c-1))} %.</div>
       ${tarjetaExcepciones('s1')}
@@ -2189,7 +2235,7 @@ function regenerar(){
 function pintarCompra(){
   const lista=listaCompra();
   const total=Object.values(lista).flat().reduce((s,i)=>s+i.precio,0);
-  $('#compra-sub').textContent={lista:'Semana 17-23 agosto · calculado desde el menú y la despensa',
+  $('#compra-sub').textContent={lista:'Semana '+rotuloSemana(0)+' · calculado desde el menú y la despensa',
     despensa:'Lo que hay en casa ahora mismo'}[TAB];
   if(TAB==='lista'){
     const semanal=225/4.33, consumo=costeConsumo(), mes=consumo*4.33, exceso=Math.round((mes/225-1)*100);
@@ -2312,6 +2358,7 @@ function pintarCompra(){
 function pintarEntreno(){
   const d=PERFILES[P];
   $('#ent-sub').textContent=`${d.nombre} · bloque de 8 semanas · semana 3`;
+  const t=$('#ent-sem-tit'); if(t) t.textContent='Semana '+rotuloSemana(0);
   $('#ent-logica').innerHTML=`<div class="row" style="margin-bottom:10px">
       <div class="grow"><strong style="font-size:14.5px">La lógica del bloque</strong></div>
       <span class="chip good">✓ progresión activa</span></div>
@@ -2335,7 +2382,7 @@ function pintarEntreno(){
         <div class="note" style="margin:1px 0 0">${RUTINA_DIARIA[P].min} min · ${RUTINA_DIARIA[P].pasos.length} ejercicios · ver cómo se hace</div></div>
       <div class="kc" style="color:var(--acc-txt); font-weight:650">ver ›</div></div>`:''}`+
     d.semana.map(([dia,n,txt,tipo])=>`
-    <div class="day"><div class="dcol ${n==='19'?'today':''}"><b>${n}</b><span>${dia}</span></div>
+    <div class="day"><div class="dcol ${n===String(HOY_F.getDate())?'today':''}"><b>${n}</b><span>${dia}</span></div>
       <div class="thumb sm ${col[tipo][0]}">${col[tipo][1]}</div>
       <div class="grow" style="padding-top:8px">
         <div style="font-size:14px; font-weight:${tipo==='off'?'400':'650'}; color:${tipo==='off'?'var(--muted)':'var(--ink)'}">${txt}</div>
@@ -2413,7 +2460,13 @@ function pintarSalud(){
   const cin=CINTURA[P], W=404,H=110,L=28,R2=44,T=12,B=18;
   const mn=Math.min(...cin)-1, mx=Math.max(...cin)+1;
   const cx=i=>L+i*(W-L-R2)/(cin.length-1), cy=v=>T+(mx-v)*(H-T-B)/(mx-mn);
-  $('#c-cintura').innerHTML=`
+  if(!CINTURA[P].length){
+    $('#c-cintura').innerHTML=`<div class="qr" style="border-top:0">
+      <div class="thumb sm t-off" style="color:var(--muted)">📏</div>
+      <div class="tx"><b style="color:var(--muted)">Sin medidas todavía</b>
+        <div class="note" style="margin:1px 0 0">Se mide una vez al mes, en ayunas y a la altura del ombligo.
+          Con resistencia a la insulina dice más que el peso.</div></div></div>`;
+  } else $('#c-cintura').innerHTML=`
     <div class="row" style="margin-bottom:6px">
       <div class="grow"><strong style="font-size:14.5px">Perímetro de cintura</strong>
         <div class="note" style="margin:1px 0 0">Baja aunque la báscula se estanque. Es mejor indicador de riesgo metabólico que el peso.</div></div>
@@ -2550,6 +2603,18 @@ const showTip=(e,h)=>{tip.innerHTML=h; tip.style.opacity=1;
   tip.style.left=Math.min(e.clientX+12,innerWidth-tip.offsetWidth-8)+'px'; tip.style.top=(e.clientY-40)+'px'};
 const hideTip=()=>tip.style.opacity=0;
 function pintarPeso(){
+  /* Sin registros no se dibuja una gráfica inventada: se dice que no hay y se
+     explica cuándo aparecerá. Una curva falsa convierte la app en una maqueta. */
+  const mios = P==='c' ? PESO_C : PESO_T;
+  if(!mios.length){
+    $('#chart-peso').innerHTML=`<div class="scan" style="margin:8px 0 0">
+      <div style="font-size:30px">⚖️</div>
+      <div style="font-weight:650; margin-top:8px">Todavía no hay pesos</div>
+      <div class="note" style="margin-top:4px">La gráfica aparece con el primer registro.
+        Se pesa <b>miércoles y sábado</b>, al levantarse, y lo que se guarda es la media de 7 días
+        — no el dato del día, que sube y baja por agua y sal.</div></div>`;
+    return;
+  }
   const W=404,H=180,L=32,R2=44,T=10,B=22;
   /* Solo tu línea: el peso del otro es `profile_id = auth.uid()` y no se puede
      leer desde este móvil. Antes se pintaban las dos porque en el prototipo todo
@@ -2626,12 +2691,8 @@ $('#theme').onclick=()=>{const d=document.documentElement;
   d.dataset.theme=d.dataset.theme==='dark'?'light':'dark'; pintarPeso(); pintarAdh()};
 $('#add-act').onclick=()=>sheetActividad();
 $('#btn-informe').onclick=sheetInforme;
-$('#hora').onchange=e=>{
-  const v=+e.target.value;
-  HORA = v<0 ? new Date().getHours() : v;
-  if(v>=0) sembrarDia(HORA);          // el estado de ejemplo acompaña a la hora simulada
-  render();
-};
+/* El selector de hora era una muleta para probar cómo se ve la app a distintas
+   horas. En la versión real la hora es la del móvil y punto. */
 $('#dia-ant').onclick=()=>{if(DIA>-2){DIA--; render()}};
 $('#dia-sig').onclick=()=>{if(DIA<0){DIA++; render()}};
 document.addEventListener('click',e=>{
@@ -2648,7 +2709,7 @@ function render(){
   document.documentElement.style.setProperty('--acc-txt', document.documentElement.dataset.theme==='dark' ? d.acc : d.accTxt);
   const hola=HORA<13?'Buenos días':HORA<20?'Buenas tardes':'Buenas noches';
   $('#saludo').textContent=DIA===0?`${hola}, ${d.nombre}`:DIAS_ATRAS[-DIA].split(' · ')[0];
-  $('#hoy-sub').textContent=DIA===0?('Miércoles 19 de agosto · '+d.lugar):DIAS_ATRAS[-DIA].split(' · ')[1];
+  $('#hoy-sub').textContent=DIA===0?(capi(largo(HOY_F))+' · '+d.lugar):DIAS_ATRAS[-DIA].split(' · ')[1];
   pintarAvisos(); pintarAhora();
   pintarHero(); pintarQuick(); pintarMenu(); pintarCompra(); pintarEntreno(); pintarSalud(); pintarPeso(); pintarAdh();
 }

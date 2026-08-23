@@ -21,8 +21,7 @@ const ING = {
   'Pavo picado':           [120, 21,  'Carnicería', null, 'p'],
   'Jamón serrano':         [240, 30,  'Charcutería',null, 'p'],
   'Aceite de oliva':       [900, 0,   'Despensa',   null, 'f'],
-  'Aceite de oliva virgen':[900, 0,   'Despensa',   null, 'f'],
-  'Vinagre de Jerez':      [20,  0,   'Despensa',   null, 'f'],
+    'Vinagre de Jerez':      [20,  0,   'Despensa',   null, 'f'],
   'Salsa de soja':         [60,  6,   'Despensa',   null, 'f'],
   'Ajo':                   [149, 6,   'Frutería',   null, 'f'],
   'Canela':                [0,   0,   'Despensa',   null, 'f'],
@@ -116,7 +115,7 @@ const MACROS = {
  'Pan integral':[41,3.5,7,55],'Pan de centeno':[45,1.7,8,50],'Pan del día anterior':[52,3,3,70],
  'Tomate maduro':[3.9,0.2,1.2,30],'Tomate':[3.9,0.2,1.2,30],'Tomate triturado':[5,0.2,1.4,35],
  'Pavo en lonchas':[1.5,3,0,0],'Pavo en tiras':[0,2,0,0],'Pavo picado':[0,4,0,0],'Jamón serrano':[0.3,12,0,0],
- 'Aceite de oliva':[0,100,0,0],'Aceite de oliva virgen':[0,100,0,0],'Vinagre de Jerez':[0.4,0,0,0],
+ 'Aceite de oliva':[0,100,0,0],'Vinagre de Jerez':[0.4,0,0,0],
  'Salsa de soja':[5,0,0,0],'Ajo':[33,0.5,2.1,30],'Canela':[0,0,0,0],'Comino':[0,0,0,0],
  'Comino y pimentón':[0,0,0,0],'Pimentón':[0,0,0,0],'Huevo':[0.7,9.5,0,0],'Clara de huevo':[0.7,0.2,0,0],
  'Champiñones':[3.3,0.3,1,15],'Queso fresco':[3,5,0,0],'Queso fresco batido':[4,0.2,0,0],
@@ -138,7 +137,7 @@ for (const n in MACROS) if (ING[n]) ING[n].push(...MACROS[n]);
 const R = {
   tostada_tomate:{n:'Tostada de tomate, aceite y pavo', e:'🍅', t:'t-verdura', mom:'desayuno',
     act:6, tot:6, metodo:'Tostadora', temp:'tomate de temporada', tags:['salado','6 minutos'],
-    ing:[['Pan integral',75],['Tomate maduro',120],['Pavo en lonchas',75],['Aceite de oliva virgen',8]],
+    ing:[['Pan integral',75],['Tomate maduro',120],['Pavo en lonchas',75],['Aceite de oliva',8]],
     pasos:['Tuesta el pan.','Ralla el tomate y extiéndelo con el aceite y una pizca de sal.','Cubre con el pavo.']},
   revuelto_champi:{n:'Revuelto de champiñones y queso fresco', e:'🍳', t:'t-huevo', mom:'desayuno',
     act:8, tot:8, metodo:'Sartén', tags:['salado','alto en proteína'],
@@ -183,19 +182,19 @@ const R = {
     ing:[['Yogur natural',1,'ud'],['Nueces',15],['Canela',1]], pasos:['Mezclar.']},
   tomate_requeson:{n:'Tomate con requesón y orégano', e:'🍅', t:'t-lacteo', mom:'snack',
     act:2, tot:2, metodo:'Sin cocción', temp:'tomate de temporada', tags:['salado','alto en proteína'],
-    ing:[['Requesón',150],['Tomate',100],['Aceite de oliva virgen',5]], pasos:['Tomate en rodajas con el requesón encima y un hilo de aceite.']},
+    ing:[['Requesón',150],['Tomate',100],['Aceite de oliva',5]], pasos:['Tomate en rodajas con el requesón encima y un hilo de aceite.']},
   huevos_aguacate:{n:'Huevos revueltos con aguacate', e:'🥑', t:'t-huevo', mom:'desayuno',
     act:8, tot:8, metodo:'Sartén', tags:['salado','alto en proteína'],
     ing:[['Huevo',2,'ud'],['Aguacate',70],['Pan integral',50],['Aceite de oliva',5]],
     pasos:['Revuelve los huevos a fuego suave.','Sirve con el aguacate en láminas sobre el pan tostado.']},
   tostada_atun:{n:'Tostada de atún y tomate', e:'🐟', t:'t-pescado', mom:'desayuno',
     act:5, tot:5, metodo:'Tostadora', temp:'tomate de temporada', tags:['salado','5 minutos'],
-    ing:[['Pan integral',70],['Atún al natural',1,'ud'],['Tomate maduro',100],['Aceite de oliva virgen',8]],
+    ing:[['Pan integral',70],['Atún al natural',1,'ud'],['Tomate maduro',100],['Aceite de oliva',8]],
     pasos:['Tuesta el pan.','Ralla el tomate encima con el aceite.','Cubre con el atún escurrido.']},
   gazpacho_pollo:{n:'Gazpacho con pollo a la plancha', e:'🥤', t:'t-verdura', mom:'comida',
     act:12, tot:20, metodo:'Thermomix + sartén', temp:'tomate y pepino de temporada',
     tags:['túper 3 días','el gazpacho aguanta 4 días'], tupper:3,
-    ing:[['Tomate maduro',300],['Pepino',60],['Pimiento verde',40],['Aceite de oliva virgen',15],
+    ing:[['Tomate maduro',300],['Pepino',60],['Pimiento verde',40],['Aceite de oliva',15],
          ['Vinagre de Jerez',5],['Pechuga de pollo',170],['Ajo',3]],
     pasos:['Tritura tomate, pepino, pimiento y ajo 2 min vel. 10.','Emulsiona con el aceite y el vinagre.','Marca el pollo 4 min por cara.','Enfría el gazpacho 2 h.']},
   lentejas_frias:{n:'Ensalada templada de lentejas y pimiento', e:'🥗', t:'t-legumbre', mom:'comida',
@@ -234,7 +233,7 @@ const R = {
     meses:[4,5,6,7,8,9,10], act:12, tot:20, metodo:'Olla',
     tags:['túper 3 días','se come fría','tanda del domingo'], tupper:3, batch:true,
     ing:[['Quinoa',65],['Atún al natural',1,'ud'],['Tomate',110],['Pepino',80],
-         ['Cebolleta',30],['Aceite de oliva virgen',10],['Vinagre de Jerez',5]],
+         ['Cebolleta',30],['Aceite de oliva',10],['Vinagre de Jerez',5]],
     pasos:['Cuece la quinoa 15 min, escúrrela y enfríala bien: en caliente aguada la ensalada.',
       'Pica el tomate, el pepino y la cebolleta en dados pequeños.',
       'Mezcla con el atún escurrido, el aceite y el vinagre.']},
@@ -298,7 +297,7 @@ const R = {
     pasos:['Saltea el calabacín rallado 5 min.','Bate huevos y claras con el atún escurrido.','Cuaja 4 min por cada lado.']},
   salmorejo_huevo:{n:'Salmorejo con huevo y jamón', e:'🍅', t:'t-verdura', mom:'cena',
     act:10, tot:12, metodo:'Thermomix', temp:'tomate de temporada', tags:['sin fuego','aguanta 3 días'], tupper:3, lista:5,
-    ing:[['Tomate maduro',350],['Pan del día anterior',50],['Aceite de oliva virgen',15],
+    ing:[['Tomate maduro',350],['Pan del día anterior',50],['Aceite de oliva',15],
          ['Ajo',2],['Huevo',1,'ud'],['Jamón serrano',35]],
     pasos:['Tritura tomate, pan y ajo 2 min.','Emulsiona con el aceite hasta que espese.','Sirve muy frío con el huevo cocido y el jamón picado.']},
   pavo_verduras:{n:'Salteado de pavo con verduras de temporada', e:'🥘', t:'t-carne', mom:'cena',
@@ -331,7 +330,7 @@ const R = {
     pasos:['Horno a 200°. Boniato en rodajas en la base.','Pollo encima con ajo y pimentón, 30 min.','Añade las coles partidas los últimos 15 min.']},
   merluza_puerros:{n:'Merluza al horno con puerros y patata', e:'🐟', t:'t-pescado', mom:'cena', meses:[9,10,11,12,1,2,3],
     act:12, tot:35, metodo:'Horno', temp:'puerro de temporada', tags:['ligera'],
-    ing:[['Merluza congelada',220],['Puerro',120],['Patata',140],['Aceite de oliva virgen',12],['Ajo',4]],
+    ing:[['Merluza congelada',220],['Puerro',120],['Patata',140],['Aceite de oliva',12],['Ajo',4]],
     pasos:['Patata en rodajas al horno 20 min.','Añade el puerro en juliana y la merluza encima.','15 min más a 190°.']},
   garbanzos_espinacas:{n:'Garbanzos con espinacas y huevo', e:'🫘', t:'t-legumbre', mom:'comida', meses:[9,10,11,12,1,2,3],
     act:12, tot:25, metodo:'Sartén', tags:['túper 3 días','25 minutos','IG bajo'], tupper:3,
@@ -376,7 +375,7 @@ const R = {
     pasos:['Dora la carne y reserva.','Pocha la verdura 10 min y añade el tomate.','Devuelve la carne, cubre con agua y cuece 45 min.']},
   bacalao_verduras:{n:'Bacalao al horno con verduras', e:'🐟', t:'t-pescado', mom:'cena', meses:[11,12,1,2,3,4],
     act:12, tot:35, metodo:'Horno', tags:['ligera','alto en proteína'],
-    ing:[['Bacalao fresco',200],['Puerro',100],['Pimiento',100],['Patata',130],['Aceite de oliva virgen',12]],
+    ing:[['Bacalao fresco',200],['Puerro',100],['Pimiento',100],['Patata',130],['Aceite de oliva',12]],
     pasos:['Patata y verdura al horno 20 min a 200°.','Coloca el bacalao encima.','12 min más a 180°.']},
   crema_puerro:{n:'Crema de puerro y patata con huevo', e:'🥣', t:'t-verdura', mom:'cena', meses:[11,12,1,2,3],
     act:10, tot:30, metodo:'Thermomix', temp:'puerro de temporada', tags:['congelable','lista en 8 min'], lista:8,
@@ -388,7 +387,7 @@ const R = {
     pasos:['Limpia y saltea las alcachofas 12 min.','Añade el jamón 2 min.','Termina con los huevos revueltos por encima.']},
   salmon_brocoli:{n:'Salmón al horno con brócoli', e:'🐟', t:'t-pescado', mom:'cena', meses:[1,2,3,4,5,6,7,8,9,10,11,12],
     act:10, tot:28, metodo:'Horno', tags:['omega 3','ligera'],
-    ing:[['Salmón',150],['Brócoli',200],['Patata',110],['Aceite de oliva virgen',8],['Ajo',4]],
+    ing:[['Salmón',150],['Brócoli',200],['Patata',110],['Aceite de oliva',8],['Ajo',4]],
     pasos:['Patata al horno 18 min.','Añade salmón y brócoli.','10 min más a 190°.']},
   avena_naranja:{n:'Avena con naranja y canela', e:'🍊', t:'t-lacteo', mom:'desayuno', meses:[12,1,2,3,4],
     act:5, tot:5, metodo:'Sin cocción', temp:'naranja de temporada', tags:['dulce','preparable la noche antes'],
@@ -415,11 +414,11 @@ const R = {
     pasos:['Pocha la cebolleta y añade la patata en dados.','Incorpora los guisantes y cuece 12 min.','Añade el jamón y el huevo cocido.']},
   ensalada_pollo_fresas:{n:'Ensalada de pollo, espinacas y fresas', e:'🍓', t:'t-carne', mom:'comida', meses:[3,4,5,6],
     act:12, tot:20, metodo:'Sartén', temp:'fresa de temporada', tags:['túper 2 días','fresca'], tupper:2, lista:12,
-    ing:[['Pechuga de pollo',170],['Espinacas frescas',100],['Fresas',120],['Nueces',15],['Pan integral',40],['Aceite de oliva virgen',12]],
+    ing:[['Pechuga de pollo',170],['Espinacas frescas',100],['Fresas',120],['Nueces',15],['Pan integral',40],['Aceite de oliva',12]],
     pasos:['Marca el pollo y córtalo en tiras.','Mezcla espinacas, fresas y nueces.','Aliña y añade el pollo templado.']},
   merluza_esparragos:{n:'Merluza con espárragos y patata', e:'🐟', t:'t-pescado', mom:'cena', meses:[3,4,5,6],
     act:12, tot:30, metodo:'Horno', temp:'espárrago de temporada', tags:['ligera'],
-    ing:[['Merluza congelada',220],['Espárragos trigueros',180],['Patata',130],['Aceite de oliva virgen',12],['Ajo',4]],
+    ing:[['Merluza congelada',220],['Espárragos trigueros',180],['Patata',130],['Aceite de oliva',12],['Ajo',4]],
     pasos:['Patata al horno 20 min.','Añade espárragos y merluza.','12 min más a 190°.']},
   tortilla_esparragos:{n:'Tortilla de espárragos trigueros', e:'🍳', t:'t-huevo', mom:'cena', meses:[3,4,5,6],
     act:12, tot:18, metodo:'Sartén', temp:'espárrago de temporada', tags:['18 minutos'], lista:18,
@@ -442,7 +441,7 @@ const R = {
     meses:[1,2,3,4,5,6,7,8,9,10,11,12], act:10, tot:10, metodo:'Sin cocción',
     tags:['10 minutos','túper 3 días','sin encender el fuego','IG bajo'], tupper:3, lista:10,
     ing:[['Lentejas de bote',220],['Tomate',100],['Cebolleta',40],['Pimiento',60],
-         ['Atún al natural',1,'ud'],['Aceite de oliva virgen',12],['Comino',1]],
+         ['Atún al natural',1,'ud'],['Aceite de oliva',12],['Comino',1]],
     pasos:['Enjuaga y escurre las lentejas.','Pica la verdura en dados pequeños.','Mezcla con el atún, el aceite y el comino.']},
   pollo_plancha_verduras:{n:'Pollo a la plancha con verduras salteadas', e:'🍗', t:'t-carne', mom:'comida',
     meses:[1,2,3,4,5,6,7,8,9,10,11,12], act:18, tot:18, metodo:'Sartén',
@@ -462,7 +461,7 @@ const R = {
     meses:[1,2,3,4,5,6,7,8,9,10,11,12], act:15, tot:15, metodo:'Sartén',
     tags:['15 minutos','túper 2 días'], tupper:2, lista:15,
     ing:[['Pechuga de pollo',170],['Lechuga',120],['Aguacate',60],['Tomate',100],
-         ['Pan integral',40],['Aceite de oliva virgen',10]],
+         ['Pan integral',40],['Aceite de oliva',10]],
     pasos:['Marca el pollo y córtalo en tiras.','Mezcla lechuga, tomate y aguacate.','Aliña y sirve con el pan tostado.']},
   crema_champi:{n:'Crema de champiñones y puerro con pollo', e:'🍄', t:'t-verdura', mom:'cena',
     meses:[1,2,3,4,9,10,11,12], act:12, tot:28, metodo:'Thermomix + sartén',
@@ -474,7 +473,7 @@ const R = {
     meses:[1,2,3,4,5,6,7,8,9,10,11,12], act:20, tot:22, metodo:'Olla',
     tags:['22 minutos','túper 2 días'], tupper:2, lista:22,
     ing:[['Pasta integral',65],['Pechuga de pollo',160],['Brócoli',150],['Ajo',5],
-         ['Aceite de oliva virgen',12],['Queso rallado ligero',15]],
+         ['Aceite de oliva',12],['Queso rallado ligero',15]],
     pasos:['Cuece la pasta y el brócoli juntos los últimos 5 min.','Saltea el pollo con el ajo.','Mezcla todo con el queso rallado.']},
   crema_brocoli:{n:'Crema de brócoli con huevo', e:'🥦', t:'t-verdura', mom:'cena',
     meses:[1,2,3,4,10,11,12], act:10, tot:25, metodo:'Thermomix',
@@ -486,7 +485,7 @@ const R = {
     meses:[1,2,3,4,5,6,7,8,9,10,11,12], act:15, tot:18, metodo:'Sartén',
     tags:['18 minutos','túper 2 días','omega 3'], tupper:2, lista:18,
     ing:[['Lentejas de bote',200],['Salmón',120],['Cebolleta',40],['Pimiento',70],
-         ['Aceite de oliva virgen',10],['Comino',1]],
+         ['Aceite de oliva',10],['Comino',1]],
     pasos:['Marca el salmón 3 min por cara y desmígalo.','Saltea la verdura 6 min.','Mezcla con las lentejas escurridas.']},
   bacalao_garbanzos:{n:'Garbanzos con bacalao y espinacas', e:'🐟', t:'t-pescado', mom:'comida',
     meses:[1,2,3,4,11,12], act:15, tot:30, metodo:'Olla',
@@ -504,7 +503,7 @@ const R = {
     meses:[9,10,11,12,1,2], act:10, tot:45, metodo:'Horno',
     tags:['túper 3 días','se come frío o caliente'], tupper:3,
     ing:[['Boniato',260],['Atún al natural',1,'ud'],['Cebolleta',40],['Queso rallado ligero',20],
-         ['Aceite de oliva virgen',10]],
+         ['Aceite de oliva',10]],
     pasos:['Asa el boniato entero 40 min a 200°.','Ábrelo y mezcla la pulpa con el atún y la cebolleta.','Rellena y gratina 5 min con el queso.']},
   coles_jamon_huevo:{n:'Coles de Bruselas con jamón cocido y huevo', e:'🥬', t:'t-verdura', mom:'cena',
     meses:[10,11,12,1,2,3], act:15, tot:22, metodo:'Sartén',
@@ -1397,6 +1396,24 @@ function necesidades(){
       need[n]=(need[n]||0)+g;
     }
   return need;
+}
+/* LA LISTA QUE SE VE.
+   `listaCompra()` la CALCULA a partir del menú y la despensa de este móvil.
+   Eso está bien para el prototipo, pero en real hacía que cada teléfono
+   enseñara su propio cálculo: basta con que uno tenga el catálogo a medio
+   cargar para que las cantidades bailen. La lista de la casa se calcula una
+   vez, se guarda y se LEE. Esta es la que pinta la pantalla. */
+let LISTA_GUARDADA = null;      // la rellena hidratar.js desde shopping_items
+const listaVista = () => LISTA_GUARDADA || listaCompra();
+
+/* Huella corta de la lista, para poder comprobar de un vistazo que los dos
+   móviles enseñan exactamente lo mismo sin tener que comparar 26 líneas. */
+function huellaLista(l){
+  const txt = Object.keys(l).sort().map(sec =>
+    sec + ':' + l[sec].map(i => i.n + '=' + Math.round(i.g)).sort().join(',')).join('|');
+  let h = 0;
+  for (let i = 0; i < txt.length; i++) h = (h * 31 + txt.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36).slice(0, 4);
 }
 function listaCompra(){
   const need=necesidades(), out={};

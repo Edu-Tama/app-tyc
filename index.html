@@ -481,7 +481,7 @@ const DIAS_ATRAS=[0,-1,-2].map(o=>{const f=fechaDe(o);
 
 /* Saber qué versión corre en cada móvil deja de ser adivinar. Cuando algo
    «no se actualiza», este número lo dice en un vistazo. */
-const VERSION_APP = 'v11 · 23 ago 2026';
+const VERSION_APP = 'v12 · 23 ago 2026';
 const TYC_CONECTADO = () => typeof TYC !== 'undefined' && !!TYC.db && !TYC.demo;
 
 /* Descarta el service worker y las cachés y recarga: la salida de emergencia
@@ -504,6 +504,23 @@ const $=s=>document.querySelector(s);
 const media=a=>a.map((_,i)=>{const s=a.slice(Math.max(0,i-3),i+1); return s.reduce((x,y)=>x+y,0)/s.length});
 const eur=v=>v.toFixed(2).replace('.',',')+' €';
 const kg=g=>g>=1000?(g/1000).toFixed(g%1000?1:0).replace('.',',')+' kg':Math.round(g)+' g';
+/* Hay cosas que no se compran ni se gastan en gramos. Los huevos van por
+   docenas, los plátanos por piezas: pedir «600 g de huevo» obliga a hacer una
+   división mental en el pasillo. Si el ingrediente tiene peso por unidad y se
+   mide por unidades, la cantidad se enseña en unidades. */
+/* Qué se compra contando piezas. Es una propiedad de la COMPRA, no del
+   escalado de la receta: el modo de escalado decide cómo se ajusta la ración y
+   tocarlo movería calorías ya calibradas. */
+const PLURAL={'Huevo':'huevos','Plátano':'plátanos','Higos frescos':'higos',
+  'Aguacate':'aguacates','Naranja':'naranjas','Kiwi':'kiwis','Manzana':'manzanas',
+  'Pera':'peras','Limón':'limones','Yogur natural':'yogures','Skyr natural':'tarrinas de skyr',
+  'Melocotón':'melocotones','Clara de huevo':'claras'};
+function porUnidades(n){ const i=ING[n]; return !!(i && i[3] && PLURAL[n]); }
+function cant(n, g){
+  if(!porUnidades(n)) return kg(g);
+  const u=Math.ceil(g/ING[n][3]);
+  return u+' '+(u===1 ? n.toLowerCase().replace(/s$/,'') : (PLURAL[n]||n.toLowerCase()+'s'));
+}
 const MOMLAB={desayuno:'Desayuno',media:'Media mañana',comida:'Comida',merienda:'Merienda',cena:'Cena'};
 
 /* SIN_EJEMPLO lo enciende la hidratación: a partir de ahí no se inventa ni una
@@ -1380,7 +1397,7 @@ function puerta(id){
 /* C · cerrar la lista. El ticket no es una importación suelta: es lo que cuadra
    lo comprado con lo previsto. */
 function sheetCerrar(k){
-  const L=LISTAS[k], lista=listaCompra();
+  const L=LISTAS[k], lista=listaVista();
   const n=L.secciones.flatMap(x=>lista[x]||[]).length;
   /* Solo hay ticket si la compra fue en un sitio que manda ticket digital Y
      ese ticket ha llegado. Si fuiste a Lidl, no lo hay: no se puede ofrecer. */
@@ -1477,7 +1494,7 @@ function sheetTicketDigital(){
 /* Otro supermercado: las cantidades ya las sabe la app. Solo falta un número. */
 function sheetOtroSuper(k){
   k = k || 'fresco';
-  const lista=listaCompra(), L=LISTAS[k];
+  const lista=listaVista(), L=LISTAS[k];
   const items=L.secciones.flatMap(x=>lista[x]||[]);
   const cogidos=items.filter(i=>(MARCAS[i.n]||{}).cogido);
   const faltan=items.filter(i=>(MARCAS[i.n]||{}).noHabia);
@@ -1737,12 +1754,39 @@ function pintarQuick(){
      «Impartes entreno · 20:00-21:30» también los domingos, que es el día que
      Tama dirige partido, y «la siguiente, jueves» cualquier día del año. */
   const hoyPlan = planDeDia(P, 0), sig = proximaSesion(P);
-  const esSesion = hoyPlan && hoyPlan[3]==='gym';
-  const htmlDeporte=`
+  /* El deporte también empieza el 31: mientras no arranque el plan no se
+     programa ninguna sesión, igual que no se programa comida. Y el título de la
+     sesión sale del plan del día, no del perfil: por eso ponía «Entrena al
+     equipo» encima de una sesión de fuerza. */
+  const esSesion = !HOY_SIN_PLAN && hoyPlan && hoyPlan[3]==='gym';
+  const htmlDeporte = HOY_SIN_PLAN ? `
+    <div class="qr" style="border-top:0">
+      <div class="thumb sm t-off" style="color:var(--muted)">📅</div>
+      <div class="tx"><div class="when">El plan de entrenamiento no ha empezado</div>
+        <b style="color:var(--muted)">Arranca el lunes ${INICIO_PLAN.getDate()} de ${MES_NOM[INICIO_PLAN.getMonth()]}</b>
+        <div class="note" style="margin:1px 0 0">La semana completa está en Entreno</div></div>
+      <div class="check" style="border:0"></div></div>
+    ${RUTINA_DIARIA[P]?`<div class="qr ${ACC.rutina?'on':''}" onclick="sheetRutina()">
+      <div class="thumb sm t-lacteo">${RUTINA_DIARIA[P].e}</div>
+      <div class="tx"><div class="when">Rutina diaria · cuando te venga bien</div>
+        <b>${RUTINA_DIARIA[P].n}</b>
+        <div class="note" style="margin:1px 0 0">${RUTINA_DIARIA[P].min} min · esta sí, desde hoy</div></div>
+      <div class="kc">${RUTINA_DIARIA[P].min}'</div><div class="check">${ACC.rutina?'✓':''}</div></div>`:''}
+    <div class="qr">
+      <div class="thumb sm t-verdura">👟</div>
+      <div class="tx"><div class="when">Base diaria · ${PASOS_OBJ[P].toLocaleString('es')} pasos</div>
+        <b style="color:var(--muted)">${PASOS[P]?PASOS[P].toLocaleString('es')+' hoy':'Se apunta al cerrar el día'}</b>
+        <div class="note" style="margin:1px 0 0">No depende del plan: los pasos cuentan desde hoy</div></div>
+      <div class="check" style="border:0"></div></div>
+    <div class="qr" onclick="sheetActividad()">
+      <div class="thumb sm t-off" style="color:var(--acc-txt); font-size:19px">+</div>
+      <div class="tx"><div class="when">Fuera del plan</div>
+        <b style="color:var(--acc-txt)">Añadir una actividad</b></div>
+      <div class="kc"></div><div class="check" style="border:0"></div></div>` : `
     ${esSesion
       ? `<div class="qr" style="border-top:0" onclick="sheetSesion(0)">
           <div class="thumb sm t-gym">🏋</div>
-          <div class="tx"><div class="when">Sesión de hoy</div><b>${e.titulo}</b></div>
+          <div class="tx"><div class="when">Sesión de hoy</div><b>${hoyPlan[2]}</b></div>
           <div class="kc">${e.meta.split('·').pop().trim()}</div>
           <div class="check" style="${ACC.sesion?'background:var(--good);border-color:var(--good);color:#fff':''}">${ACC.sesion?'✓':''}</div></div>`
       : `${hoyPlan && hoyPlan[3]==='work'
@@ -1769,13 +1813,22 @@ function pintarQuick(){
         <b>${RUTINA_DIARIA[P].n}</b>
         <div class="note" style="margin:1px 0 0">${RUTINA_DIARIA[P].min} min · no es sesión, es mantenimiento</div></div>
       <div class="kc">${RUTINA_DIARIA[P].min}'</div><div class="check">${ACC.rutina?'✓':''}</div></div>`:''}
-    <div class="qr">
+    ${/* Los pasos se apuntan en el cierre del día, no van llegando solos. Una
+          barra a cero toda la mañana con «8.000 faltan» solo consigue que el
+          bloque se ignore: se enseña el objetivo, y el número cuando lo haya. */
+      PASOS[P] ? `<div class="qr">
       <div class="thumb sm t-verdura">👟</div>
-      <div class="tx"><div class="when">Base diaria · desde ${PULSERA[P]}</div>
+      <div class="tx"><div class="when">Base diaria · registrado en el cierre</div>
         <b>${PASOS[P].toLocaleString('es')} de ${PASOS_OBJ[P].toLocaleString('es')} pasos</b>
         <div class="bar" style="height:5px; margin-top:5px"><i style="width:${Math.min(100,100*PASOS[P]/PASOS_OBJ[P])}%"></i></div></div>
       <div class="kc">${Math.max(0,PASOS_OBJ[P]-PASOS[P]).toLocaleString('es')}<br>faltan</div>
-      <div class="check" style="border:0"></div></div>
+      <div class="check" style="border:0"></div></div>`
+      : `<div class="qr">
+      <div class="thumb sm t-verdura">👟</div>
+      <div class="tx"><div class="when">Base diaria · ${PASOS_OBJ[P].toLocaleString('es')} pasos</div>
+        <b style="color:var(--muted)">Se apunta al cerrar el día</b>
+        <div class="note" style="margin:1px 0 0">Del ${PULSERA[P]}, de una vez y sin mirarlo cada hora</div></div>
+      <div class="check" style="border:0"></div></div>`}
     ${P==='c'?`<div class="qr ${ACC.paseo?'on':''}" onclick="accCheck('paseo')">
       <div class="thumb sm t-fruta">🚶</div>
       <div class="tx"><div class="when">Paseo después de comer · 12 min</div>
@@ -2219,16 +2272,16 @@ function marcarItem(n){
    2 kg de melocotón porque en Mercadona va en bolsa de 1 kg; en Lidl la bandeja
    es de 750 g y compras 1,5. Sin esto, la despensa arrastra el error. */
 function sheetItem(n){
-  const lista=listaCompra(), i=Object.values(lista).flat().find(x=>x.n===n);
+  const lista=listaVista(), i=Object.values(lista).flat().find(x=>x.n===n);
   if(!i) return;
   const m=MARCAS[n]||{}, f=i.formato;
   const ops=[1,2,3,4].map(k=>k*f).filter(g=>g!==i.comprado);
   openSheet(`<h3>${n}</h3>
-    <div class="meta" style="margin-bottom:16px">Hacen falta <b>${kg(i.g)}</b> para las recetas
-      de la semana${i.tengo?` · en casa hay ${kg(i.tengo)}`:''}</div>
+    <div class="meta" style="margin-bottom:16px">Hacen falta <b>${cant(n, i.g)}</b> para las recetas
+      de la semana${i.tengo?` · en casa hay ${cant(n, i.tengo)}`:''}</div>
     <button class="opt" onclick="marcarConCantidad('${n}',${i.g})">
       ${m.cogido&&m.g==null?'✅':'⬜'} <span class="grow">Cogido, lo que hacía falta
-        <small>${kg(i.g)} · ${eur(i.precioReal)}</small></span></button>
+        <small>${cant(n, i.g)} · ${eur(i.precioReal)}</small></span></button>
     <div class="sec-h">O la cantidad que venga en este súper</div>
     <div class="note" style="margin:-4px 0 8px">De referencia, en Mercadona va en ${fmt(f)}.
       Da igual el formato: lo que se apunta es cuánto entra en casa.</div>
@@ -2243,7 +2296,7 @@ function sheetItem(n){
     <button class="act" style="width:100%; margin-top:8px" onclick="noHabia('${n}')">No había</button>`);
 }
 function marcarConCantidad(n,g){
-  const lista=listaCompra(), i=Object.values(lista).flat().find(x=>x.n===n);
+  const lista=listaVista(), i=Object.values(lista).flat().find(x=>x.n===n);
   const m=MARCAS[n]=MARCAS[n]||{};
   m.cogido=true; delete m.noHabia;
   if(i && Math.round(g)===Math.round(i.g)) delete m.g; else m.g=g;
@@ -2348,7 +2401,7 @@ function regenerar(){
     ${r.intentos} ${r.intentos===1?'intento':'intentos'} hasta encontrar una semana válida.`;
 }
 function pintarCompra(){
-  const lista=listaCompra();
+  const lista=listaVista();
   /* El total de la lista es lo que cuesta lo que hace falta, igual que las
      líneas: si arriba sumara envases enteros y abajo cantidades, no cuadraría. */
   const total=Object.values(lista).flat().reduce((s,i)=>s+i.precioReal,0);
@@ -2406,6 +2459,10 @@ function pintarCompra(){
             ? `<span class="chip" onclick="sheetCerrar('${k}')" style="cursor:pointer; background:var(--acc); color:#fff">✓ Cerrar</span>`
             : '<span class="chip good">✓ cerrada</span>'}</div>
         ${L.estado==='abierta'?`<div class="bar" style="margin-bottom:10px"><i style="width:${Math.min(100,Math.round(100*L.cogidos/n))}%"></i></div>`:''}
+        ${(()=>{const dentro={}; secs.forEach(x=>{if(lista[x]) dentro[x]=lista[x]});
+          return `<div class="note" style="margin:0 0 6px; color:var(--muted)">
+            ${LISTA_GUARDADA?'lista de la casa':'calculada en este móvil'} ·
+            ${items.length} artículos · huella ${huellaLista(dentro)}</div>`})()}
         ${secs.filter(x=>lista[x]).map(sec=>`
         <div class="sec-h">${sec}<span>${eur(lista[sec].reduce((s,i)=>s+i.precioReal,0))}</span></div>
         ${lista[sec].map(i=>{const m=MARCAS[i.n]||{};
@@ -2413,7 +2470,7 @@ function pintarCompra(){
           return `<div class="item" style="${m.noHabia?'opacity:.5':''}">
           <span class="box ${m.cogido?'on':''}" onclick="marcarItem('${i.n}')">${m.cogido?'✓':''}</span>
           <span class="grow" onclick="sheetItem('${i.n}')" style="cursor:pointer">
-            ${i.n} <b style="color:var(--acc-txt)">${kg(i.g)}</b>
+            ${porUnidades(i.n)?'':i.n+' '}<b style="color:var(--acc-txt)">${cant(i.n, i.g)}</b>
             <span class="note" style="margin:0; display:block">
               ${m.noHabia?'<b style="color:var(--crit)">no había · '+m.noHabia+'</b>'
                :difiere?`<b style="color:var(--acc-txt)">cogido ${kg(real)}</b>${m.quien?' · '+m.quien:''}`
@@ -2422,7 +2479,7 @@ function pintarCompra(){
                   el súper en el que se acabe comprando, y ponerlo delante ya hizo
                   comprar 6 latas de atún donde hacían falta 3. Queda en la ficha,
                   para cuando importe. */
-               :i.tengo?`ya tenías ${kg(i.tengo)} · esto es lo que falta`:''}</span></span>
+               :i.tengo?`ya tenías ${cant(i.n, i.tengo)} · esto es lo que falta`:''}</span></span>
           <span class="price">${eur(difiere?i.precioReal*real/i.g:i.precioReal)}</span>
           <span class="chip" style="cursor:pointer" onclick="noHabia('${i.n}')">✕</span></div>`}).join('')}`).join('')}
         </div>`}).join('')}`;

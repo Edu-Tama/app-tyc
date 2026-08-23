@@ -180,17 +180,37 @@ async function hidratarCompra(){
   return Object.values(LISTA_ID).filter(Boolean).length;
 }
 
-/* Lo marcado, sea quien sea quien lo marcó. */
+/* Lo guardado: la lista Y lo marcado. Esto es lo que se pinta.
+   Antes solo se leían las marcas y la lista se seguía CALCULANDO en cada
+   móvil. Bastaba con una diferencia mínima en el catálogo cargado —o en la
+   versión de la app— para que las cantidades no coincidieran entre los dos
+   teléfonos. Ahora la lista viene entera de la base: es un dato, no un
+   cálculo que cada uno repite por su cuenta. */
 async function leerMarcas(){
   const ids = Object.values(LISTA_ID).filter(Boolean);
   if (!ids.length) return;
   const {data} = await TYC.db.from('shopping_items')
-    .select('id, cogido, no_habia, motivo_falta, cantidad_real, marcado_por, ingredients(nombre), profiles:marcado_por(nombre)')
+    .select('id, cantidad, seccion_super, envases, formato_g, cogido, no_habia, motivo_falta, cantidad_real, marcado_por, ingredients(nombre), profiles:marcado_por(nombre)')
     .in('shopping_list_id', ids);
   vaciar(MARCAS);
+  const lista = {};
   for (const it of (data || [])){
     const n = it.ingredients?.nombre; if (!n) continue;
     ITEM_ID[n] = it.id;
+
+    const g = +it.cantidad;
+    const sec = it.seccion_super || (ING[n] ? ING[n][2] : 'Despensa');
+    const f = it.formato_g ? +it.formato_g : (FORMATO[n] || g);
+    const env = it.envases || Math.max(1, Math.ceil(g / (f || g || 1)));
+    const precioKg = PRECIO[n] || 0;
+    (lista[sec] = lista[sec] || []).push({
+      n, g, envases: env, formato: f, comprado: env * f,
+      tengo: DESPENSA[n] ? DESPENSA[n][0] : 0,
+      precio: env * f * precioKg / 1000,
+      precioReal: g * precioKg / 1000,
+      sobra: (env * f - g) * precioKg / 1000
+    });
+
     if (!it.cogido && !it.no_habia) continue;
     MARCAS[n] = {
       cogido: !!it.cogido,
@@ -200,6 +220,8 @@ async function leerMarcas(){
       quien: it.profiles?.nombre || undefined
     };
   }
+  for (const s in lista) lista[s].sort((a, b) => b.precioReal - a.precioReal);
+  LISTA_GUARDADA = Object.keys(lista).length ? lista : null;
 }
 
 /* Marcar es un hecho de la casa: se guarda con quién y cuándo. */

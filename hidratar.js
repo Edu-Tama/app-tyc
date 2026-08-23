@@ -95,18 +95,34 @@ async function hidratarPerfil(){
 /* ── la despensa real ───────────────────────────────────────────────────── */
 async function hidratarDespensa(){
   const {data, error} = await TYC.db.from('pantry')
-    .select('cantidad, caducidad, origen, nota, ingredients(nombre)');
+    .select('cantidad, caducidad, origen, nota, ubicacion, ingredients(nombre)');
   if (error) throw error;
   vaciar(DESPENSA); ESPONTANEOS.length = 0;
   for (const p of (data || [])){
     if (!p.ingredients) continue;
     DESPENSA[p.ingredients.nombre] = [+p.cantidad, p.caducidad || '2027-12-31'];
+    /* Dónde está ESTA existencia manda sobre dónde suele estar el ingrediente:
+       el pimiento del catálogo es fresco y de nevera, el nuestro es en dados y
+       está congelado. Si no, la app manda a descongelar un bote de judías. */
+    if (p.ubicacion) UBIC[p.ingredients.nombre] = p.ubicacion;
     if (p.origen && p.origen !== 'ticket')
       ESPONTANEOS.push({n:p.ingredients.nombre, g:+p.cantidad, origen:
         ({huerta:'huerta',regalo:'regalo',otra_tienda:'otra',pesca:'pesca'}[p.origen] || 'otra'),
         fecha:'—', cad:p.caducidad || '2027-12-31'});
   }
   return Object.keys(DESPENSA).length;
+}
+
+/* ── los objetivos de cada uno ──────────────────────────────────────────── */
+async function hidratarObjetivos(){
+  const {data, error} = await TYC.db.from('goals')
+    .select('titulo, detalle, plazo, metrica').eq('activo', true);
+  if (error) throw error;
+  const yo = SESION.perfil;
+  OBJETIVOS[yo] = (data || []).map(g => ({
+    titulo: g.titulo, detalle: g.detalle || '', plazo: g.plazo, metrica: g.metrica
+  }));
+  return OBJETIVOS[yo].length;
 }
 
 /* ── la medicación, de la base ──────────────────────────────────────────── */
@@ -214,6 +230,8 @@ async function hidratarHistorial(){
   const cint = (medidas || []).map(x => +x.cintura_cm).filter(Boolean);
   CINTURA.c.length = 0; CINTURA.t.length = 0;
   if (cint.length) CINTURA[yo].push(...cint);
+  /* La fecha de la última medida decide si hoy toca volver a medir. */
+  CINTURA_ULT_F = medidas && medidas.length ? medidas[medidas.length - 1].fecha : null;
 
   /* Analíticas: solo las que estén cargadas de verdad. */
   const {data: labs} = await TYC.db.from('lab_reports').select('id').limit(1);
@@ -255,6 +273,11 @@ function limpiarEjemplo(){
 
   CARDIO_HECHO.c = null; CARDIO_HECHO.t = null;
 
+  /* Salud: adherencia a la medicación, adherencia semanal y días en rango.
+     Son porcentajes calculados sobre registros que todavía no existen. */
+  MED_ADH.c.length = 0; MED_ADH.t.length = 0;
+  ADH.length = 0; RANGO.length = 0;
+
   SIN_EJEMPLO = true;
 }
 
@@ -276,7 +299,7 @@ async function arrancarApp(){
        medicación o la despensa con datos de ejemplo. Antes un solo error
        tiraba toda la hidratación al modo demostración. */
     const fallos = [];
-    for (const [nombre, fn] of [['medicación', hidratarMedicacion],
+    for (const [nombre, fn] of [['objetivos', hidratarObjetivos], ['medicación', hidratarMedicacion],
                                 ['historial',  hidratarHistorial],
                                 ['menú',       hidratarMenu]]){
       try { await fn(); }

@@ -422,7 +422,6 @@
 <script>
 /* La capa de datos vive en datos.js */
 
-
 /* ═══ QUIÉN ERES ══════════════════════════════════════════════════════════
    No hay conmutador de persona: la app es siempre la del que ha iniciado sesión.
    En Supabase esto no es una preferencia, es una consecuencia: las políticas de
@@ -461,12 +460,28 @@ function rotuloSemana(off){
 const diasDeSemana = off => { const a=lunesDe(baseSemana()); a.setDate(a.getDate()+off*7);
   return Array.from({length:7},(_,i)=>{const f=new Date(a); f.setDate(f.getDate()+i);
     return {d:LETRA_DIA[f.getDay()], n:String(f.getDate()), iso:f.toISOString().slice(0,10)};}); };
+/* Qué toca hoy y cuándo es lo siguiente. El plan de la semana ya está escrito
+   por posición (lunes … domingo): basta con leerlo por el día que sea hoy, en
+   vez de dar por hecho que hoy es el día de sesión. */
+function planDeDia(persona, off){
+  const sem = PERFILES[persona].semana;
+  const i = ((HOY_F.getDay()+6)%7 + (off||0)) % 7;
+  return sem[i];
+}
+function proximaSesion(persona){
+  for(let i=1;i<=7;i++){
+    const d = planDeDia(persona, i);
+    if(d && (d[3]==='gym')) return {plan:d, dias:i,
+      nombre: DIA_SEM[(HOY_F.getDay()+i)%7]};
+  }
+  return null;
+}
 const DIAS_ATRAS=[0,-1,-2].map(o=>{const f=fechaDe(o);
   return (o===0?'Hoy':o===-1?'Ayer':'Anteayer')+' · '+DIA_SEM[f.getDay()]+' '+f.getDate();});
 
 /* Saber qué versión corre en cada móvil deja de ser adivinar. Cuando algo
    «no se actualiza», este número lo dice en un vistazo. */
-const VERSION_APP = 'v7 · 23 ago 2026';
+const VERSION_APP = 'v9 · 23 ago 2026';
 const TYC_CONECTADO = () => typeof TYC !== 'undefined' && !!TYC.db && !TYC.demo;
 
 /* Descarta el service worker y las cachés y recarga: la salida de emergencia
@@ -495,10 +510,17 @@ const MOMLAB={desayuno:'Desayuno',media:'Media mañana',comida:'Comida',merienda
    comida marcada ni una pastilla tomada. Antes esta función rellenaba el día
    según la hora para que el prototipo se viera lleno, y eso en la app real es
    mentir sobre lo que has hecho. */
-let SIN_EJEMPLO=false;
+let SIN_EJEMPLO=false, HOY_SIN_PLAN=false;
 function sembrarDia(h){
-  const d=MENU.find(x=>x.n===String(HOY_F.getDate()))||MENU[0]||{};
-  HOY={c:MOM.map(k=>({k,r:d[k],estado:null})),t:MOM.map(k=>({k,r:d[k],estado:null}))};
+  /* Si hoy no está dentro de la semana planificada, no se enseña el menú de
+     otro día como si fuera el de hoy. Antes del 31 no hay plan que seguir. */
+  HOY_SIN_PLAN = SIN_EJEMPLO && !MENU.some(x=>x.n===String(HOY_F.getDate()));
+  const d=MENU.find(x=>x.n===String(HOY_F.getDate())) || (SIN_EJEMPLO ? null : MENU[0]) || {};
+  /* Sin plan, el día está vacío. Rellenarlo con recetas indefinidas hacía que
+     media app intentara pintar platos que no existen. */
+  HOY = HOY_SIN_PLAN
+    ? {c:[], t:[]}
+    : {c:MOM.map(k=>({k,r:d[k],estado:null})), t:MOM.map(k=>({k,r:d[k],estado:null}))};
   const nMed=p=>(MEDICACION[p]||[]).length;
   if(SIN_EJEMPLO){
     MED.c=Array(nMed('c')).fill(false); MED.t=Array(nMed('t')).fill(false);
@@ -766,13 +788,14 @@ function loQueSeCocina(sem){
 function sheetTanda(sem){
   sem = sem || TABM;
   const T = TANDAS[sem] || TANDAS.s1, esta = sem==='s1';
+  const offT = sem==='s2' ? 1 : 0;
   const st = TANDA_ESTADO[sem];
   const platos = loQueSeCocina(sem);
   const enTanda = platos.filter(p=>p.r.tot>25);          // lo que de verdad merece cocinarse antes
   const alDia  = platos.filter(p=>p.r.tot<=25);
   const min = enTanda.reduce((a,p)=>a+p.r.tot,0);
   const tapers = platos.reduce((a,p)=>a+p.raciones,0);
-  openSheet(`<h3>Tanda de cocina · ${T.dia.toLowerCase()}</h3>
+  openSheet(`<h3>Tanda de cocina · ${textoTanda(offT).toLowerCase()}</h3>
     <div class="meta" style="margin-bottom:14px">${enTanda.length} ${enTanda.length===1?'receta':'recetas'} ·
       ${tapers} tápers · cubre lunes a jueves${esta?'':' · <b>semana siguiente</b>'}</div>
     ${st?`<div class="banner ${st==='hecha'?'info':''}" style="margin-bottom:12px"><b class="t">${
@@ -1000,10 +1023,26 @@ function sheetNuevaAnalitica(){
 }
 function sheetInforme(){
   const esC = P==='c';
+  /* El informe va a manos de un médico: cada cifra que salga tiene que venir de
+     un registro. Lo que no se haya medido dice «sin registros», no un número
+     razonable. Las preguntas sí se mantienen: son el motivo de la consulta. */
+  const SR = 'sin registros';
+  const serieP = esC ? PESO_C : PESO_T, serieC = CINTURA[P];
+  const fPeso = serieP.length < 2 ? SR
+    : `${serieP[0].toFixed(1).replace('.',',')} → ${serieP[serieP.length-1].toFixed(1).replace('.',',')} kg`;
+  const fCint = serieC.length < 2 ? SR
+    : `${serieC[0]} → ${serieC[serieC.length-1]} cm (${(serieC[serieC.length-1]-serieC[0]).toFixed(1).replace('.',',')})`;
+  const fRitmo = serieP.length < 2 ? SR : (() => {
+    const dif = serieP[serieP.length-1]-serieP[0], sem = Math.max(1, serieP.length/2);
+    return `${(dif/sem).toFixed(2).replace('.',',')} kg/semana`; })();
+  const fAdh   = ADH.length ? `${PERFILES[P].adherencia} %` : SR;
+  const fRango = ADH.length ? `${PERFILES[P].enRango} %`   : SR;
+  const fMeds  = MED_ADH[P].length ? MED_ADH[P].map(m=>[m.n, m.pct+' %'])
+                                   : MEDICACION[P].map(m=>[m.n, SR]);
   const INF = esC ? {
-    peso:'93,4 → 90,9 kg', ritmo:'0,45 kg/semana (−0,5 %)', cintura:'116 → 112 cm (−4)',
-    rango:'1.600-1.750 kcal', adh:'83 %', enRango:'67 %', prot:'118 g/día',
-    meds:[['Metformina 850 mg · 2/día','94 %'],['Letrozol 2,5 mg','100 %']],
+    peso:fPeso, ritmo:fRitmo, cintura:fCint,
+    rango:'1.600-1.750 kcal', adh:fAdh, enRango:fRango, prot:ADH.length?'118 g/día':SR,
+    meds:fMeds,
     marcadores:[['Glucosa','121 → 127 mg/dL',true],['ALT / GGT / AST','90 / 74 / 48 U/L · sin repetir en junio',true],
                 ['Vitamina D','24 ng/mL · sin repetir',true],['Colesterol total','203 → 185 mg/dL',false]],
     preguntas:['La glucosa en ayunas sube estando ya con metformina, ¿procede revisar algo?',
@@ -1011,17 +1050,18 @@ function sheetInforme(){
       '¿Suplementar vitamina D y a qué dosis?',
       '¿Es adecuado un rango de 1.600-1.750 kcal durante la estimulación ovárica?']
   } : {
-    peso:'74,8 → 73,9 kg', ritmo:'peso estable · objetivo de recomposición', cintura:'89 → 86,5 cm (−2,5)',
-    rango:'1.950-2.100 kcal', adh:'79 %', enRango:'64 %', prot:'132 g/día',
-    meds:[['Bisoprolol 2,5 mg (½)','97 %'],['Sedotime 15 mg','91 %']],
+    peso:fPeso, ritmo:fRitmo, cintura:fCint,
+    rango:'1.950-2.100 kcal', adh:fAdh, enRango:fRango, prot:ADH.length?'132 g/día':SR,
+    meds:fMeds,
     marcadores:[['Sin analítica registrada','Pendiente de subir la primera',true]],
     preguntas:['Primera analítica pendiente: ¿qué marcadores conviene pedir en mi caso?',
       'Tomo bisoprolol: ¿condiciona la intensidad de entrenamiento o el uso de pulsómetro?',
-      'He pasado de 5,4 a 2,1 cervezas por semana. ¿Conviene revisar algo hepático?',
+      'Estoy reduciendo el consumo de cerveza. ¿Conviene revisar algo hepático?',
       'Estoy en 1.950-2.100 kcal con 130 g de proteína para perder grasa (gasto estimado ~2.310). ¿Le parece un déficit razonable con bisoprolol de por medio?']
   };
   openSheet(`<h3>Informe para la consulta</h3>
-    <div class="meta" style="margin-bottom:16px">Una página · del 24/06 al 19/08/2026 · ${PERFILES[P].nombre}</div>
+    <div class="meta" style="margin-bottom:16px">Una página · ${PERFILES[P].nombre}${
+      serieP.length?'':' · todavía sin datos que llevar'}</div>
     <div class="card" style="box-shadow:none; background:var(--surface-2)">
       <div class="sec-h" style="margin-top:0">Peso y composición</div>
       <div class="ing" style="border-top:0"><span class="grow">Peso inicial → actual</span><span style="font-weight:650">${INF.peso}</span></div>
@@ -1033,8 +1073,8 @@ function sheetInforme(){
       <div class="ing"><span class="grow">Días dentro de rango</span><span style="font-weight:650">${INF.enRango}</span></div>
       <div class="ing"><span class="grow">Proteína media</span><span style="font-weight:650">${INF.prot}</span></div>
       ${esC?'':`<div class="sec-h">Alcohol</div>
-      <div class="ing" style="border-top:0"><span class="grow">Consumo semanal</span><span style="font-weight:650">5,4 → 2,1 cervezas</span></div>
-      <div class="ing"><span class="grow">Días sin alcohol este mes</span><span style="font-weight:650">19 de 26</span></div>`}
+      <div class="ing" style="border-top:0"><span class="grow">Consumo semanal</span>
+        <span style="font-weight:650">${EXTRA_LOG.t.some(x=>x.alc)?'':SR}</span></div>`}
       <div class="sec-h">Medicación</div>
       ${INF.meds.map(([n,v],i)=>`<div class="ing" ${i?'':'style="border-top:0"'}><span class="grow">${n}</span><span style="font-weight:650">${v}</span></div>`).join('')}
       <div class="sec-h">Marcadores</div>
@@ -1113,7 +1153,6 @@ function sheetAjustes(){
     <button class="opt" onclick="sheetDatos()">💾 <span class="grow">Copias y datos<small>Exportación automática el día 1 de cada mes</small></span>›</button>
     <button class="opt" onclick="sheetRitmo()">🛒 <span class="grow">Ritmo de compra y cocina<small>${AJUSTES_COMPRA.diaCompra?'Compra los '+DIA_LARGO[AJUSTES_COMPRA.diaCompra]:'Compra sin día fijo'} · tanda los ${DIA_LARGO[AJUSTES_COMPRA.diaTanda]}</small></span>›</button>
     <button class="opt" onclick="sheetOficina()">🏢 <span class="grow">Días de oficina de Tama<small>${OFICINA.t.length} marcados · se llevan túper</small></span>›</button>
-    <button class="opt" onclick="sheetArranque()">🚀 <span class="grow">Asistente de arranque<small>Despensa, precios y primera semana</small></span>›</button>
     <div class="ing" style="margin-top:14px"><span class="grow">Versión</span>
       <span style="font-weight:650">${VERSION_APP}</span></div>
     <div class="ing"><span class="grow">Datos</span>
@@ -1242,24 +1281,10 @@ function sheetDatos(){
       pedido, así que lo dejo apuntado: cuesta lo mismo y evita que los datos queden atados al proyecto.</div>
     <button class="cta" style="margin-top:14px" onclick="sheetAjustes()">‹ Volver</button>`);
 }
-function sheetArranque(){
-  const pasos=[['Dos cuentas en Supabase','Una para cada uno · cada móvil entra con la suya','ok'],
-    ['Perfiles y objetivos','Hecho','ok'],['Biblioteca de recetas',Object.keys(R).length+' recetas · las 4 estaciones cubiertas','ok'],
-    ['Inventario de despensa','41 productos · pendiente el recuento real','wip'],
-    ['Precios de los básicos','Estimados · se corrigen con cada ticket','wip'],
-    ['Mapeo de nombres del ticket','7 de ~50 aprendidos','wip'],
-    ['Primera semana confirmada','Hecho','ok'],['Pauta del profesional sanitario','Pendiente de consulta','no']];
-  openSheet(`<h3>Asistente de arranque</h3>
-    <div class="meta" style="margin-bottom:16px">Lo que falta para que la app funcione con vuestros datos reales</div>
-    ${pasos.map(([n,d,st],i)=>`<div class="qr" ${i?'':'style="border-top:0"'}>
-      <div class="thumb sm ${st==='ok'?'t-verdura':st==='wip'?'t-fruta':'t-off'}">${st==='ok'?'✓':st==='wip'?'◐':'·'}</div>
-      <div class="tx"><b>${n}</b><div class="note" style="margin:1px 0 0">${d}</div></div></div>`).join('')}
-    <div class="banner info" style="margin-top:14px"><b class="t">Dos sesiones de 20 minutos</b>
-      El inventario de despensa se hace por secciones —congelador, nevera, armario— con la lista delante y sin pesar nada:
-      basta con «hay», «queda poco» o «no hay». Los precios se corrigen solos con los tickets, así que no hay que
-      teclear ninguno.</div>
-    <button class="cta" style="margin-top:14px" onclick="sheetAjustes()">‹ Volver</button>`);
-}
+/* El asistente de arranque se ha retirado: listaba «inventario pendiente» y
+   «primera semana confirmada» cuando el inventario ya está cargado y la semana
+   la genera la app sola. Lo único que seguía vivo —cómo van los precios y los
+   nombres del ticket— se ve en Compra, que es donde se usa. */
 function sheetNotif(){
   const N=[['21:45','Cierra el día','Las comidas del día en una pantalla. Miércoles y viernes a las 22:15, cuando Tama vuelve de entrenar.',1],
    ['08:00 / 21:00','Medicación','Según la pauta de cada uno. La metformina avisa junto a la comida, no suelta.',1],
@@ -1559,17 +1584,20 @@ function pintarHero(){
   const kcal=Math.round(extra)+sueltos+h.reduce((s,m)=>s+(m.estado&&m.estado!=='saltado'?nutre(m.r,P).kcal:0),0);
   const prot=h.reduce((s,m)=>s+(m.estado&&m.estado!=='saltado'?nutre(m.r,P).prot:0),0);
   const reg=h.filter(m=>m.estado).length, pct=Math.min(1,kcal/d.kcalMax), C=2*Math.PI*32;
+  /* Sin plan no hay nada que contar: enseñar «0 de 5 comidas» y un anillo con
+     las kcal de los extras fijos es inventarse un día que todavía no existe. */
+  const sinPlan = typeof HOY_SIN_PLAN !== 'undefined' && HOY_SIN_PLAN;
   $('#hero').innerHTML=`<div class="row">
     <div class="ring"><svg width="78" height="78">
       <circle cx="39" cy="39" r="32" fill="none" stroke="rgba(255,255,255,.25)" stroke-width="7"/>
       <circle cx="39" cy="39" r="32" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round"
-        stroke-dasharray="${C}" stroke-dashoffset="${C*(1-pct)}"/></svg>
-      <b>${kcal.toLocaleString('es')}<i>KCAL</i></b></div>
+        stroke-dasharray="${C}" stroke-dashoffset="${C*(1-(sinPlan?0:pct))}"/></svg>
+      <b>${sinPlan?'—':kcal.toLocaleString('es')}<i>KCAL</i></b></div>
     <div class="grow" style="display:flex; flex-direction:column; gap:8px">
       <div class="hstat">Objetivo del día<b>${d.kcalMin.toLocaleString('es')} – ${d.kcalMax.toLocaleString('es')} kcal</b></div>
-      <div class="hstat">Proteína · mínimo ${d.protMin} g<b>${prot} g</b>
-        <div class="mini"><i style="width:${Math.min(100,prot/d.protMin*100)}%"></i></div></div>
-      <div class="hstat">Registrado<b>${reg} de 5 comidas</b></div></div></div>`;
+      <div class="hstat">Proteína · mínimo ${d.protMin} g<b>${sinPlan?'—':prot+' g'}</b>
+        <div class="mini"><i style="width:${sinPlan?0:Math.min(100,prot/d.protMin*100)}%"></i></div></div>
+      <div class="hstat">${sinPlan?'El plan arranca<b>lunes 31 de agosto</b>':`Registrado<b>${reg} de 5 comidas</b>`}</div></div></div>`;
 }
 
 /* ═══ QUÉ ES DE LA CASA Y QUÉ ES DE CADA UNO ══════════════════════════════
@@ -1606,7 +1634,7 @@ function pintarAvisos(){
   $('#dia-sig').style.visibility = DIA<0?'visible':'hidden';
 }
 function pintarAhora(){
-  if(DIA<0){$('#ahora').innerHTML=''; return}
+  if(DIA<0 || HOY_SIN_PLAN){$('#ahora').innerHTML=''; return}
   if(HORA>=22){
     const faltan=HOY[P].filter(m=>!m.estado).length;
     $('#ahora').innerHTML=`<div class="card tap" style="border-color:var(--acc); border-width:1.5px" onclick="sheetCierre()">
@@ -1657,7 +1685,21 @@ function pintarQuick(){
           <span class="chip" onclick="event.stopPropagation(); puntuar('${m.r}','si')">👍</span>
           <span class="chip" onclick="event.stopPropagation(); puntuar('${m.r}','ok')">😐</span>
           <span class="chip" onclick="event.stopPropagation(); puntuar('${m.r}','no')">👎</span></div></div>` : ''}`};
-  const htmlComida=`
+  const diasAlPlan = Math.ceil((INICIO_PLAN - HOY_F)/86400000);
+  const htmlComida = (SIN_EJEMPLO && HOY_SIN_PLAN) ? `
+    <div class="qr" style="border-top:0">
+      <div class="thumb sm t-off" style="color:var(--muted)">📅</div>
+      <div class="tx"><div class="when">El plan todavía no ha empezado</div>
+        <b>${antesDeEmpezar()?`Arranca el lunes ${INICIO_PLAN.getDate()} de ${MES_NOM[INICIO_PLAN.getMonth()]}`:'Hoy no hay menú planificado'}</b>
+        <div class="note" style="margin:1px 0 0">${antesDeEmpezar()
+          ? (diasAlPlan===1?'Queda un día.':`Quedan ${diasAlPlan} días.`)+' El menú de esa semana ya está hecho: míralo en Menú.'
+          : 'Genera la semana desde Menú para que aparezca aquí.'}</div></div>
+      <span class="chip acc" onclick="ir('menu')" style="cursor:pointer">Ver menú</span></div>
+    <div class="qr" onclick="sheetExtra()">
+      <div class="thumb sm t-off" style="color:var(--acc-txt); font-size:19px">+</div>
+      <div class="tx"><div class="when">Fuera del plan</div>
+        <b style="color:var(--acc-txt)">Añadir una bebida o un picoteo</b></div>
+      <div class="kc"></div><div class="check" style="border:0"></div></div>` : `
     ${hechas.length?`<div class="qr" style="border-top:0" onclick="VER_HECHAS=!VER_HECHAS; pintarQuick()">
       <div class="thumb sm t-off" style="color:var(--good-ink); font-size:15px">✓</div>
       <div class="tx"><div class="when">Ya registradas</div><b style="color:var(--muted)">${hechas.length} comidas · ${hechas.map(x=>MOMLAB[x.m.k].toLowerCase()).join(', ')}</b></div>
@@ -1678,24 +1720,39 @@ function pintarQuick(){
 
   const per=PERFILES[P], e=per.entreno;
   const meds=MEDICACION[P], tomadas=MED[P].filter(Boolean).length;
-  const tocaPeso=DIAS_PESO.includes(3);          // hoy es miércoles
+  /* DIAS_PESO son los días de la semana, no un número escrito a mano.
+     0=domingo … 3=miércoles, 6=sábado. */
+  const tocaPeso=DIAS_PESO.includes(HOY_F.getDay());
+  const ultCint=CINTURA[P] && CINTURA[P].length ? CINTURA[P].at(-1) : null;
+  /* La cintura se mide una vez al mes, y se propone el mismo día que el peso:
+     si no, la propuesta aparece los siete días hasta que alguien la mide. */
+  const diasCint = CINTURA_ULT_F ? Math.round((HOY_F - new Date(CINTURA_ULT_F)) / 86400000) : 999;
+  const tocaCintura = tocaPeso && diasCint >= 21;
 
   /* ── DEPORTE ── */
+  /* Lo que toca hoy sale del plan de la semana, no de un texto fijo: decía
+     «Impartes entreno · 20:00-21:30» también los domingos, que es el día que
+     Tama dirige partido, y «la siguiente, jueves» cualquier día del año. */
+  const hoyPlan = planDeDia(P, 0), sig = proximaSesion(P);
+  const esSesion = hoyPlan && hoyPlan[3]==='gym';
   const htmlDeporte=`
-    ${e.tipo==='profesional'
-      ? `<div class="qr" style="border-top:0"><div class="thumb sm t-off" style="color:var(--muted)">🚫</div>
-          <div class="tx"><div class="when">Agenda · no es entrenamiento tuyo</div>
-            <b style="color:var(--muted)">Impartes entreno · 20:00-21:30</b>
-            <div class="note" style="margin:1px 0 0">Bloquea la tarde: no se te programa nada aquí</div></div>
-          <div class="check" style="border:0"></div></div>
-         <div class="qr"><div class="thumb sm t-off" style="color:var(--muted)">·</div>
-          <div class="tx"><div class="when">Sesión propia</div><b style="color:var(--muted)">Hoy no toca · la siguiente, jueves</b></div>
-          <div class="check" style="border:0"></div></div>`
-      : `<div class="qr" style="border-top:0" onclick="sheetSesion(0)">
+    ${esSesion
+      ? `<div class="qr" style="border-top:0" onclick="sheetSesion(0)">
           <div class="thumb sm t-gym">🏋</div>
           <div class="tx"><div class="when">Sesión de hoy</div><b>${e.titulo}</b></div>
           <div class="kc">${e.meta.split('·').pop().trim()}</div>
-          <div class="check" style="${ACC.sesion?'background:var(--good);border-color:var(--good);color:#fff':''}">${ACC.sesion?'✓':''}</div></div>`}
+          <div class="check" style="${ACC.sesion?'background:var(--good);border-color:var(--good);color:#fff':''}">${ACC.sesion?'✓':''}</div></div>`
+      : `${hoyPlan && hoyPlan[3]==='work'
+          ? `<div class="qr" style="border-top:0"><div class="thumb sm t-off" style="color:var(--muted)">🚫</div>
+              <div class="tx"><div class="when">Agenda · no es entrenamiento tuyo</div>
+                <b style="color:var(--muted)">${hoyPlan[2]}</b>
+                <div class="note" style="margin:1px 0 0">Bloquea la tarde: no se te programa nada aquí</div></div>
+              <div class="check" style="border:0"></div></div>` : ''}
+         <div class="qr" ${hoyPlan && hoyPlan[3]==='work'?'':'style="border-top:0"'}>
+          <div class="thumb sm t-off" style="color:var(--muted)">·</div>
+          <div class="tx"><div class="when">Sesión propia</div><b style="color:var(--muted)">${
+            sig ? `Hoy no toca · la siguiente, ${sig.nombre}` : 'Hoy no toca'}</b></div>
+          <div class="check" style="border:0"></div></div>`}
     ${CARDIO_HECHO[P]?(()=>{const sel=CARDIO_HECHO[P], x=CARDIO_FORUS[sel.i], h=sel.estado==='hecha';
       return `<div class="qr ${h?'on':''}" onclick="sheetCardioHecho()">
         <div class="thumb sm t-pescado">${x.e}</div>
@@ -1727,44 +1784,31 @@ function pintarQuick(){
       <div class="kc"></div><div class="check" style="border:0"></div></div>`:''}`;
 
   /* ── MEDICACIÓN ── */
+  /* La nota va debajo del nombre, no en la columna de la derecha: ahí cabían
+     tres palabras y «separado del café, del calcio y del hierro» tapaba el
+     nombre del medicamento. */
   const htmlMed=meds.map((m,i)=>`
     <div class="qr ${MED[P][i]?'on':''}" ${i?'':'style="border-top:0"'} onclick="toggleMedFila(${i})">
       <div class="thumb sm t-lacteo">${m.e}</div>
-      <div class="tx"><div class="when">${m.cuando}${m.comida?' · con comida':''}</div><b>${m.n}</b></div>
-      <div class="kc">${m.nota||''}</div><div class="check">${MED[P][i]?'✓':''}</div></div>`).join('');
+      <div class="tx"><div class="when">${m.cuando}${m.comida?' · con comida':''}</div><b>${m.n}</b>
+        ${m.nota?`<div class="note" style="margin:2px 0 0">${m.nota}</div>`:''}</div>
+      <div class="check">${MED[P][i]?'✓':''}</div></div>`).join('');
 
-  /* ── SALUD (solo si hay algo que hacer) ── */
-  const htmlSalud=[
-    tocaPeso?`<div class="qr ${ACC.peso?'on':''}" onclick="sheetPeso()">
-      <div class="thumb sm t-lacteo">⚖️</div>
-      <div class="tx"><div class="when">Peso · hoy toca (miércoles)</div>
-        <b>${ACC.peso?ACC.peso.toFixed(1).replace('.',',')+' kg registrados':'Registrar peso'}</b></div>
-      <div class="kc">${ACC.peso?'hoy':'últ. '+per.peso+' kg'}</div>
-      <div class="check">${ACC.peso?'✓':''}</div></div>`:'',
-    `<div class="qr ${ACC.cintura?'on':''}" onclick="sheetCintura()">
-      <div class="thumb sm t-fruta">📏</div>
-      <div class="tx"><div class="when">Cintura · toca este mes</div>
-        <b>${ACC.cintura?'Medida registrada':'Medir cintura'}</b>
-        ${ACC.cintura?'':`<div class="note" style="margin:1px 0 0">Última: 22 de julio · ${CINTURA[P].at(-1)} cm</div>`}</div>
-      <div class="check">${ACC.cintura?'✓':''}</div></div>`,
-    `<div class="qr"><div class="thumb sm t-off" style="color:var(--muted)">🧪</div>
-      <div class="tx"><div class="when">Próxima analítica</div><b style="color:var(--muted)">Septiembre · a los 3 meses</b></div>
-      <div class="check" style="border:0"></div></div>`
-  ].join('').replace('class="qr','class="qr" data-x="');
+  /* ── SALUD (solo lo que toca hoy) ── */
   const htmlSaludFix=[
     tocaPeso?`<div class="qr ${ACC.peso?'on':''}" style="border-top:0" onclick="sheetPeso()">
       <div class="thumb sm t-lacteo">⚖️</div>
-      <div class="tx"><div class="when">Peso · hoy toca (miércoles)</div>
+      <div class="tx"><div class="when">Peso · hoy toca (${DIA_SEM[HOY_F.getDay()]})</div>
         <b>${ACC.peso?ACC.peso.toFixed(1).replace('.',',')+' kg registrados':'Registrar peso'}</b></div>
-      <div class="kc">${ACC.peso?'hoy':'últ. '+per.peso+' kg'}</div>
+      <div class="kc">${ACC.peso?'hoy':((P==='c'?PESO_C:PESO_T).length?'últ. '+per.peso+' kg':'el primero')}</div>
       <div class="check">${ACC.peso?'✓':''}</div></div>`:'',
-    `<div class="qr ${ACC.cintura?'on':''}" ${tocaPeso?'':'style="border-top:0"'} onclick="sheetCintura()">
+    tocaCintura?`<div class="qr ${ACC.cintura?'on':''}" ${tocaPeso?'':'style="border-top:0"'} onclick="sheetCintura()">
       <div class="thumb sm t-fruta">📏</div>
-      <div class="tx"><div class="when">Cintura · toca este mes</div>
-        <b>${ACC.cintura?CINTURA[P].at(-1)+' cm · registrada':'Medir cintura'}</b>
-        ${ACC.cintura?'':`<div class="note" style="margin:1px 0 0">Última: 22 de julio · ${CINTURA[P].at(-1)} cm</div>`}</div>
-      <div class="check">${ACC.cintura?'✓':''}</div></div>`,
-    `<div class="qr"><div class="thumb sm t-off" style="color:var(--muted)">🧪</div>
+      <div class="tx"><div class="when">Cintura · ${ultCint?'toca este mes':'todavía sin medir'}</div>
+        <b>${ACC.cintura?ACC.cintura+' cm · registrada':'Medir cintura'}</b>
+        ${ACC.cintura?'':`<div class="note" style="margin:1px 0 0">${ultCint?('Última: '+ultCint+' cm'):'Todavía sin medir'}</div>`}</div>
+      <div class="check">${ACC.cintura?'✓':''}</div></div>`:'',
+    `<div class="qr" ${(tocaPeso||tocaCintura)?'':'style="border-top:0"'}><div class="thumb sm t-off" style="color:var(--muted)">🧪</div>
       <div class="tx"><div class="when">Próxima analítica</div><b style="color:var(--muted)">Septiembre · a los 3 meses</b></div>
       <div class="check" style="border:0"></div></div>`
   ].join('');
@@ -1792,7 +1836,7 @@ function pintarQuick(){
   const dep = e.tipo==='profesional' ? !!ACC.paseo : (!!ACC.sesion && (P!=='c'||!!ACC.paseo));
   $('#bloques').innerHTML=[
     bloque(`Comida <span class="r" onclick="ir('menu')">Ver menú ›</span>`, htmlComida,
-           `${nComidas} comidas registradas · ${EXTRA_LOG[P].length} extras`, nComidas===5),
+           `${nComidas} comidas registradas · ${EXTRA_LOG[P].length} extras`, !HOY_SIN_PLAN && nComidas===5),
     bloque('Deporte', htmlDeporte, 'Sesión hecha y pasos al día', dep),
     bloque('Medicación', htmlMed, `Todo tomado hoy · ${meds.length} de ${meds.length}`, meds.length>0 && tomadas===meds.length),
     bloque('Salud', htmlSaludFix, 'Todo al día', false),
@@ -1830,7 +1874,7 @@ function semanaHTML(datos, editable, cocina, sem){
         <div class="dcol ${day.n===String(HOY_F.getDate())?'today':''}" style="width:38px"><b>${day.n}</b><span>${day.d}</span></div>
         <span class="grow"></span>
         <span class="chip" onclick="event.stopPropagation(); sheetCocinero('${day.n}')" style="cursor:pointer">
-          👨‍🍳 ${QUIEN[(cocina||COCINA)[day.n]||'n'].split(' ·')[0]}</span>
+          👨‍🍳 ${QUIEN[(cocina||cocinaDe(0))[day.n]||'n'].split(' ·')[0]}</span>
         ${(()=>{const fe=FECHA_DE[day.n]; if(!fe) return '';
           const t=tupersDe(fe); if(!t.length) return '';
           return `<span class="chip" title="${t.map(x=>x.nombre).join(' y ')} en la oficina">🏢 ${
@@ -1868,12 +1912,15 @@ function tarjetaExcepciones(sem){
       <span style="color:var(--muted); font-size:18px">›</span></div></div>`;
 }
 function tarjetaTanda(sem){
-  const T=TANDAS[sem], st=TANDA_ESTADO[sem];
+  const T=TANDAS[sem], st=TANDA_ESTADO[sem], off = sem==='s2' ? 1 : 0;
   const est={hecha:['✓ hecha','good'], corta:['tanda corta de 30 min','warn'],
-             saltada:['saltada · semana replanificada','crit'], movida:['movida al lunes','warn']}[st];
+             saltada:['saltada · semana replanificada','crit'], movida:['movida al lunes','warn']}[st]
+    /* Sin marcar: pendiente si el día ya pasó, y nada si aún no ha llegado. */
+    || (tandaPasada(off) ? ['pendiente','warn'] : null);
   return `<div class="card tap" onclick="sheetTanda('${sem}')" style="border-color:var(--acc)">
     <div class="row"><div class="thumb t-legumbre">👨‍🍳</div>
-      <div class="grow"><div class="when">${T.dia} · ${sem==='s1'?'hecha':'prevista'}</div>
+      <div class="grow"><div class="when">${textoTanda(off)} · ${
+        st==='hecha'?'hecha':tandaPasada(off)?'sin marcar':'prevista'}</div>
         <div class="name">Tanda de cocina · ${T.min} min</div>
         <div class="meta">${T.tapers} tápers · ${T.nota||'cubre las comidas de lunes a jueves'}</div></div>
       ${est?`<span class="chip ${est[1]}">${est[0]}</span>`:'<span style="color:var(--muted); font-size:18px">›</span>'}</div></div>`;
@@ -1898,12 +1945,15 @@ function pintarMenu(){
       <div class="banner info"><b class="t">Ración de cada uno: Cristina ×${FACTOR.c.toFixed(2).replace('.',',')} · Tama ×${FACTOR.t.toFixed(2).replace('.',',')}</b>
         Sale del objetivo calórico de cada uno. Como el aceite y las especias no escalan,
         la diferencia real de energía entre los dos platos es del ${(() => {
+          /* Si el menú no ha cargado, no hay día del que sacar el porcentaje.
+             Se cae al factor teórico antes que reventar la pantalla entera. */
           const d=MENU.find(x=>x.n===String(HOY_F.getDate()))||MENU[0];
+          if(!d) return Math.round(100*(FACTOR.t/FACTOR.c-1));
           const a=MOM.reduce((x,k)=>x+nutre(d[k],'c').kcal,0), b=MOM.reduce((x,k)=>x+nutre(d[k],'t').kcal,0);
-          return Math.round(100*(b/a-1));})()} %, no del ${Math.round(100*(FACTOR.t/FACTOR.c-1))} %.</div>
+          return a ? Math.round(100*(b/a-1)) : Math.round(100*(FACTOR.t/FACTOR.c-1));})()} %, no del ${Math.round(100*(FACTOR.t/FACTOR.c-1))} %.</div>
       ${tarjetaExcepciones('s1')}
       ${tarjetaTanda('s1')}
-      ${semanaHTML(MENU, false, COCINA, 's1')}`;
+      ${semanaHTML(MENU, false, cocinaDe(0), 's1')}`;
   } else if(TABM==='s2'){
     $('#menu-body').innerHTML=`
       <div class="banner info"><b class="t">Semana propuesta, todavía editable</b>
@@ -1911,7 +1961,7 @@ function pintarMenu(){
         Se confirma el sábado; hasta entonces cambia lo que quieras.</div>
       ${tarjetaExcepciones('s2')}
       ${tarjetaTanda('s2')}
-      ${semanaHTML(MENU2, true, COCINA2, 's2')}
+      ${semanaHTML(MENU2, true, cocinaDe(1), 's2')}
       <div class="row" style="gap:8px; margin:4px 0 10px">
         <button class="act" onclick="regenerar()">↻ Regenerar</button>
         <button class="act primary">✓ Confirmar semana</button></div>
@@ -2454,7 +2504,8 @@ function pintarEntreno(){
       <div class="thumb sm ${col[tipo][0]}">${col[tipo][1]}</div>
       <div class="grow" style="padding-top:8px">
         <div style="font-size:14px; font-weight:${tipo==='off'?'400':'650'}; color:${tipo==='off'?'var(--muted)':'var(--ink)'}">${txt}</div>
-        ${tipo==='work'?'<div class="meta" style="font-size:11.5px; color:var(--muted)">agenda ocupada · 20:00-21:30 · no se programa nada</div>':''}
+        ${tipo==='work'?`<div class="meta" style="font-size:11.5px; color:var(--muted)">${
+  dia==='D'?'no es entrenamiento tuyo: estás dirigiendo':'agenda ocupada · 20:00-21:30 · no se programa nada'}</div>`:''}
       </div></div>`}).join('');
   /* adherencia al entrenamiento */
   const a=ADH_ENT[P], hechas=a.reduce((x,y)=>x+y,0), plan=a.length*2;
@@ -2527,8 +2578,13 @@ function pintarEntreno(){
         </div></div>`})()}
     <div class="card tap" style="border-color:var(--acc)" onclick="sheetSesion(0)">
       <div class="row"><div class="thumb t-gym">▶</div>
-        <div class="grow"><div class="when">Hoy 19:00 · Forus o en casa</div>
-          <div class="name" style="margin:2px 0 3px">Empezar sesión</div>
+        <div class="grow"><div class="when">${(()=>{
+          /* «Hoy 19:00» estaba escrito a mano: la pestaña decía que había sesión
+             hoy también los días que no toca. */
+          const h=planDeDia(P,0); if(h && h[3]==='gym') return 'Hoy · Forus o en casa';
+          const s2=proximaSesion(P);
+          return s2 ? `El ${s2.nombre} · Forus o en casa` : 'Sin sesión programada';})()}</div>
+          <div class="name" style="margin:2px 0 3px">${planDeDia(P,0)&&planDeDia(P,0)[3]==='gym'?'Empezar sesión':'Ver la sesión'}</div>
           <div class="meta">${d.ejercicios.length} ejercicios · calentamiento incluido · ~45 min</div></div>
         <span style="color:var(--muted); font-size:18px">›</span></div></div>`+
     d.ejercicios.map(ex=>`
@@ -2542,7 +2598,10 @@ function pintarEntreno(){
 }
 function pintarSalud(){
   const d=PERFILES[P];
-  $('#salud-sub').textContent=`${d.nombre} · últimas 8 semanas`;
+  /* «últimas 8 semanas» era literal aunque no hubiera ni una. */
+  $('#salud-sub').textContent = (P==='c'?PESO_C:PESO_T).length
+    ? `${d.nombre} · últimas 8 semanas`
+    : `${d.nombre} · sin registros todavía`;
 
   /* alerta de bienestar: dos semanas seguidas de hambre alta */
   const hb=BIENESTAR[P].hambre, alta=hb.slice(-4,-1).filter(x=>x===3).length>=2;
@@ -2587,6 +2646,12 @@ function pintarSalud(){
   const EST={bien:['#0ca30c','●'], medio:['#fab219','■'], mal:['#d03b3b','▲']};
   const VAL={hambre:['bien','medio','mal'], energia:['mal','medio','bien'], sueno:['mal','medio','bien']};
   const ETQ={hambre:['Nada','Algo','Bastante'],energia:['Baja','Normal','Alta'],sueno:['Mal','Regular','Bien']};
+  /* Sin cierres del día no hay nada que pintar: la rejilla vacía parecía un
+     fallo de carga en vez de «todavía no habéis registrado ninguno». */
+  if(!BIENESTAR[P].hambre.length){
+    $('#c-bienestar').innerHTML = vacio('Sin cierres del día todavía',
+      'Cada noche, tres toques: hambre, energía y sueño. Es la señal que antes avisa de un abandono.');
+  } else
   $('#c-bienestar').innerHTML=`
     <div class="note" style="margin:0 0 12px">Del cierre del día. Es la señal que mejor anticipa un abandono: mucho antes que el peso.
       El color va por lo que <b>conviene</b>, no por el número: en hambre lo alto es malo, en energía y sueño es bueno.</div>
@@ -2606,37 +2671,60 @@ function pintarSalud(){
     `;
 
   /* adherencia a la medicación */
-  $('#c-medadh').innerHTML=MED_ADH[P].map((m,i)=>`
+  /* La adherencia sale de las marcas de medicación, y todavía no hay ninguna. */
+  $('#c-medadh').innerHTML = (SIN_EJEMPLO && !MED_ADH[P].length)
+    ? vacio('Todavía no hay días marcados',
+        'El porcentaje aparece con una semana de marcas: se calcula sobre los últimos 90 días.')
+    : MED_ADH[P].map((m,i)=>`
     <div class="ing" ${i?'':'style="border-top:0"'}>
       <div class="grow"><div style="font-size:14px; font-weight:600">${m.n}</div>
         <div class="bar" style="height:6px; margin-top:6px"><i style="width:${m.pct}%; background:${m.pct>=90?'var(--good)':'var(--warn)'}"></i></div></div>
       <span style="font-weight:700; width:48px; text-align:right">${m.pct} %</span></div>`).join('')+
     `<div class="note">Últimos 90 días.</div>`;
 
-  $('#ind-adh').innerHTML=`${d.adherencia} %`;
-  $('#ind-rango').innerHTML=`${d.enRango} %`;
+  /* Adherencia y días en rango se calculan de lo registrado. Sin registros no
+     son un 0 %: es que todavía no se pueden calcular. */
+  const hayRegistro = ADH.length > 0;
+  $('#ind-adh').innerHTML   = hayRegistro ? `${d.adherencia} %` : '—';
+  $('#ind-rango').innerHTML = hayRegistro ? `${d.enRango} %`   : '—';
   $('#calib').innerHTML=`${d.calib.map(([s,r,m],i)=>`
     <div class="ing" ${i?'':'style="border-top:0"'}><div class="grow">
-      <div style="font-size:14px; font-weight:650">${s} · ${r} kcal</div>
+      <div style="font-size:14px; font-weight:650">${s}${r==='pendiente'?'':' · '+r+' kcal'}</div>
       <div class="note" style="margin:1px 0 0">${m}</div></div>
-      ${i===d.calib.length-1?'<span class="chip acc">actual</span>':''}</div>`).join('')}
+      ${r==='pendiente'?'<span class="chip" style="color:var(--muted)">pendiente</span>'
+        :i===d.calib.length-2?'<span class="chip acc">actual</span>':''}</div>`).join('')}
     <div class="note">La app revisa el rango cada 3 semanas con vuestros datos reales.</div>`;
-  $('#alcohol').innerHTML = P==='t' ? `
-    <h2>Objetivo · retirar la cerveza</h2>
-    <div class="card"><div class="row" style="margin-bottom:9px">
-        <div class="grow"><div class="meta">Días sin alcohol este mes</div>
-          <div style="font-size:22px; font-weight:700; letter-spacing:-.03em">19 <span style="font-size:13px; color:var(--muted); font-weight:400">de 26</span></div></div>
-        <span class="chip good">↑ 4 más que el mes pasado</span></div>
-      <div class="bar"><i style="width:73%"></i></div>
-      <div class="note">Consumo medio: 2,1 cervezas por semana · 300 kcal · frente a 5,4 en junio.
-        Es el hábito que más directamente enlaza con tus transaminasas, así que aparece junto a ellas en el informe médico.</div></div>` : '';
+  /* El bloque del alcohol daba «19 de 26 días» y «2,1 cervezas por semana»:
+     nadie ha registrado eso todavía. Cuando el cierre del día lleve semanas
+     contándolo, volverá con números de verdad. */
+  $('#alcohol').innerHTML = '';
+
+  /* ── Objetivos ──────────────────────────────────────────────────────────
+     Antes esto era un «hito» con barras al 56 % y al 82 % calculadas sobre un
+     peso que nadie había medido. Ahora se pintan los objetivos declarados y,
+     debajo de cada uno, solo el progreso que exista de verdad. */
+  $('#h-hito').textContent='Objetivos';
+  $('#hito').innerHTML = OBJETIVOS[P].map((o,i)=>{
+    const serie = P==='c'?PESO_C:PESO_T;
+    let dato='';
+    if(o.metrica==='peso' && serie.length>=2){
+      const dif=(serie[serie.length-1]-serie[0]);
+      dato=`<span class="chip ${dif<0?'good':''}">${dif>0?'+':'−'}${Math.abs(dif).toFixed(1).replace('.',',')} kg</span>`;
+    } else if(o.metrica==='cintura' && CINTURA[P].length>=2){
+      const dif=CINTURA[P][CINTURA[P].length-1]-CINTURA[P][0];
+      dato=`<span class="chip ${dif<0?'good':''}">${dif>0?'+':'−'}${Math.abs(dif).toFixed(1).replace('.',',')} cm</span>`;
+    } else {
+      dato='<span class="chip" style="color:var(--muted)">sin datos aún</span>';
+    }
+    return `<div class="ing" ${i?'':'style="border-top:0"'}>
+      <div class="grow"><div class="meta">${o.plazo==='corto'?'Corto plazo':'Medio plazo'}</div>
+        <div style="font-size:14px; font-weight:650">${o.titulo}</div>
+        <div class="note" style="margin:1px 0 0">${o.detalle}</div></div>
+      ${dato}</div>`;
+  }).join('') + `<div class="note">El progreso sale del peso, la cintura y el cierre del día.
+      Mientras no haya registros, aquí no hay porcentajes.</div>`;
+
   if(P==='c'){
-    $('#h-hito').textContent='Progreso hacia los hitos';
-    $('#hito').innerHTML=`<div class="row" style="margin-bottom:9px">
-        <div class="grow"><div class="meta">Hito 1 · −5 % (86,4 kg)</div></div>
-        <span class="chip acc">2,5 de 4,5 kg</span></div>
-      <div class="bar"><i style="width:56%"></i></div>
-      <div class="note">Ritmo actual 0,45 kg/semana → dentro del objetivo de 2-4 kg/mes.</div>`;
     $('#h-lab').textContent='Analítica · 14/03 → 05/06/2026';
     const num=x=>String(x).replace('.',',');
     const fuera=[['Glucosa',121,127,'74-106',true],['ALT (GPT)',90,null,'10-49',false],
@@ -2684,12 +2772,6 @@ function pintarSalud(){
       </div>
       <button class="act" style="width:100%; margin-top:14px" onclick="sheetNuevaAnalitica()">＋ Añadir analítica nueva</button>`;
   } else {
-    $('#h-hito').textContent='Objetivo de recomposición';
-    $('#hito').innerHTML=`<div class="row" style="margin-bottom:9px">
-        <div class="grow"><div class="meta">Peso estable · bajando % de grasa</div></div>
-        <span class="chip good">✓ en rango</span></div>
-      <div class="bar"><i style="width:82%"></i></div>
-      <div class="note">−0,9 kg en 8 semanas con las cargas subiendo.</div>`;
     $('#h-lab').textContent='Analítica';
     $('#lab-card').innerHTML=`<div class="name" style="margin-top:0">Sin analítica registrada</div>
       <div class="note">Sube el PDF de Echevarne y los marcadores aparecerán aquí.</div>
@@ -2741,7 +2823,17 @@ function pintarPeso(){
     showTip(e,`<b>Semana ${Math.floor(i/2)+1}</b><br>Cristina ${mc[i].toFixed(1)} kg<br>Tama ${mt[i].toFixed(1)} kg`)};
   svg.onmouseleave=()=>{hideTip(); svg.querySelector('#cross').setAttribute('opacity','0')};
 }
+/* Un bloque sin datos tiene que decir que no los tiene y cuándo los tendrá.
+   Rellenarlo con un número plausible es lo que convierte la app en un folleto. */
+function vacio(txt, cuando){
+  return `<div class="row"><div class="thumb sm t-off" style="color:var(--muted)">·</div>
+    <div class="grow"><div class="name" style="margin:0; font-size:14px">${txt}</div>
+    ${cuando?`<div class="note" style="margin:2px 0 0">${cuando}</div>`:''}</div></div>`;
+}
 function pintarAdh(){
+  if(!ADH.length){ $('#chart-adh').innerHTML =
+    vacio('Sin semanas completas todavía',
+          'La primera barra aparece cuando se cierre la primera semana del plan.'); return; }
   const W=404,H=150,L=28,R2=8,T=16,B=22,n=ADH.length,bw=(W-L-R2)/n-10,y=v=>T+(100-v)*(H-T-B)/100;
   $('#chart-adh').innerHTML=`
     <div class="legend"><span><i style="background:var(--acc)"></i>Adherencia</span>
@@ -2808,7 +2900,12 @@ function render(){
   document.documentElement.style.setProperty('--acc-txt', document.documentElement.dataset.theme==='dark' ? d.acc : d.accTxt);
   const hola=HORA<13?'Buenos días':HORA<20?'Buenas tardes':'Buenas noches';
   $('#saludo').textContent=DIA===0?`${hola}, ${d.nombre}`:DIAS_ATRAS[-DIA].split(' · ')[0];
-  $('#hoy-sub').textContent=DIA===0?(capi(largo(HOY_F))+' · '+d.lugar):DIAS_ATRAS[-DIA].split(' · ')[1];
+  /* Dónde comes hoy sale del calendario, no de un texto fijo del perfil: poner
+     «Teletrabajo» un domingo es el tipo de detalle que hace desconfiar de todo
+     lo demás que dice la pantalla. */
+  $('#hoy-sub').textContent = DIA===0
+    ? capi(largo(HOY_F)) + ' · ' + lugarDe(P, isoDe(0))
+    : DIAS_ATRAS[-DIA].split(' · ')[1];
   pintarAvisos(); pintarAhora();
   pintarHero(); pintarQuick(); pintarMenu(); pintarCompra(); pintarEntreno(); pintarSalud(); pintarPeso(); pintarAdh();
 }

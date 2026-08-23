@@ -1,5 +1,4 @@
 /* CAPA DE DATOS — App T&C */
-
 /* ╔══════════════════════════════════════════════════════════════════╗
    ║  CAPA DE DATOS                                                   ║
    ║  Todo lo que hay entre estas marcas es lo ÚNICO que cambiará el   ║
@@ -835,8 +834,10 @@ const PERFILES={
  c:{nombre:'Cristina',acc:'#2a78d6',accTxt:'#1f5da8',saludo:'Buenos días, Cristina',lugar:'Comida en la oficina · túper',
     kcalMin:1600,kcalMax:1750,protMin:100,peso:'90,9',delta:'−0,4 kg esta semana',
     adherencia:86,enRango:71,
-    calib:[['Semana 1','1.650 – 1.800','estimación inicial por fórmula'],
-           ['Semana 3','1.600 – 1.750','la pérdida real fue menor que la esperada → −50 kcal']],
+    /* Historial real de cómo se fijó el rango. Decía «Semana 3: la pérdida real
+       fue menor que la esperada» sin que hubiera habido ninguna semana. */
+    calib:[['Punto de partida','1.650 – 1.800','estimación por fórmula con tu peso, altura y actividad'],
+           ['Primera revisión','pendiente','a las tres semanas del arranque, con el peso real de la báscula']],
     entreno:{tipo:'sesion',titulo:'Fuerza B — cuerpo completo',meta:'Forus · 45 min · hoy 19:00'},
     semana:[['L','17','Fuerza A · con Tama','gym'],['M','18','Cardio en Forus · a elegir','cardio'],['X','19','Solo base de pasos','off'],
             ['J','20','Fuerza B · con Tama','gym'],['V','21','Solo base de pasos','off'],['S','22','Salida larga · 60-75 min','soft'],['D','23','Descanso','off']],
@@ -864,13 +865,13 @@ const PERFILES={
  t:{nombre:'Tama',acc:'#eb6834',accTxt:'#b8471c',saludo:'Buenos días, Tama',lugar:'Teletrabajo · come en casa',
     kcalMin:1950,kcalMax:2100,protMin:130,peso:'73,9',delta:'−0,1 kg esta semana',
     adherencia:79,enRango:64,
-    calib:[['Semana 1','2.300 – 2.450','estimación inicial por fórmula'],
-           ['Semana 3','2.250 – 2.400','peso estable y cargas subiendo → sin cambios de fondo'],
-           ['Semana 4','1.950 – 2.100','corregido: los entrenos que impartes no son gasto tuyo. Déficit real de ~290 kcal']],
+    calib:[['Punto de partida','2.300 – 2.450','estimación por fórmula, contando el fútbol sala como entrenamiento'],
+           ['Corregido antes de arrancar','1.950 – 2.100','dirigir un entreno no es gasto tuyo. Déficit real de unas 290 kcal'],
+           ['Primera revisión','pendiente','a las tres semanas, con el peso real y cómo vaya el hambre']],
     entreno:{tipo:'profesional',titulo:'Entrena al equipo',meta:'20:00-21:30 · actividad profesional'},
     semana:[['L','17','Fuerza A · con Cristina','gym'],['M','18','Solo base de pasos','off'],['X','19','Impartes entreno','work'],
             ['J','20','Fuerza B · con Cristina','gym'],['V','21','Impartes entreno','work'],
-            ['S','22','Cardio suave · a elegir','cardio'],['D','23','Descanso · partido si lo hay','off']],
+            ['S','22','Cardio suave · a elegir','cardio'],['D','23','Partido · lo diriges tú','work']],
     ejercicios:[{n:'Sentadilla con barra',p:'4 × 5-6 @ 85 kg',sets:[[6,85],[6,85],[6,85],[6,85]],fig:'fig-sentadilla',
         clave:'Rodillas hacia fuera, pecho arriba. Con 85 kg el fallo típico es que la cadera suba antes que el pecho.'},
       {n:'Press banca barra',p:'4 × 5-6 @ 65 kg',sets:[[6,65],[6,65],[6,65],[6,65]],fig:'fig-press',
@@ -966,8 +967,11 @@ const PUNT={gazpacho_pollo:'si', chili:'si', lentejas_frias:'ok',
             berenjenas:'no', tortitas:'no', salmorejo_huevo:'ok'};
 
 /* quién cocina cada día — sale de las agendas reales */
-const COCINA={'17':'t','18':'t','19':'c','20':'t','21':'c','22':'x','23':'x'};
-const COCINA2={'24':'t','25':'t','26':'c','27':'t','28':'c','29':'x','30':'x'};
+/* Quién cocina cada día. El patrón va por día de la semana —lunes a domingo—,
+   no por número: así vale para cualquier semana. L M X J V S D */
+const PATRON_COCINA=['t','t','c','t','c','x','x'];
+const cocinaDe = off => Object.fromEntries(
+  diasDeSemana(off).map((d,i)=>[d.n, PATRON_COCINA[i]]));
 const QUIEN={c:'Cristina',t:'Tama',x:'Los dos',n:'Nadie · sobras'};
 
 /* historial de semanas pasadas */
@@ -990,8 +994,17 @@ const PREVISION=[
 
 /* guion de la tanda del domingo. La de la semana siguiente es más corta porque
    queda chili congelado: por eso no puede ser la misma ficha para las dos. */
-const TANDAS={s1:{min:85, tapers:8, dia:'Domingo 16'},
-              s2:{min:70, tapers:6, dia:'Domingo 23', nota:'Una receta menos: sobra chili congelado'}};
+/* La tanda de una semana se cocina el domingo ANTERIOR a esa semana. Estaba
+   escrita a mano («Domingo 16»), que era el domingo previo a la semana de
+   ejemplo: con el plan arrancando el 31, tocaba el 30. Ahora sale de la fecha. */
+function fechaTanda(off){ const a=lunesDe(baseSemana()); a.setDate(a.getDate()+off*7-1); return a; }
+const textoTanda = off => { const f=fechaTanda(off);
+  return `Domingo ${f.getDate()} de ${MES_NOM[f.getMonth()]}`; };
+/* Y su estado no se puede cablear: mientras no llegue el día está PREVISTA, y
+   solo pasa a hecha, corta o saltada cuando alguien lo marca. */
+const tandaPasada = off => fechaTanda(off) < HOY_F;
+const TANDAS={s1:{min:85, tapers:8},
+              s2:{min:70, tapers:6, nota:'Una receta menos: sobra chili congelado'}};
 const TANDA={min:85, tapers:8, pasos:[
  {t:'0 min', q:'Enciende el horno a 200° y pon agua a hervir para las lentejas', icon:'🔥'},
  {t:'5 min', q:'Bandeja de pollo con patata al horno · 30 min', icon:'🍗'},
@@ -1095,6 +1108,13 @@ function enOficina(persona, fecha){
   return OFICINA.t.includes(fecha);
 }
 const desayunoFuera = (persona, fecha) => (DESAYUNO_FUERA[persona]||[]).includes(fecha);
+/* El rótulo de la cabecera de Hoy: oficina, teletrabajo o fin de semana. */
+function lugarDe(persona, fecha){
+  if(!esLaborable(fecha)) return 'Fin de semana · en casa';
+  if(enOficina(persona, fecha)) return desayunoFuera(persona, fecha)
+    ? 'Oficina · desayuno y comida fuera' : 'Oficina · comes de túper';
+  return 'Teletrabajo · comes en casa';
+}
 /* Cuántos túper hay que preparar la noche antes, y de qué */
 function tupersDe(fecha){
   const out=[];
@@ -1103,9 +1123,15 @@ function tupersDe(fecha){
     out.push({p, nombre:PERFILES[p].nombre, momentos:l}); });
   return out;
 }
-const FECHA_DE={'17':'2026-08-17','18':'2026-08-18','19':'2026-08-19','20':'2026-08-20',
-  '21':'2026-08-21','22':'2026-08-22','23':'2026-08-23','24':'2026-08-24','25':'2026-08-25',
-  '26':'2026-08-26','27':'2026-08-27','28':'2026-08-28','29':'2026-08-29','30':'2026-08-30'};
+/* Del número de día a su fecha completa. Era un mapa escrito a mano con los días
+   17-30 de agosto: en cuanto el menú pasó a ser el de la semana del 31, ninguna
+   clave casaba y los túper y el cocinero desaparecían de la vista. Ahora se
+   construye de las dos semanas que la app tiene delante. */
+const FECHA_DE = new Proxy({}, {get:(_,n)=>{
+  if(typeof n!=='string') return undefined;
+  for(const off of [0,1]){ const d=diasDeSemana(off).find(x=>x.n===n); if(d) return d.iso; }
+  return undefined;
+}});
 
 /* ═══ COMPRA: estado, no calendario ═══════════════════════════════════════
    No hay día fijo de compra. Una lista se ABRE cuando se confirma el menú y se
@@ -1180,6 +1206,9 @@ const TICKET=[['PECH POLLO FIL','Contramuslo de pollo','1,6 kg','7,20',1],['LENT
 const BIENESTAR={c:{hambre:[1,2,2,2,3,3,3,2], energia:[2,2,3,2,2,1,2,2], sueno:[2,3,2,2,1,2,2,3]},
                  t:{hambre:[1,1,2,1,2,1,1,2], energia:[3,2,3,3,2,3,2,3], sueno:[2,2,3,2,2,3,3,2]}};
 const CINTURA={c:[116,115,114,113,112.5,112,112,112], t:[89,89,88,88,87.5,87,87,86.5]};
+/* Fecha de la última medida de cintura. La serie son solo números: sin esto
+   no hay forma de saber si toca volver a medir. La rellena hidratar.js. */
+let CINTURA_ULT_F=null;
 /* analíticas reales: [marcador, marzo, junio (null = no incluido), referencia, unidad, dirección buena] */
 const LABS_EVO=[['Glucosa',121,127,'74-106','mg/dL','baja'],['HbA1c',5.4,5.4,'4,3-6,1','%','baja'],
  ['Colesterol',203,185,'<200','mg/dL','baja'],['Ferritina',54.2,30.8,'10-291','ng/mL','—'],
@@ -1190,6 +1219,24 @@ const LABS_EVO=[['Glucosa',121,127,'74-106','mg/dL','baja'],['HbA1c',5.4,5.4,'4,
  ['Vitamina D',24.01,null,'30-100','ng/mL','sube'],['Triglicéridos',70,null,'<150','mg/dL','baja']];
 const MED_ADH={c:[{n:'Metformina 850 mg · 2/día',pct:94},{n:'Letrozol 2,5 mg',pct:100}],
                t:[{n:'Bisoprolol 2,5 mg',pct:97},{n:'Sedotime 15 mg',pct:91}]};
+
+/* Los objetivos de cada uno. Estaban escritos dentro de la pantalla de Salud
+   —«19 de 26 días sin alcohol», «2,5 de 4,5 kg»— con números que nadie había
+   medido. Ahora son filas de la tabla `goals` y lo que no esté ahí no se pinta.
+   plazo: 'corto' | 'medio'   ·   metrica: peso | cintura | grasa | habito */
+const OBJETIVOS={
+  c:[{titulo:'Bajar de peso a ritmo sostenible', plazo:'corto', metrica:'peso',
+      detalle:'El ritmo lo marca el hambre y la analítica, no la báscula sola.'},
+     {titulo:'Reducir cintura', plazo:'corto', metrica:'cintura',
+      detalle:'Es el marcador que mejor acompaña a la resistencia a la insulina.'},
+     {titulo:'Estabilizar el peso sin rebotes', plazo:'medio', metrica:'peso',
+      detalle:'Cuando llegue: mantener sin subidas bruscas.'}],
+  t:[{titulo:'Reducir el porcentaje de grasa', plazo:'corto', metrica:'grasa',
+      detalle:'Objetivo principal. Déficit moderado y las tres sesiones de fuerza.'},
+     {titulo:'Fruta todos los días', plazo:'corto', metrica:'habito',
+      detalle:'Hábito, no número: dos piezas al día cuentan como cumplido.'},
+     {titulo:'Retirar la cerveza de los hábitos', plazo:'medio', metrica:'habito',
+      detalle:'Sin fecha marcada: se sigue en el cierre del día.'}]};
 
 const PESO_C=[93.4,93.1,92.8,92.9,92.4,92.1,91.9,91.7,91.8,91.4,91.2,91.0,90.9,90.7,91.0,90.9];
 const PESO_T=[74.8,74.9,74.6,74.7,74.4,74.5,74.2,74.3,74.1,74.2,74.0,74.1,73.9,74.0,73.8,73.9];

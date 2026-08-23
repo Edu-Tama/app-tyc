@@ -1,0 +1,2677 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2a78d6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b0b0b" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="T&C">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icono.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icono-192.png">
+<title>App T&C</title>
+<style>
+  :root{color-scheme:light;
+    --plane:#f4f4f1; --surface:#fff; --surface-2:#f2f1ed; --surface-3:#eceae4;
+    --ink:#0b0b0b; --ink-2:#52514e; --muted:#6f6d67;
+    --grid:#e6e5df; --axis:#c3c2b7; --border:rgba(11,11,11,.07);
+    --s1:#2a78d6; --s2:#eb6834; --s1-txt:#1f5da8; --s2-txt:#b8471c; --good:#0ca30c; --warn:#fab219; --crit:#b82f2f; --good-ink:#006300;
+    --shadow:0 1px 2px rgba(11,11,11,.04), 0 8px 24px -12px rgba(11,11,11,.14);
+    --shadow-lg:0 2px 6px rgba(11,11,11,.06), 0 24px 48px -20px rgba(11,11,11,.28)}
+  :root[data-theme="dark"]{color-scheme:dark;
+    --plane:#0b0b0b; --surface:#1a1a19; --surface-2:#242423; --surface-3:#2e2e2c;
+    --ink:#fff; --ink-2:#c3c2b7; --muted:#8c8a84;
+    --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.09);
+    --s1:#3987e5; --s2:#d95926; --s1-txt:#7cb4f2; --s2-txt:#f59a6d; --crit:#f26b6b; --good-ink:#22c322;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+    --shadow-lg:0 2px 6px rgba(0,0,0,.5), 0 24px 48px -20px rgba(0,0,0,.8)}
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  body{margin:0; background:var(--plane); color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+    display:flex; justify-content:center; padding:14px 12px 0; overflow-x:hidden}
+  body::before{content:""; position:fixed; inset:-30% -30% auto -30%; height:52vh; z-index:-1;
+    background:radial-gradient(60% 60% at 30% 0%, color-mix(in srgb, var(--acc) 16%, transparent), transparent 70%)}
+  .phone{width:100%; max-width:452px; padding-bottom:96px}
+  header{display:flex; align-items:center; justify-content:space-between; margin-bottom:16px}
+  .brand{font-size:12px; font-weight:800; letter-spacing:.18em; color:var(--muted)}
+  .hdr-actions{display:flex; gap:7px; align-items:center; min-width:0; flex:1; justify-content:flex-end}
+  /* Ya no hay a quién cambiar: solo recuerda de quién es esta app. */
+  .quien{display:inline-flex; align-items:center; gap:7px; background:var(--surface); border-radius:999px;
+    padding:5px 13px 5px 5px; box-shadow:var(--shadow); font-size:13px; font-weight:650; letter-spacing:-.01em}
+  .quien i{width:24px; height:24px; border-radius:999px; background:var(--acc); color:#fff; font-style:normal;
+    display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:750}
+  .hdr-actions>*{flex:0 0 auto}
+  /* En pantallas estrechas (muchos Xiaomi y Redmi son de 360 px) el nombre se acorta
+     antes que salirse: el conmutador de persona es lo último que puede desaparecer. */
+  @media (max-width:379px){
+    .switch button{padding:6px 9px; font-size:12px}
+    .icon-btn{width:31px; height:31px; font-size:13px}
+    #hora{padding:6px 6px !important; font-size:11px !important}
+    header{gap:6px}
+    /* La marca es lo primero que sobra: la app ya se llama T&C en el icono. */
+    .brand{display:none}
+  }
+  .switch{display:flex; background:var(--surface-2); border-radius:999px; padding:3px; gap:2px}
+  .switch button{border:0; background:transparent; color:var(--muted); font:inherit; font-size:12.5px;
+    font-weight:650; padding:6px 13px; border-radius:999px; cursor:pointer; transition:.16s}
+  .switch button.on{background:var(--surface); color:var(--acc-txt); box-shadow:var(--shadow)}
+  .icon-btn{border:1px solid var(--border); background:var(--surface); color:var(--ink-2);
+    width:34px; height:34px; border-radius:999px; cursor:pointer; font-size:14px; box-shadow:var(--shadow)}
+  h1{font-size:27px; margin:0 0 2px; letter-spacing:-.03em; font-weight:700}
+  .sub{font-size:13.5px; color:var(--muted); margin:0 0 18px}
+  h2{font-size:11.5px; text-transform:uppercase; letter-spacing:.09em; color:var(--muted);
+    margin:24px 0 9px; font-weight:750; display:flex; align-items:center; gap:8px}
+  h2 .r{margin-left:auto; text-transform:none; letter-spacing:0; font-size:12.5px; font-weight:600;
+    color:var(--acc-txt); cursor:pointer; padding:10px 4px; margin-top:-10px; margin-bottom:-10px}
+  .card{background:var(--surface); border:1px solid var(--border); border-radius:20px;
+    padding:15px; margin-bottom:11px; box-shadow:var(--shadow)}
+  .card.flush{padding:6px 15px}
+  .tap{cursor:pointer; transition:transform .12s} .tap:active{transform:scale(.985)}
+  .row{display:flex; align-items:center; gap:12px} .grow{flex:1; min-width:0}
+  .hero{border-radius:24px; padding:16px; margin-bottom:12px; color:#fff; box-shadow:var(--shadow-lg);
+    background:linear-gradient(140deg, var(--acc) 0%, color-mix(in srgb, var(--acc) 62%, #10131a) 100%)}
+  .ring{width:78px; height:78px; flex:0 0 auto; position:relative}
+  .ring svg{transform:rotate(-90deg)}
+  .ring b{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; font-size:17px; font-weight:700; letter-spacing:-.02em}
+  .ring b i{font-style:normal; font-size:11.5px; font-weight:600; opacity:.8; letter-spacing:.05em}
+  .hstat{font-size:11.5px; opacity:.9}
+  .hstat b{display:block; font-size:15px; font-weight:700; margin-top:1px}
+  .mini{height:4px; background:rgba(255,255,255,.28); border-radius:99px; overflow:hidden; margin-top:5px}
+  .mini i{display:block; height:100%; background:#fff; border-radius:99px}
+  .thumb{width:50px; height:50px; border-radius:15px; flex:0 0 auto; display:grid; place-items:center;
+    font-size:23px; box-shadow:inset 0 0 0 1px rgba(0,0,0,.05)}
+  .thumb.sm{width:38px; height:38px; font-size:18px; border-radius:12px}
+  .thumb.xs{width:32px; height:32px; font-size:15px; border-radius:10px}
+  .t-legumbre{background:linear-gradient(140deg,#f4d9a8,#e8b06a)}
+  .t-carne{background:linear-gradient(140deg,#f3c0ae,#e0836a)}
+  .t-pescado{background:linear-gradient(140deg,#bcd9ef,#84b2d8)}
+  .t-verdura{background:linear-gradient(140deg,#c7e6c0,#8ec48a)}
+  .t-lacteo{background:linear-gradient(140deg,#e6e2f5,#bdb5e0)}
+  .t-fruta{background:linear-gradient(140deg,#fbdcc2,#f2a97e)}
+  .t-huevo{background:linear-gradient(140deg,#fdeab5,#f2cd6b)}
+  .t-gym{background:linear-gradient(140deg,#d6d5ff,#a09ce8)}
+  .t-off{background:var(--surface-2); box-shadow:inset 0 0 0 1px var(--border)}
+  .when{font-size:11.5px; font-weight:750; color:var(--muted); letter-spacing:.07em; text-transform:uppercase}
+  .name{font-size:15px; font-weight:650; margin:1px 0 2px; line-height:1.25; letter-spacing:-.01em}
+  .meta{font-size:12.5px; color:var(--ink-2)}
+  .chip{display:inline-flex; align-items:center; gap:4px; font-size:11.5px; font-weight:650;
+    padding:4px 9px; border-radius:999px; background:var(--surface-2); color:var(--ink-2)}
+  /* Un chip que se puede pulsar necesita altura de dedo, no de etiqueta. */
+  .chip[onclick]{padding:9px 11px; cursor:pointer}
+  .seg .chip{padding:9px 12px}
+  .chip.acc{background:color-mix(in srgb, var(--acc) 13%, transparent); color:var(--acc-txt)}
+  .chip.good{background:color-mix(in srgb, var(--good) 14%, transparent); color:var(--good-ink)}
+  .chip.warn{background:color-mix(in srgb, var(--warn) 24%, transparent); color:var(--ink)}
+  .chip.crit{background:color-mix(in srgb, var(--crit) 13%, transparent); color:var(--crit)}
+  .chips{display:flex; gap:6px; flex-wrap:wrap; margin-top:9px}
+  .qr{display:flex; align-items:center; gap:11px; padding:10px 0; border-top:1px solid var(--grid); cursor:pointer}
+  .qr:first-child{border-top:0}
+  .qr .tx{flex:1; min-width:0}
+  /* El nombre del plato no se corta: se parte en dos líneas como mucho.
+     En una app de recetas, el nombre es justo lo que hay que poder leer. */
+  .qr .tx b{display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+    font-size:14px; font-weight:600; letter-spacing:-.01em; line-height:1.25;
+    overflow:hidden; overflow-wrap:anywhere}
+  .qr .kc{font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; text-align:right}
+  .check{width:30px; height:30px; border-radius:99px; border:1.8px solid var(--axis); flex:0 0 auto;
+    display:grid; place-items:center; color:transparent; font-size:14px; font-weight:800; transition:.15s}
+  .qr.on .check{background:var(--good); border-color:var(--good); color:#fff}
+  .qr.on .tx b{color:var(--muted)}
+  .qr.alt .check{background:var(--surface-3); border-color:var(--surface-3); color:var(--muted); font-size:13px}
+  .act{flex:1; border:1px solid var(--border); background:var(--surface-2); color:var(--ink-2);
+    font:inherit; font-size:12.5px; font-weight:650; padding:10px 4px; border-radius:12px; cursor:pointer}
+  .act.primary{background:var(--ink); color:var(--surface); border-color:var(--ink)}
+  .bar{height:8px; background:var(--surface-2); border-radius:99px; overflow:hidden}
+  .bar>i{display:block; height:100%; border-radius:99px; background:var(--acc)}
+  table{width:100%; border-collapse:collapse; font-size:13px}
+  th{text-align:left; font-size:11.5px; text-transform:uppercase; letter-spacing:.07em;
+    color:var(--muted); font-weight:750; padding:0 0 9px}
+  td{padding:9px 0; border-top:1px solid var(--grid); font-variant-numeric:tabular-nums}
+  td.num{text-align:right}
+  .sec-h{font-size:11.5px; font-weight:750; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--muted); margin:16px 0 4px; display:flex}
+  .sec-h span{margin-left:auto; text-transform:none; letter-spacing:0; font-weight:600}
+  .item{display:flex; align-items:center; gap:8px; padding:5px 0; border-top:1px solid var(--grid); font-size:14px}
+  /* La casilla de la lista es el control que más se pulsa de toda la app —treinta
+     veces por compra, de pie y con el carro—. Necesita dedo, no ratón. */
+  .item .box{width:44px; height:44px; border:0; background:none; border-radius:0;
+    display:flex; align-items:center; justify-content:center; position:relative; font-size:0}
+  .item .box::before{content:""; width:23px; height:23px; border:1.8px solid var(--axis); border-radius:8px}
+  .item .box.on{background:none; border-color:transparent}
+  .item .box.on::before{background:var(--acc); border-color:var(--acc)}
+  .item .box.on::after{content:"✓"; color:#fff; font-size:14px; font-weight:700;
+    position:absolute; left:50%; top:50%; transform:translate(-50%,-52%)}
+  .item .grow{padding:9px 0}
+  .item .chip{min-height:36px; min-width:36px; display:inline-flex; align-items:center; justify-content:center}
+  .item:first-of-type{border-top:0}
+  .box{width:21px; height:21px; border:1.6px solid var(--axis); border-radius:7px; flex:0 0 auto; cursor:pointer}
+  .box.on{background:var(--acc); border-color:var(--acc); position:relative}
+  .box.on::after{content:"✓"; color:#fff; font-size:13px; position:absolute; left:3.5px; top:-1px}
+  .item.on .grow{text-decoration:line-through; color:var(--muted)}
+  .price{font-size:12.5px; color:var(--muted); font-variant-numeric:tabular-nums}
+  .set{display:flex; align-items:center; gap:8px; padding:8px 0; border-top:1px solid var(--grid)}
+  .set input,.f input{padding:6px; border:1px solid var(--border); border-radius:9px;
+    background:var(--surface-2); color:var(--ink); font:inherit; font-size:13px; text-align:center;
+    font-variant-numeric:tabular-nums}
+  .set input{width:54px}
+  .set .n{font-size:12px; color:var(--muted); width:16px; font-weight:750}
+  .set .x{font-size:11.5px; color:var(--muted)}
+  nav{position:fixed; bottom:0; left:0; right:0; display:flex; justify-content:center; padding:0 12px 12px}
+  .navbar{display:flex; width:100%; max-width:452px; background:color-mix(in srgb, var(--surface) 86%, transparent);
+    border:1px solid var(--border); border-radius:22px; padding:7px 5px; box-shadow:var(--shadow-lg); backdrop-filter:blur(16px)}
+  .navbar button{flex:1; border:0; background:transparent; cursor:pointer; font:inherit; font-size:11.5px;
+    font-weight:650; color:var(--muted); display:flex; flex-direction:column; align-items:center; gap:3px; padding:5px 0}
+  .navbar button .g{font-size:16px; line-height:1; opacity:.65}
+  .navbar button.on{color:var(--acc-txt)} .navbar button.on .g{opacity:1}
+  .screen{display:none} .screen.on{display:block; animation:in .22s ease}
+  @keyframes in{from{opacity:0; transform:translateY(6px)}to{opacity:1; transform:none}}
+  .legend{display:flex; gap:14px; font-size:12px; color:var(--ink-2); margin:0 0 8px}
+  .legend i{width:9px; height:9px; border-radius:3px; display:inline-block; margin-right:5px}
+  .note{font-size:12px; color:var(--muted); line-height:1.5; margin-top:10px}
+  /* pantalla de acceso */
+  .acceso{position:fixed; inset:0; z-index:400; background:var(--plane);
+    display:flex; align-items:center; justify-content:center; padding:24px}
+  .acc-caja{width:100%; max-width:360px; background:var(--surface); border-radius:24px;
+    padding:28px 24px; box-shadow:var(--shadow-lg)}
+  .acc-logo{width:52px; height:52px; border-radius:16px; background:var(--acc); color:#fff;
+    display:flex; align-items:center; justify-content:center; font-weight:800; font-size:17px;
+    letter-spacing:-.02em; margin-bottom:16px}
+  .acc-caja h2{font-size:21px; letter-spacing:-.03em; margin-bottom:5px}
+  .acc-caja p{font-size:13px; color:var(--muted); line-height:1.5; margin-bottom:18px}
+  .acc-caja input{width:100%; padding:13px 15px; border:1.5px solid var(--grid); border-radius:14px;
+    font:inherit; font-size:15px; background:var(--surface-2); color:var(--ink); margin-bottom:10px}
+  .acc-err{font-size:13px; color:var(--crit); margin-top:10px; min-height:18px; text-align:center}
+  /* calendario del mes */
+  .cal{display:grid; grid-template-columns:repeat(7,1fr); gap:4px}
+  .cal-h{font-size:11px; font-weight:750; color:var(--muted); text-align:center; padding-bottom:4px;
+    text-transform:uppercase; letter-spacing:.05em}
+  .cal-d{aspect-ratio:1; border:1.5px solid var(--grid); background:var(--surface); border-radius:12px;
+    font:inherit; font-size:13.5px; font-weight:650; color:var(--ink); cursor:pointer; position:relative;
+    display:flex; align-items:center; justify-content:center; min-height:40px}
+  .cal-d.on{background:var(--acc); border-color:var(--acc); color:#fff}
+  .cal-d.fin{background:transparent; border-color:transparent; color:var(--axis); cursor:default}
+  .cal-d i{position:absolute; bottom:1px; right:2px; font-size:9px; font-style:normal}
+  /* monigotes de ejercicio */
+  .fig{display:block; width:100%; height:60px}
+  .fig .b{fill:none; stroke:var(--ink-2); stroke-width:3.2; stroke-linecap:round; stroke-linejoin:round}
+  .fig .a{fill:none; stroke:var(--acc); stroke-width:3.6; stroke-linecap:round; stroke-linejoin:round}
+  .fig .h{fill:var(--ink-2); stroke:none}
+  .fig .eq{fill:none; stroke:var(--muted); stroke-width:3; stroke-linecap:round; stroke-linejoin:round}
+  .fig .ar{fill:none; stroke:var(--acc); stroke-width:1.8; stroke-dasharray:3 3; stroke-linecap:round}
+  .fig .suelo{stroke:var(--grid); stroke-width:2; stroke-dasharray:3 4}
+  .figbox{background:var(--surface-2); border-radius:14px; padding:10px 8px 6px; margin-bottom:12px}
+  .figmini{width:52px; height:36px; flex:0 0 52px}
+  .figmini .b,.figmini .a{stroke-width:5}
+  .figmini .eq{stroke-width:4.5}
+  .figmini .h{r:8}
+  .banner{background:color-mix(in srgb, var(--warn) 16%, var(--surface));
+    border:1px solid color-mix(in srgb, var(--warn) 40%, transparent);
+    border-radius:18px; padding:13px 15px; font-size:13px; line-height:1.5; margin-bottom:12px}
+  .banner.info{background:color-mix(in srgb, var(--s1) 10%, var(--surface)); border-color:color-mix(in srgb, var(--s1) 32%, transparent)}
+  .banner b.t{display:block; margin-bottom:3px}
+  .tip{position:fixed; pointer-events:none; background:var(--ink); color:var(--plane); font-size:12px;
+    padding:7px 10px; border-radius:9px; opacity:0; transition:opacity .1s;
+    font-variant-numeric:tabular-nums; z-index:120; white-space:nowrap}
+  .fab{width:100%; border:1px dashed var(--axis); background:transparent; color:var(--ink-2);
+    font:inherit; font-size:13px; font-weight:650; padding:13px; border-radius:16px; cursor:pointer}
+  .cta{width:100%; border:0; background:var(--ink); color:var(--surface); font:inherit; font-size:14px;
+    font-weight:700; padding:14px; border-radius:16px; cursor:pointer}
+  .backdrop{position:fixed; inset:0; background:rgba(0,0,0,.45); opacity:0; pointer-events:none;
+    transition:opacity .22s; z-index:100; backdrop-filter:blur(2px)}
+  .backdrop.on{opacity:1; pointer-events:auto}
+  .sheet{position:fixed; left:0; right:0; bottom:0; margin:0 auto; max-width:452px; z-index:110;
+    background:var(--surface); border-radius:26px 26px 0 0; padding:10px 16px 26px;
+    transform:translateY(102%); transition:transform .28s cubic-bezier(.32,.72,0,1);
+    max-height:88vh; overflow-y:auto; box-shadow:var(--shadow-lg)}
+  .sheet.on{transform:none}
+  .grab{width:38px; height:4px; background:var(--axis); border-radius:99px; margin:0 auto 14px}
+  .sheet h3{margin:0 0 3px; font-size:20px; letter-spacing:-.02em}
+  .opt{display:flex; align-items:center; gap:11px; width:100%; text-align:left; border:1px solid var(--border);
+    background:var(--surface-2); border-radius:14px; padding:11px 13px; font:inherit; font-size:14px;
+    color:var(--ink); cursor:pointer; margin-bottom:7px}
+  .opt small{display:block; color:var(--muted); font-size:11.5px; margin-top:1px}
+  .ing{display:flex; padding:9px 0; border-top:1px solid var(--grid); font-size:13.5px; align-items:center}
+  .ing .g{width:74px; text-align:right; font-variant-numeric:tabular-nums; font-weight:650}
+  .ing .g.c{color:var(--s1-txt)} .ing .g.t{color:var(--s2-txt)}
+  .steps{counter-reset:s; padding:0; margin:0; list-style:none}
+  .steps li{counter-increment:s; position:relative; padding:0 0 12px 30px; font-size:13.5px; line-height:1.5}
+  .steps li::before{content:counter(s); position:absolute; left:0; top:-1px; width:21px; height:21px;
+    border-radius:99px; background:var(--surface-2); color:var(--ink-2); font-size:11.5px; font-weight:750;
+    display:grid; place-items:center}
+  .scan{border:1.5px dashed var(--axis); border-radius:20px; padding:26px 16px; text-align:center; background:var(--surface-2)}
+  .ok{color:var(--good-ink); font-weight:700}
+  .day{display:flex; gap:10px; align-items:flex-start; padding:12px 0; border-top:1px solid var(--grid)}
+  .day:first-child{border-top:0}
+  .dcol{width:44px; flex:0 0 auto; text-align:center}
+  .dcol b{display:block; font-size:16px; font-weight:700; letter-spacing:-.02em}
+  .dcol span{font-size:11.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; font-weight:650}
+  .dcol.today b{color:var(--acc-txt)}
+  .sports{display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:6px}
+  .sport{border:1px solid var(--border); background:var(--surface-2); border-radius:15px; padding:11px 4px;
+    text-align:center; cursor:pointer; font:inherit}
+  .sport .e{font-size:21px; display:block}
+  .sport .l{font-size:11.5px; color:var(--ink-2); font-weight:600; margin-top:4px; display:block; line-height:1.2}
+  .f{display:flex; align-items:center; gap:10px; padding:11px 0; border-top:1px solid var(--grid)}
+  .f label{flex:1; font-size:14px}
+  .f input{width:78px}
+  .seg{display:flex; gap:6px} .seg .chip{cursor:pointer} .seg .chip.on{background:var(--acc); color:#fff}
+  .search{width:100%; padding:11px 13px; border:1px solid var(--border); border-radius:14px;
+    background:var(--surface-2); color:var(--ink); font:inherit; font-size:14px; margin-bottom:12px}
+  .tabs{display:flex; background:var(--surface-2); border-radius:14px; padding:3px; gap:2px; margin-bottom:14px}
+  .tabs button{flex:1; border:0; background:transparent; color:var(--muted); font:inherit; font-size:13px;
+    font-weight:650; padding:9px; border-radius:11px; cursor:pointer}
+  .tabs button.on{background:var(--surface); color:var(--ink); box-shadow:var(--shadow)}
+  .stock{display:flex; align-items:center; gap:11px; padding:10px 0; border-top:1px solid var(--grid)}
+  .stock:first-child{border-top:0}
+  .lvl{width:54px; height:6px; background:var(--surface-2); border-radius:99px; overflow:hidden; flex:0 0 auto}
+  .lvl i{display:block; height:100%; border-radius:99px}
+</style>
+</head>
+<body>
+<div class="phone">
+  <header>
+    <span class="brand">T&amp;C</span>
+    <div class="hdr-actions">
+      <span class="quien" id="quien"></span>
+      <select id="hora" title="Solo en el prototipo: simular otra hora"
+        style="border:1px solid var(--border); background:var(--surface); color:var(--ink-2);
+        border-radius:999px; padding:7px 9px; font:inherit; font-size:12px; font-weight:650; box-shadow:var(--shadow)">
+        <option value="-1">🕐 ahora</option>
+        <option value="8">08:00</option><option value="11">11:00</option><option value="15">15:00</option>
+        <option value="19">19:00</option><option value="21">21:00</option><option value="22">22:30</option></select>
+      <button class="icon-btn" id="notif">⚙</button>
+      <button class="icon-btn" id="theme">◐</button>
+    </div>
+  </header>
+
+  <section class="screen on" id="s-hoy">
+    <div class="row" style="margin-bottom:10px">
+      <button class="icon-btn" id="dia-ant">‹</button>
+      <div class="grow" style="text-align:center">
+        <h1 id="saludo" style="font-size:22px"></h1>
+        <p class="sub" id="hoy-sub" style="margin:0"></p></div>
+      <button class="icon-btn" id="dia-sig">›</button>
+    </div>
+    <div id="aviso-modo"></div>
+    <div class="hero" id="hero"></div>
+    <div id="ahora"></div>
+    <div id="bloques"></div>
+    </section>
+
+  <section class="screen" id="s-menu">
+    <h1>Menú y previsión</h1>
+    <p class="sub" id="menu-sub"></p>
+    <div class="tabs" id="tabs-menu">
+      <button class="on" data-t="s1">Esta semana</button>
+      <button data-t="s2">Siguiente</button>
+      <button data-t="prev">Previsión</button>
+      <button data-t="hist">Historial</button>
+    </div>
+    <div id="menu-body"></div>
+  </section>
+
+  <section class="screen" id="s-compra">
+    <h1>Compra y despensa</h1>
+    <p class="sub" id="compra-sub"></p>
+    <div class="tabs" id="tabs-compra">
+      <button class="on" data-t="lista">Lista</button>
+      <button data-t="despensa">Despensa</button>
+
+    </div>
+    <div id="compra-body"></div>
+  </section>
+
+  <section class="screen" id="s-entreno">
+    <h1>Entrenamiento</h1><p class="sub" id="ent-sub"></p>
+    <div class="tabs" id="tabs-entreno">
+      <button class="on" data-t="semana">Semana</button>
+      <button data-t="sesion">Sesión</button>
+      <button data-t="progreso">Progreso</button>
+    </div>
+    <div data-tab-e="semana">
+      <h2 style="margin-top:14px">Semana 17-23 agosto</h2><div class="card" id="ent-semana"></div>
+      <div class="card" id="ent-logica"></div>
+      <button class="cta" id="add-act" style="margin:2px 0 20px">+ Registrar actividad libre</button>
+    </div>
+    <div data-tab-e="sesion" hidden>
+      <h2 style="margin-top:14px">Próxima sesión</h2><div id="ejercicios"></div>
+    </div>
+    <div data-tab-e="progreso" hidden>
+      <h2 style="margin-top:14px">Adherencia al entrenamiento</h2><div class="card" id="ent-adh"></div>
+      <h2>Progresión de cargas</h2><div class="card" id="ent-cargas"></div>
+    </div>
+  </section>
+
+  <section class="screen" id="s-salud">
+    <h1>Salud</h1><p class="sub" id="salud-sub"></p>
+    <div class="tabs" id="tabs-salud">
+      <button class="on" data-t="peso">Peso</button>
+      <button data-t="dia">Día a día</button>
+      <button data-t="objetivo">Objetivo</button>
+      <button data-t="analitica">Analítica</button>
+    </div>
+    <div data-tab-s="peso">
+    <div class="banner" style="margin-top:14px"><b class="t">⚠ Sin alertas de seguridad</b>
+      El ritmo de pérdida está por debajo del 1,2 %/semana. Si lo supera dos semanas seguidas, aquí aparece un aviso para <strong>subir</strong> calorías.</div>
+    <div class="card">
+      <strong style="font-size:14.5px">Peso — media móvil de 7 días</strong>
+      <div class="legend" style="margin-top:8px"><span><i style="background:var(--acc)"></i>Media móvil de 7 días</span></div>
+      <div id="chart-peso"></div>
+      
+      <div class="row" style="margin-top:12px; padding:11px 13px; background:var(--surface-2); border-radius:14px">
+        <span class="grow" style="font-size:13px">No interpretar esta semana
+          <span class="note" style="margin:1px 0 0; display:block">Retención por medicación, ciclo o un viaje: la app no la cuenta para la tendencia ni lanza alertas</span></span>
+        <div class="seg"><span class="chip">Sí</span><span class="chip on">No</span></div></div>
+    </div>
+    <div id="alerta-bienestar"></div>
+    <h2>Cintura</h2><div class="card" id="c-cintura"></div>
+    </div>
+
+    <div data-tab-s="dia" hidden>
+    <h2 style="margin-top:14px">Cómo os habéis encontrado</h2><div class="card" id="c-bienestar"></div>
+    <h2>Medicación</h2><div class="card" id="c-medadh"></div>
+    <h2>Los dos indicadores</h2>
+    <div class="card">
+      <div class="row" style="margin-bottom:12px">
+        <div class="grow"><div class="meta">Adherencia · ¿cumpliste el plan?</div>
+          <div style="font-size:20px; font-weight:700; letter-spacing:-.02em" id="ind-adh"></div></div>
+        <div class="grow"><div class="meta">Días en rango · ¿comiste bien?</div>
+          <div style="font-size:20px; font-weight:700; letter-spacing:-.02em" id="ind-rango"></div></div>
+      </div>
+      <div id="chart-adh"></div>
+    </div>
+    <div id="alcohol"></div>
+    </div>
+
+    <div data-tab-s="objetivo" hidden>
+    <h2 style="margin-top:14px">Calibración del objetivo</h2>
+    <div class="card" id="calib"></div>
+    <h2 id="h-hito"></h2><div class="card" id="hito"></div>
+    <button class="cta" id="btn-informe" style="margin:6px 0 4px">📄 Informe para la consulta médica</button>
+    </div>
+
+    <div data-tab-s="analitica" hidden>
+    <h2 id="h-lab" style="margin-top:14px"></h2><div class="card" id="lab-card"></div>
+    </div>
+  </section>
+
+  <nav><div class="navbar" id="nav">
+    <button class="on" data-s="hoy"><span class="g">☀</span>Hoy</button>
+    <button data-s="menu"><span class="g">▦</span>Menú</button>
+    <button data-s="compra"><span class="g">🛒</span>Compra</button>
+    <button data-s="entreno"><span class="g">🏋</span>Entreno</button>
+    <button data-s="salud"><span class="g">❤</span>Salud</button>
+  </div></nav>
+</div>
+<div class="acceso" id="acceso" style="display:none">
+  <div class="acc-caja">
+    <div class="acc-logo">T&amp;C</div>
+    <h2>Entra con tu cuenta</h2>
+    <p>Cada uno con la suya: lo que registras es tuyo y no lo ve el otro.</p>
+    <input id="acc-mail" type="email" autocomplete="username" placeholder="Tu correo" inputmode="email">
+    <input id="acc-pass" type="password" autocomplete="current-password" placeholder="Contraseña">
+    <button class="cta" id="acc-btn" onclick="entrar()">Entrar</button>
+    <div class="acc-err" id="acc-error"></div>
+  </div>
+</div>
+<div class="backdrop" id="bd"></div>
+<div class="sheet" id="sheet"><div class="grab"></div><div id="sheet-body"></div></div>
+<div class="tip" id="tip"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="datos.js"></script>
+<script src="hidratar.js"></script>
+<script>
+/* La capa de datos vive en datos.js */
+
+
+/* ═══ QUIÉN ERES ══════════════════════════════════════════════════════════
+   No hay conmutador de persona: la app es siempre la del que ha iniciado sesión.
+   En Supabase esto no es una preferencia, es una consecuencia: las políticas de
+   las tablas personales dicen `profile_id = auth.uid()`, así que pedir las
+   comidas del otro devuelve cero filas. Cristina entra como Cristina desde su
+   móvil y Tama como Tama desde el suyo.
+   Al conectar la base, SESION sale de db.auth.getUser() (ver supabase.js). */
+let SESION={perfil:'c', email:'cristina@…'};
+let DISPOSITIVO=SESION.perfil;
+let P=SESION.perfil, DIA=0, HORA=new Date().getHours(), TAB='lista', TABM='s1', HOY={}, ACC={}, NOTA='', EXTRA_LOG={c:[],t:[]}, VER_HECHAS=false, VER_TICKET=false, MED={c:[false,false,false],t:[false,false]};
+const $=s=>document.querySelector(s);
+const media=a=>a.map((_,i)=>{const s=a.slice(Math.max(0,i-3),i+1); return s.reduce((x,y)=>x+y,0)/s.length});
+const eur=v=>v.toFixed(2).replace('.',',')+' €';
+const kg=g=>g>=1000?(g/1000).toFixed(g%1000?1:0).replace('.',',')+' kg':Math.round(g)+' g';
+const MOMLAB={desayuno:'Desayuno',media:'Media mañana',comida:'Comida',merienda:'Merienda',cena:'Cena'};
+
+function sembrarDia(h){
+  const d=MENU.find(x=>x.n==='19');
+  HOY={c:MOM.map(k=>({k,r:d[k],estado:null})),t:MOM.map(k=>({k,r:d[k],estado:null}))};
+  const n = h<9?0 : h<12?1 : h<14?2 : h<18?3 : h<21?4 : 4;   // cuántas comidas cabría haber hecho
+  for(let i=0;i<n;i++){HOY.c[i].estado='hecho'; HOY.t[i].estado= i===2?'cambiado':'hecho';}
+  MED.c=[h>=9,h>=21,h>=22]; MED.t=[h>=8,h>=22];
+}
+sembrarDia(HORA);
+
+/* ───── hojas ───── */
+function openSheet(h){$('#sheet-body').innerHTML=h; $('#sheet').classList.add('on'); $('#bd').classList.add('on'); $('#sheet').scrollTop=0}
+function closeSheet(){$('#sheet').classList.remove('on'); $('#bd').classList.remove('on')}
+$('#bd').onclick=closeSheet;
+
+function sheetReceta(k){
+  const r=R[k], nc=nutre(k,'c'), nt=nutre(k,'t');
+  openSheet(`
+    <div class="row" style="margin-bottom:14px">
+      <div class="thumb ${r.t}" style="width:62px;height:62px;font-size:29px;border-radius:19px">${r.e}</div>
+      <div class="grow"><h3>${r.n}</h3><div class="meta">${r.metodo} · ${r.act} min activos de ${r.tot}</div></div></div>
+    <div class="chips" style="margin:0 0 14px">${r.tags.map(t=>`<span class="chip acc">${t}</span>`).join('')}
+      ${r.temp?`<span class="chip good">🌾 ${r.temp}</span>`:''}</div>
+    <div class="row" style="background:var(--surface-2); border-radius:14px; padding:11px 13px; margin-bottom:16px">
+      <span class="grow" style="font-size:13.5px">${PUNT[k]==='no'?'Retirada de la rotación':PUNT[k]==='si'?'Marcada como favorita':PUNT[k]==='ok'?'Puntuada como normal':'Sin puntuar todavía'}</span>
+      <div class="seg">
+        <span class="chip${PUNT[k]==='si'?' on':''}" onclick="puntuar('${k}','si'); sheetReceta('${k}')">👍</span>
+        <span class="chip${PUNT[k]==='ok'?' on':''}" onclick="puntuar('${k}','ok'); sheetReceta('${k}')">😐</span>
+        <span class="chip${PUNT[k]==='no'?' on':''}" onclick="puntuar('${k}','no'); sheetReceta('${k}')">👎</span></div></div>
+    ${PUNT[k]==='no'?`<div class="banner" style="margin-bottom:14px"><b class="t">Fuera de la rotación</b>
+      El generador ya no la propone. Sigue en la biblioteca por si cambiáis de idea.</div>`:''}
+    <div class="row" style="gap:8px; margin-bottom:16px">
+      ${[['Cristina',nc,'--s1'],['Tama',nt,'--s2']].map(([l,n,c])=>`
+        <div style="flex:1; background:var(--surface-2); border-radius:14px; padding:11px">
+          <div style="font-size:11.5px; font-weight:750; letter-spacing:.06em; text-transform:uppercase; color:var(${c})">${l}</div>
+          <div style="font-size:19px; font-weight:700; letter-spacing:-.02em; margin-top:3px">${n.kcal} <span style="font-size:11.5px; font-weight:500; color:var(--muted)">kcal</span></div>
+          <div style="font-size:12px; color:var(--muted)">${n.prot} g de proteína</div></div>`).join('')}
+    </div>
+    <h2 style="margin:0 0 6px">Ingredientes por persona</h2>
+    <div class="ing" style="border-top:0; color:var(--muted); font-size:11.5px; text-transform:uppercase; letter-spacing:.06em; font-weight:750">
+      <span class="grow"></span><span class="g" style="color:var(--s1-txt)">Cristina</span><span class="g" style="color:var(--s2-txt)">Tama</span></div>
+    ${r.ing.map(([n,c,u])=>{const mo=ING[n][4];
+      return `<div class="ing"><span class="grow">${n}
+        ${mo==='f'?'<span class="chip" style="padding:2px 7px; font-size:11px; margin-left:5px">no escala</span>':''}</span>
+        <span class="g c">${escala(n,c,u,'c')} ${u||'g'}</span>
+        <span class="g t">${escala(n,c,u,'t')} ${u||'g'}</span></div>`}).join('')}
+    <div style="height:14px"></div>
+    <h2 style="margin:0 0 8px">Preparación</h2>
+    <ol class="steps">${r.pasos.map(p=>`<li>${p}</li>`).join('')}</ol>
+    ${r.nota?`<div class="banner" style="margin:6px 0 16px"><b class="t">Nota</b>${r.nota}</div>`:''}
+    <button class="cta" onclick="closeSheet()">Cerrar</button>`);
+}
+function sheetComida(i){
+  const m=HOY[P][i], r=R[m.r];
+  openSheet(`<div class="row" style="margin-bottom:16px"><div class="thumb ${r.t}">${r.e}</div>
+    <div class="grow"><div class="when">${MOMLAB[m.k]}</div><h3 style="font-size:17px">${r.n}</h3>
+    <div class="meta">${nutre(m.r,P).kcal} kcal · ${nutre(m.r,P).prot} g P</div></div></div>
+    <button class="opt" onclick="marcar(${i},'hecho')">✅ <span class="grow">Hecho<small>Tal cual estaba planificado</small></span></button>
+    <button class="opt" onclick="sheetCambio(${i})">↔️ <span class="grow">Lo cambié<small>Elegir qué comiste</small></span></button>
+    <button class="opt" onclick="sheetFuera(${i})">🍽️ <span class="grow">Comí fuera<small>Estimación gruesa</small></span></button>
+    <button class="opt" onclick="marcar(${i},'saltado')">⏭️ <span class="grow">Me la salté<small>También es un dato</small></span></button>
+    <button class="opt" onclick="sheetReceta('${m.r}')">📖 <span class="grow">Ver la receta<small>Cantidades y pasos</small></span></button>`);
+}
+function sheetCambio(i){
+  const m=HOY[P][i], mm=(m.k==='media'||m.k==='merienda')?'snack':m.k;
+  const alt=cocinablesAhora().filter(x=>R[x.k].mom===mm&&x.k!==m.r).slice(0,4);
+  openSheet(`<h3>¿Qué comiste?</h3>
+    <div class="meta" style="margin-bottom:16px">Ordenado por lo que se puede hacer con la despensa de ahora.</div>
+    ${alt.map(({k,falta})=>`<button class="opt" onclick="marcar(${i},'cambiado','${k}')">
+      <span class="thumb sm ${R[k].t}">${R[k].e}</span>
+      <span class="grow">${R[k].n}<small>${nutre(k,P).kcal} kcal · ${falta?`faltan ${falta} ingredientes`:'todo en despensa'}</small></span></button>`).join('')}
+    <button class="opt" onclick="marcar(${i},'cambiado')">🍳 <span class="grow">Otra cosa en casa<small>No entra en el cálculo fino</small></span></button>`);
+}
+function sheetFuera(i){
+  openSheet(`<h3>Comiste fuera</h3><div class="meta" style="margin-bottom:16px">Una estimación gruesa basta.</div>
+    ${[['🥗','Ligero','ensalada, algo suelto'],['🍽️','Normal','un menú corriente'],['🍕','Copioso','comida de celebración']]
+      .map(([e,l,d])=>`<button class="opt" onclick="marcar(${i},'fuera')">${e}<span class="grow">${l}<small>${d}</small></span></button>`).join('')}
+    <div class="sec-h">Bebida</div>
+    ${P==='t'
+      ? `<button class="opt">🍺 <span class="grow">Cerveza<small>142 kcal el tercio · cuenta para el objetivo de días sin alcohol</small></span></button>
+         <button class="opt">💧 <span class="grow">Sin alcohol<small>Suma un día al contador</small></span></button>`
+      : `<button class="opt">🥤 <span class="grow">Aquarius de limón<small>120 kcal y 29 g de azúcar el medio litro</small></span></button>
+         <button class="opt">💧 <span class="grow">Agua o refresco sin azúcar<small>La versión zero tiene el mismo sabor y 0 g</small></span></button>`}
+    <div class="note">${P==='c'
+      ? 'Con la glucosa en ayunas en 127, medio litro de bebida azucarada es de las pocas cosas que la mueven de golpe. No es prohibirla: es que la versión zero cuesta lo mismo.'
+      : 'La cerveza no se prohíbe, se cuenta. Es lo que hace visible el objetivo de retirarla.'}</div>`);
+}
+function marcar(i,estado,alt){const m=HOY[P][i]; m.estado=estado; if(alt)m.r=alt; closeSheet(); pintarQuick(); pintarHero()}
+
+/* vídeos propios: un clip de 10 s hecho en el gimnasio vale más que
+   cualquier dibujo, porque es TU técnica con TU material. */
+const MIS_VIDEOS={'Sentadilla con barra':{fecha:'02/08/2026', nota:'Vista lateral · Cristina grabando'}};
+function sheetMiVideo(n){
+  const v=MIS_VIDEOS[n];
+  openSheet(`<h3>Mi vídeo · ${n}</h3>
+    ${v?`<div class="meta" style="margin-bottom:14px">Grabado el ${v.fecha} · ${v.nota}</div>
+      <div class="figbox" style="height:180px; display:flex; align-items:center; justify-content:center; color:var(--muted)">
+        ▶︎ Reproducir</div>
+      <div class="note">Se guarda en el móvil, no se sube a ningún sitio. Regrábalo cada pocas semanas:
+        comparar el de hoy con el de hace dos meses es la forma más honesta de ver si la técnica mejora
+        o si solo ha subido el peso.</div>
+      <div class="row" style="gap:8px; margin-top:14px">
+        <button class="act" onclick="closeSheet()">Regrabar</button>
+        <button class="act" onclick="closeSheet()">Borrar</button></div>`
+    :`<div class="meta" style="margin-bottom:14px">Todavía no hay vídeo de este ejercicio</div>
+      <div class="note" style="margin:0 0 14px">Diez segundos desde un lado, con el móvil apoyado en el suelo.
+        Es lo único que enseña de verdad la técnica: el dibujo sirve para reconocer el ejercicio,
+        el vídeo para corregirlo. Y sirve para enseñárselo a un monitor de Forus sin tener que repetirlo delante.</div>
+      <button class="cta" onclick="closeSheet()">🎥 Grabar ahora</button>`}`);
+}
+let SES={ex:0, serie:0, casa:false, desc:0, timer:null};
+function sheetRutina(){
+  const r=RUTINA_DIARIA[P]; if(!r) return;
+  openSheet(`<h3>${r.n}</h3>
+    <div class="meta" style="margin-bottom:14px">${r.min} minutos · todos los días · ${r.pasos.length} ejercicios</div>
+    <div class="sec-h" style="margin-top:0">¿Cuándo la haces hoy?</div>
+    <div class="row" style="gap:8px; margin-bottom:14px">
+      ${r.franjas.map(([id,e,t,sub])=>`<button class="act${ACC.franja===id?' primary':''}"
+        style="flex:1; flex-direction:column; gap:2px; padding:10px 6px; line-height:1.3"
+        onclick="ACC.franja='${id}'; sheetRutina()">
+        <span style="font-size:17px">${e}</span><span style="font-size:11.5px">${t}</span></button>`).join('')}</div>
+    ${ACC.franja?`<div class="note" style="margin:-8px 0 14px">${r.franjas.find(f=>f[0]===ACC.franja)[3]}</div>`:
+      '<div class="note" style="margin:-8px 0 14px">Da igual la hora: lo que cuenta es que se haga todos los días.</div>'}
+    ${r.pasos.map(([n,d,fg],i)=>`<div class="ing" ${i?'':'style="border-top:0"'}>
+      <span style="width:22px; font-weight:750; color:var(--acc-txt); font-size:12.5px">${i+1}</span>
+      ${FIGURAS[fg]?`<span class="figmini">${figura(fg,36)}</span>`:'<span class="figmini"></span>'}
+      <span class="grow" style="padding-left:8px">${n}${i<6?'':'<small style="display:block; color:var(--muted); font-size:11.5px">si vas justo de tiempo, este puede caer</small>'}</span>
+      <span style="color:var(--muted); font-size:12.5px">${d}</span></div>`).join('')}
+    <div class="note">${r.nota}</div>
+    <button class="cta" style="margin-top:14px" onclick="ACC.rutina=true; closeSheet(); pintarQuick(); pintarEntreno()">✓ Hecha</button>`);
+}
+function sheetCardio(){
+  openSheet(`<h3>Cardio ${P==='c'?'del martes':'del sábado'} · Forus</h3>
+    <div class="meta" style="margin-bottom:16px">Complementa la fuerza, no sustituye a los pasos del día. Elige la que te apetezca:
+      todas cumplen el mismo objetivo.</div>
+    ${CARDIO_FORUS.map(x=>`<button class="opt" onclick="closeSheet()">
+      <span class="thumb sm t-pescado">${x.e}</span>
+      <span class="grow">${x.n}<small>${x.nota}</small></span>
+      <span class="chip acc">${x.obj}</span></button>`).join('')}
+    `);
+}
+function sheetSesion(ex){
+  const d=PERFILES[P];
+  const lista = SES.casa
+    ? EN_CASA[P].map((x,i)=>({...x, sets:d.ejercicios[i].sets, t:d.ejercicios[i].t}))
+    : d.ejercicios;
+  SES.ex=Math.max(0,Math.min(lista.length-1,ex));
+  const e=lista[SES.ex], hechas=SES.serie;
+  openSheet(`
+    <div class="row" style="margin-bottom:14px">
+      <div class="grow"><div class="when">Ejercicio ${SES.ex+1} de ${lista.length} · ${SES.casa?'versión en casa':'Forus'}</div>
+        <h3 style="font-size:19px">${e.n}</h3>
+        <div class="meta">Prescrito: ${e.p}${e.mov?' · bloque de movilidad':''}${e.prev?' · prevención':''}</div></div>
+      <div class="seg"><span class="chip${SES.casa?'':' on'}" onclick="SES.casa=false; sheetSesion(0)">Gimnasio</span>
+        <span class="chip${SES.casa?' on':''}" onclick="SES.casa=true; sheetSesion(0)">En casa</span></div></div>
+    <div class="bar" style="margin-bottom:16px"><i style="width:${100*(SES.ex+hechas/e.sets.length)/lista.length}%"></i></div>
+    ${FIGURAS[e.fig]?`<div class="figbox">${figura(e.fig,130)}
+      ${e.clave?`<div class="note" style="margin:6px 4px 0; text-align:center">${e.clave}</div>`:''}
+      <div class="row" style="gap:6px; margin-top:8px">
+        <a class="act" style="flex:1; text-decoration:none; text-align:center" target="_blank"
+           href="https://www.youtube.com/results?search_query=${encodeURIComponent(e.n+' técnica')}">▶︎ Ver vídeo</a>
+        <button class="act${MIS_VIDEOS[e.n]?' primary':''}" style="flex:1"
+           onclick="sheetMiVideo('${e.n.replace(/'/g,"\\'")}')">${MIS_VIDEOS[e.n]?'🎥 Mi vídeo':'🎥 Grabar el mío'}</button></div></div>`:''}
+    ${SES.ex===0?`<div class="card" style="box-shadow:none; background:var(--surface-2); margin-bottom:14px">
+      <div class="sec-h" style="margin-top:0">Calentamiento · 5 min</div>
+      ${CALENTAMIENTO.map(([n,t])=>`<div class="ing" style="font-size:13px"><span class="grow">${n}</span>
+        <span style="color:var(--muted)">${t}</span></div>`).join('')}</div>`:''}
+    ${e.sets.map((sv,i)=>`<div class="set" style="${i<hechas?'opacity:.5':''}">
+      <span class="n">${i+1}</span>
+      <input value="${sv[0]}"><span class="x">${e.t?'seg':'reps'}</span>
+      ${e.t||!sv[1]?'':`<input value="${sv[1]}"><span class="x">kg</span>`}
+      <span class="grow"></span>
+      <span class="box ${i<hechas?'on':''}" onclick="serieHecha(${i})"></span></div>`).join('')}
+    ${SES.desc>0?`<div class="card" style="box-shadow:none; background:color-mix(in srgb, var(--acc) 12%, transparent); text-align:center; margin-top:14px">
+      <div style="font-size:32px; font-weight:700; letter-spacing:-.03em; font-variant-numeric:tabular-nums">${SES.desc}s</div>
+      <div class="meta">Descanso · siguiente serie</div></div>`:''}
+    <div class="row" style="gap:8px; margin-top:16px">
+      <button class="act" onclick="sheetSesion(${SES.ex-1})" ${SES.ex?'':'disabled style="opacity:.4"'}>‹ Anterior</button>
+      ${SES.ex<lista.length-1
+        ? `<button class="act primary" onclick="SES.serie=0; sheetSesion(${SES.ex+1})">Siguiente ›</button>`
+        : `<button class="act primary" onclick="finSesion()">✓ Terminar sesión</button>`}</div>
+    ${SES.ex<lista.length-1?`<div class="note">Siguiente: ${lista[SES.ex+1].n}</div>`:''}`);
+}
+function serieHecha(i){
+  SES.serie=i+1; SES.desc=90;
+  clearInterval(SES.timer);
+  SES.timer=setInterval(()=>{SES.desc--; if(SES.desc<=0){clearInterval(SES.timer); SES.desc=0}
+    if($('#sheet').classList.contains('on')) sheetSesion(SES.ex);},1000);
+  sheetSesion(SES.ex);
+}
+function finSesion(){
+  clearInterval(SES.timer); SES.desc=0; ACC.sesion=true; SES.serie=0; SES.ex=0;
+  closeSheet(); pintarQuick();
+  openSheet(`<h3>Sesión completada</h3>
+    <div class="meta" style="margin-bottom:16px">${PERFILES[P].entreno.titulo} · ${SES.casa?'en casa':'Forus'}</div>
+    <div class="f" style="border-top:0; align-items:flex-start"><label>¿Cómo ha ido el esfuerzo?</label></div>
+    <div class="seg">${[2,4,6,8,10].map(n=>`<span class="chip${n===6?' on':''}">${n}</span>`).join('')}</div>
+    <div class="f" style="align-items:flex-start; margin-top:10px"><label>¿Alguna molestia?
+      <div class="note" style="margin-top:2px">Si marcas una, la próxima sesión sustituye los ejercicios que la cargan</div></label></div>
+    <div class="seg" style="flex-wrap:wrap">${['Ninguna','Hombro','Rodilla','Lumbar','Otra'].map((x,i)=>
+      `<span class="chip${i?'':' on'}">${x}</span>`).join('')}</div>
+    <button class="cta" style="margin-top:16px" onclick="closeSheet()">Guardar</button>`);
+}
+function sheetActividad(q=''){
+  const l=DEPORTES.filter(d=>d.n.toLowerCase().includes(q.toLowerCase()));
+  openSheet(`<h3>Actividad libre</h3>
+    <div class="meta" style="margin-bottom:14px">Todo lo que no está en el plan: una clase, un partido, una ruta.</div>
+    <input class="search" placeholder="Buscar deporte…" value="${q}" oninput="sheetActividad(this.value)">
+    <div class="sports">${l.map(d=>`<button class="sport" onclick="sheetActividadForm('${d.id}')">
+      <span class="e">${d.e}</span><span class="l">${d.n}</span></button>`).join('')}</div>`);
+}
+function sheetActividadForm(id){
+  const d=DEPORTES.find(x=>x.id===id);
+  openSheet(`<div class="row" style="margin-bottom:16px"><div class="thumb t-gym">${d.e}</div>
+    <div class="grow"><h3 style="font-size:18px">${d.n}</h3><div class="meta">Miércoles 19 de agosto</div></div>
+    <button class="icon-btn" onclick="sheetActividad()">↺</button></div>
+    ${d.m.map(k=>`<div class="f"><label>${CAMPO[k][0]}</label><input placeholder="—"><span class="meta" style="width:38px">${CAMPO[k][1]}</span></div>`).join('')}
+    <div class="f"><label>Esfuerzo percibido</label><div class="seg">${[2,4,6,8,10].map(n=>`<span class="chip${n===6?' on':''}">${n}</span>`).join('')}</div></div>
+    <div class="f" style="align-items:flex-start"><label>¿La impartes tú?
+      <div class="note" style="margin-top:2px">Si entrenas a otros, no computa como entrenamiento propio</div></label>
+      <div class="seg"><span class="chip">Sí</span><span class="chip on">No</span></div></div>
+    <button class="cta" style="margin-top:16px" onclick="closeSheet()">Guardar actividad</button>`);
+}
+/* La tanda es de UNA semana concreta: si se abre desde «Siguiente», lo que
+   cambie el plan B tiene que ser el menú de esa semana, no el de esta. */
+/* Qué se cocina ese día NO es una lista fija: sale de las comidas de lunes a
+   jueves del menú de esa semana. Si el plan B las cambia, la tanda cambia con
+   ellas — que es justo lo que faltaba. */
+function loQueSeCocina(sem){
+  const semana = sem==='s2' ? MENU2 : MENU;
+  const dias = semana.filter(d=>['L','M','X','J'].includes(d.d));
+  const platos = {};
+  dias.forEach(d=>{ (platos[d.comida]=platos[d.comida]||{dias:[],k:d.comida}).dias.push(d.d+' '+d.n); });
+  return Object.values(platos).map(p=>({...p, r:R[p.k], raciones:p.dias.length*2}));
+}
+function sheetTanda(sem){
+  sem = sem || TABM;
+  const T = TANDAS[sem] || TANDAS.s1, esta = sem==='s1';
+  const st = TANDA_ESTADO[sem];
+  const platos = loQueSeCocina(sem);
+  const enTanda = platos.filter(p=>p.r.tot>25);          // lo que de verdad merece cocinarse antes
+  const alDia  = platos.filter(p=>p.r.tot<=25);
+  const min = enTanda.reduce((a,p)=>a+p.r.tot,0);
+  const tapers = platos.reduce((a,p)=>a+p.raciones,0);
+  openSheet(`<h3>Tanda de cocina · ${T.dia.toLowerCase()}</h3>
+    <div class="meta" style="margin-bottom:14px">${enTanda.length} ${enTanda.length===1?'receta':'recetas'} ·
+      ${tapers} tápers · cubre lunes a jueves${esta?'':' · <b>semana siguiente</b>'}</div>
+    ${st?`<div class="banner ${st==='hecha'?'info':''}" style="margin-bottom:12px"><b class="t">${
+      {hecha:'✓ Tanda hecha',corta:'Tanda corta de 30 min',saltada:'Tanda saltada',movida:'Movida al lunes'}[st]}</b>
+      ${st==='saltada'?'Las comidas de lunes a jueves son ahora recetas del día: se cocinan cuando toca, no antes.'
+       :st==='corta'?'Solo las dos primeras salen de la tanda. El resto se cocina entre semana.'
+       :st==='movida'?'La comida del lunes se queda sin cubrir: hay que tirar de sobras o cambiarla.'
+       :'Los tápers están hechos y en la nevera.'}</div>`:''}
+    <div class="sec-h" style="margin-top:0">Qué se cocina</div>
+    ${platos.map(p=>`<div class="qr" onclick="sheetReceta('${p.k}')">
+      <div class="thumb sm ${p.r.t}">${p.r.e}</div>
+      <div class="tx"><div class="when">${p.dias.join(' · ')} · ${p.raciones} raciones</div><b>${p.r.n}</b></div>
+      <div class="kc"><span class="chip ${p.r.tot>25?'acc':''}">${p.r.tot} min</span></div></div>`).join('')}
+    ${alDia.length?`<div class="note">${alDia.length===1?'Esa receta se hace':'Esas '+alDia.length+' recetas se hacen'}
+      en ${alDia.reduce((a,p)=>a+p.r.tot,0)} minutos el mismo día: no compensa adelantarla${alDia.length===1?'':'s'}.</div>`:''}
+    ${enTanda.length?`<div class="sec-h">El guion, todo en paralelo · ~${Math.round(min*0.6)} min reales</div>
+    ${TANDA.pasos.map(p=>`<div class="ing" style="align-items:flex-start">
+      <span style="width:52px; font-weight:750; color:var(--acc-txt); font-size:12.5px">${p.t}</span>
+      <span class="grow">${p.icon} ${p.q}</span></div>`).join('')}`
+    :`<div class="banner"><b class="t">No queda nada que cocinar por adelantado</b>
+      Todas las comidas de la semana se resuelven en 25 minutos o menos el mismo día. La tanda no hace falta.</div>`}
+    <div class="sec-h">Si ${esta?'hoy':'ese día'} no puede ser</div>
+    <button class="opt" onclick="planB('media','${sem}')">⏱ <span class="grow">Tengo 30 minutos
+      <small>Cocino lo que más rinde y el resto se resuelve entre semana</small></span></button>
+    <button class="opt" onclick="planB('nada','${sem}')">✕ <span class="grow">No cocino nada
+      <small>La app cambia las comidas de la semana por recetas del día</small></span></button>
+    <button class="opt" onclick="tandaMovida('${sem}')">📅 <span class="grow">Lo hago al día siguiente
+      <small>La tanda se mueve al lunes por la tarde</small></span></button>
+    <button class="cta" style="margin-top:8px" onclick="tandaHecha('${sem}')">✓ Tanda hecha</button>`);
+}
+const TANDA_ESTADO={s1:null, s2:null};
+function tandaHecha(sem){ TANDA_ESTADO[sem]='hecha'; closeSheet(); pintarMenu(); pintarQuick(); }
+function tandaMovida(sem){ TANDA_ESTADO[sem]='movida'; closeSheet(); pintarMenu();
+  openSheet(`<h3>Tanda movida al lunes</h3>
+    <div class="meta" style="margin-bottom:14px">Las comidas de lunes siguen siendo del día anterior</div>
+    <div class="banner"><b class="t">Lo que hay que resolver</b>
+      La comida del lunes salía de la tanda del domingo. Si cocinas el lunes por la tarde, esa comida
+      no existe: o se tira de sobras, o se cambia por algo rápido.</div>
+    <button class="opt" onclick="planB('media','${sem}')">⏱ <span class="grow">Cambiar solo la comida del lunes
+      <small>El resto de la semana sigue igual</small></span></button>
+    <button class="cta" style="margin-top:8px" onclick="closeSheet()">Dejarlo así</button>`);
+}
+const ESTADO_ACC={hecho:'Hecho',usado:'Usado a tiempo',congelado:'Al congelador',tirado:'Tirado · anotado en desperdicio',pospuesto:'Lo miro mañana'};
+function accCheck(id){ACC[id]=ACC[id]?null:'hecho'; pintarQuick()}
+function accSet(id,v){ACC[id]=v; closeSheet(); pintarQuick()}
+function sheetCaducidad(id,n,g){
+  const precio=PRECIO[n]?g*PRECIO[n]/1000:0;
+  openSheet(`<h3>${n}</h3>
+    <div class="meta" style="margin-bottom:16px">${kg(g)} en despensa · valor aproximado ${eur(precio)}</div>
+    <button class="opt" onclick="accSet('${id}','usado')">🍽️ <span class="grow">Lo hemos usado<small>Se descuenta de la despensa y desaparece el aviso</small></span></button>
+    <button class="opt" onclick="accSet('${id}','congelado')">❄️ <span class="grow">Lo congelo<small>Pasa al congelador y se le alarga la caducidad</small></span></button>
+    <button class="opt" onclick="accSet('${id}','tirado')">🗑️ <span class="grow">Se ha estropeado<small>Suma ${eur(precio)} al desperdicio del mes</small></span></button>
+    <button class="opt" onclick="accSet('${id}','pospuesto')">⏰ <span class="grow">Aguanta un día más<small>Vuelve a avisar mañana</small></span></button>
+    `);
+}
+function cerrarTodo(){HOY[P].forEach(m=>{if(!m.estado)m.estado='hecho'}); closeSheet(); render()}
+function puntuar(k,v){PUNT[k]=v; pintarQuick(); pintarMenu()}
+function sheetExtra(){
+  openSheet(`<h3>Fuera del plan</h3>
+    <div class="meta" style="margin-bottom:16px">Una cerveza al salir del trabajo, un picoteo, un café fuera. Dos toques y no hace falta que sea a la hora de una comida.</div>
+    <div class="sports">${EXTRAS_RAPIDOS[P].map((x,i)=>`<button class="sport" onclick="addExtra(${i},1)">
+      <span class="e">${x.e}</span><span class="l">${x.n}</span></button>`).join('')}</div>
+    <div class="note">Tócala otra vez si fueron dos o tres.</div>`);
+}
+function addExtra(i,n){
+  const x=EXTRAS_RAPIDOS[P][i];
+  /* «Otro» con 0 kcal no aporta nada: ni suma al día ni dice qué fue. Si se
+     registra algo, tiene que pesar. */
+  if(x.kcal===0) return sheetOtroExtra();
+  const ya=EXTRA_LOG[P].find(y=>y.n===x.n);
+  if(ya) ya.n2+=n; else EXTRA_LOG[P].push({...x, n2:n});
+  closeSheet(); pintarQuick(); pintarHero();
+}
+const RACIONES_EXTRA=[['Poca cosa',90,'un puñado, media pieza, un par de bocados'],
+                      ['Normal',250,'una ración de las de siempre'],
+                      ['Bastante',450,'un plato entero o repetir']];
+function sheetOtroExtra(){
+  openSheet(`<h3>¿Qué ha sido?</h3>
+    <div class="meta" style="margin-bottom:16px">Sin ponerle nombre y tamaño, esto no suma al día y no sirve
+      para nada. Con dos toques, sí.</div>
+    <div class="f" style="border-top:0"><label>Qué fue</label>
+      <input id="extra-n" placeholder="tarta de la oficina" style="flex:1; text-align:right"></div>
+    <div class="sec-h">¿Cuánto?</div>
+    ${RACIONES_EXTRA.map(([n,k,d])=>`<button class="opt" onclick="guardarOtroExtra(${k})">
+      <span class="grow">${n}<small>${d}</small></span><span class="chip acc">~${k} kcal</span></button>`).join('')}
+    <div class="f"><label>O las calorías exactas, si vienen en el envase</label>
+      <input id="extra-k" placeholder="0" style="width:80px; text-align:right"><span class="meta" style="width:34px">kcal</span></div>
+    <button class="cta" style="margin-top:10px"
+      onclick="guardarOtroExtra(+((document.getElementById('extra-k')||{}).value)||0)">Guardar</button>
+    <div class="note">Una estimación tosca vale mucho más que un cero: el cero dice que no comiste nada.</div>`);
+}
+function guardarOtroExtra(kcal){
+  const nom=(document.getElementById('extra-n')||{}).value||'Otro';
+  if(!kcal) return;
+  EXTRA_LOG[P].push({n:nom, e:'➕', kcal, n2:1});
+  closeSheet(); pintarQuick(); pintarHero();
+}
+function quitarExtra(i){EXTRA_LOG[P].splice(i,1); pintarQuick(); pintarHero()}
+function sheetCierre(){
+  const chips=(l)=>`<div class="seg" style="flex-wrap:wrap">${l.map((x,i)=>`<span class="chip${i===1?' on':''}">${x}</span>`).join('')}</div>`;
+  openSheet(`<h3>¿Cómo ha ido hoy?</h3>
+    <div class="meta" style="margin-bottom:18px">Tres toques. Es la señal que mejor predice si un plan se va a abandonar — mucho mejor que el peso.</div>
+    <div class="f" style="border-top:0; align-items:flex-start"><label>¿Has pasado hambre?</label></div>
+    ${chips(['Nada','Algo','Bastante'])}
+    <div class="f" style="align-items:flex-start; margin-top:8px"><label>Energía durante el día</label></div>
+    ${chips(['Baja','Normal','Alta'])}
+    <div class="f" style="align-items:flex-start; margin-top:8px"><label>¿Cómo dormiste?</label></div>
+    ${chips(['Mal','Regular','Bien'])}
+    <div class="f" style="align-items:flex-start; margin-top:8px"><label>Pasos de hoy
+      <div class="note" style="margin-top:2px">El número que marca ${PULSERA[P]}</div></label>
+      <input value="${PASOS[P]}" style="width:86px"></div>
+    <div class="f" style="align-items:flex-start"><label>¿Alcohol hoy?
+      <div class="note" style="margin-top:2px">Por si se te olvidó registrarlo en el momento</div></label></div>
+    <div class="seg"><span class="chip on">No</span><span class="chip">1</span><span class="chip">2</span><span class="chip">3 o más</span></div>
+    
+    <div class="f" style="align-items:flex-start; margin-top:8px"><label>Nota del día
+      <div class="note" style="margin-top:2px">El contexto que los números no cuentan</div></label></div>
+    <textarea class="search" rows="2" placeholder="Cena de empresa improvisada, me encontré fatal…"
+      style="resize:none; font-family:inherit">${NOTA}</textarea>
+    ${HOY[P].some(m=>!m.estado)?`<button class="act primary" style="width:100%; margin-bottom:8px" onclick="cerrarTodo()">
+      ✓ Todo según el plan · marcar las ${HOY[P].filter(m=>!m.estado).length} que faltan</button>`:''}
+    <button class="cta" onclick="closeSheet()">Cerrar el día</button>`);
+}
+function sheetExcepciones(sem){
+  sem = sem || TABM;
+  const lista = EXCEPCIONES[sem] || [];
+  const semana = sem==='s2' ? MENU2 : MENU;
+  openSheet(`<h3>Excepciones · ${sem==='s2'?'semana del 24 al 30':'esta semana'}</h3>
+    <div class="meta" style="margin-bottom:16px">Decirlo antes es mejor que registrarlo después: la app
+      ajusta el resto del día y no compra de más.</div>
+    ${lista.length ? lista.map((x,i)=>`<div class="qr" ${i?'':'style="border-top:0"'}>
+      <div class="thumb sm ${TIPOS_EXC[x.tipo][3]}">${TIPOS_EXC[x.tipo][0]}</div>
+      <div class="tx"><div class="when">${x.dia} ${x.fecha} · ${x.momento}</div><b>${x.txt}</b></div>
+      <span class="chip" onclick="quitarExcepcion('${sem}',${i})" style="cursor:pointer">✕</span></div>`).join('')
+      : `<div class="qr" style="border-top:0"><div class="thumb sm t-off" style="color:var(--muted)">·</div>
+        <div class="tx"><b style="color:var(--muted)">Ninguna excepción todavía</b></div></div>`}
+    <div class="sec-h">Añadir</div>
+    ${Object.entries(TIPOS_EXC).map(([k,[e,n,d]])=>`<button class="opt" onclick="nuevaExcepcion('${sem}','${k}')">
+      ${e} <span class="grow">${n}<small>${d}</small></span>›</button>`).join('')}
+    <button class="cta" style="margin-top:10px" onclick="closeSheet()">Cerrar</button>`);
+}
+let EXC_BORRADOR={};
+function nuevaExcepcion(sem, tipo){
+  const semana = sem==='s2' ? MENU2 : MENU;
+  const LARGO={L:'Lunes',M:'Martes',X:'Miércoles',J:'Jueves',V:'Viernes',S:'Sábado',D:'Domingo'};
+  EXC_BORRADOR={sem, tipo, dia:semana[0].n, momento:'comida', personas:4};
+  formExcepcion();
+}
+function formExcepcion(){
+  const B=EXC_BORRADOR, [e,n,d]=TIPOS_EXC[B.tipo];
+  const semana = B.sem==='s2' ? MENU2 : MENU;
+  const LARGO={L:'Lunes',M:'Martes',X:'Miércoles',J:'Jueves',V:'Viernes',S:'Sábado',D:'Domingo'};
+  const dia = semana.find(x=>x.n===B.dia);
+  const receta = dia ? R[dia[B.momento]] : null;
+  openSheet(`<h3>${e} ${n}</h3>
+    <div class="meta" style="margin-bottom:16px">${d}</div>
+    <div class="f" style="border-top:0"><label>¿Qué día?</label></div>
+    <div class="seg" style="flex-wrap:wrap; margin-bottom:8px">
+      ${semana.map(x=>`<span class="chip ${B.dia===x.n?'on':''}"
+        onclick="EXC_BORRADOR.dia='${x.n}'; formExcepcion()">${x.d} ${x.n}</span>`).join('')}</div>
+    ${B.tipo!=='vacaciones'?`
+    <div class="f"><label>¿Qué comida?</label></div>
+    <div class="seg" style="flex-wrap:wrap; margin-bottom:8px">
+      ${MOM.map(m=>`<span class="chip ${B.momento===m?'on':''}"
+        onclick="EXC_BORRADOR.momento='${m}'; formExcepcion()">${MOMLAB[m]}</span>`).join('')}</div>`:''}
+    ${B.tipo==='invitados'?`
+    <div class="f"><label>¿Cuántos sois en total?</label>
+      <div class="seg">${[3,4,5,6,8].map(p=>`<span class="chip ${B.personas===p?'on':''}"
+        onclick="EXC_BORRADOR.personas=${p}; formExcepcion()">${p}</span>`).join('')}</div></div>`:''}
+    ${receta && B.tipo!=='vacaciones'?`<div class="card" style="box-shadow:none; background:var(--surface-2); margin-top:12px">
+      <div class="sec-h" style="margin-top:0">Lo que va a pasar</div>
+      <div class="ing" style="border-top:0"><span class="grow">Plato afectado</span>
+        <span style="font-weight:650">${receta.n}</span></div>
+      ${B.tipo==='fuera'?`
+        <div class="ing"><span class="grow">Sale del menú y de la compra</span>
+          <span style="font-weight:650; color:var(--good-ink)">−${eur(costeReceta(dia[B.momento]))}</span></div>
+        <div class="ing"><span class="grow">Objetivo del resto del día</span>
+          <span style="font-weight:650">se recalcula</span></div>`
+      :`<div class="ing"><span class="grow">Raciones</span>
+          <span style="font-weight:650">2 → ${B.personas}</span></div>
+        <div class="ing"><span class="grow">Coste de la compra</span>
+          <span style="font-weight:650; color:var(--crit)">+${eur(costeReceta(dia[B.momento])*(B.personas-2)/2)}</span></div>`}
+      </div>`:''}
+    ${B.tipo==='vacaciones'?`<div class="banner info" style="margin-top:12px">
+      <b class="t">Qué hace el modo vacaciones</b>
+      Deja de generar menú y de pedir registros, pero <b>no rompe las medias</b>: los días de vacaciones
+      quedan marcados y no cuentan como incumplimiento ni disparan alertas de peso.</div>`:''}
+    <button class="cta" style="margin-top:14px" onclick="guardarExcepcion()">Guardar excepción</button>
+    <button class="act" style="width:100%; margin-top:8px" onclick="sheetExcepciones('${B.sem}')">‹ Volver</button>`);
+}
+function costeReceta(k){
+  return R[k].ing.reduce((a,[n,c,u])=>{
+    const g = u==='ud' ? c*(ING[n][3]||100) : c;
+    return a + g*(PRECIO[n]||0)/1000; }, 0) * 2;   // dos raciones
+}
+function guardarExcepcion(){
+  const B=EXC_BORRADOR, semana = B.sem==='s2' ? MENU2 : MENU;
+  const LARGO={L:'Lunes',M:'Martes',X:'Miércoles',J:'Jueves',V:'Viernes',S:'Sábado',D:'Domingo'};
+  const dia = semana.find(x=>x.n===B.dia);
+  const txt = B.tipo==='fuera' ? 'Fuera de casa'
+            : B.tipo==='invitados' ? `Invitados · ${B.personas} personas`
+            : 'Vacaciones · plan en pausa';
+  EXCEPCIONES[B.sem].push({fecha:B.dia, dia:LARGO[dia.d], momento:MOMLAB[B.momento],
+                           tipo:B.tipo, txt, personas:B.personas});
+  pintarMenu(); pintarCompra();
+  sheetExcepciones(B.sem);
+}
+function quitarExcepcion(sem,i){ EXCEPCIONES[sem].splice(i,1); pintarMenu(); pintarCompra(); sheetExcepciones(sem); }
+/* ¿este plato tiene una excepción encima? */
+function excepcionDe(sem, n, mom){
+  return (EXCEPCIONES[sem]||[]).find(x=>x.fecha===n && x.momento===MOMLAB[mom]);
+}
+function sheetNuevaAnalitica(){
+  openSheet(`<h3>Añadir analítica</h3>
+    <div class="meta" style="margin-bottom:16px">Doce marcadores, unos dos minutos. Cuatro veces al año.</div>
+    <div class="f" style="border-top:0"><label>Fecha de la muestra</label><input value="05/09/2026" style="width:110px"></div>
+    <div class="f"><label>¿De quién es?</label>
+      <div class="seg"><span class="chip on">Cristina</span><span class="chip">Tama</span></div></div>
+    ${LABS_EVO.slice(0,6).map(([n,,,ref,u])=>`<div class="f">
+      <label>${n} <span class="note" style="margin:0">ref. ${ref}</span></label>
+      <input placeholder="—"><span class="meta" style="width:52px; font-size:11.5px">${u}</span></div>`).join('')}
+    <div class="note" style="margin:10px 0">…y 6 más. Se puede adjuntar el PDF de Echevarne para tenerlo guardado,
+      pero los valores se teclean: automatizar algo que hacéis cuatro veces al año no compensa.</div>
+    <button class="cta" onclick="closeSheet()">Guardar analítica</button>`);
+}
+function sheetInforme(){
+  const esC = P==='c';
+  const INF = esC ? {
+    peso:'93,4 → 90,9 kg', ritmo:'0,45 kg/semana (−0,5 %)', cintura:'116 → 112 cm (−4)',
+    rango:'1.600-1.750 kcal', adh:'83 %', enRango:'67 %', prot:'118 g/día',
+    meds:[['Metformina 850 mg · 2/día','94 %'],['Letrozol 2,5 mg','100 %']],
+    marcadores:[['Glucosa','121 → 127 mg/dL',true],['ALT / GGT / AST','90 / 74 / 48 U/L · sin repetir en junio',true],
+                ['Vitamina D','24 ng/mL · sin repetir',true],['Colesterol total','203 → 185 mg/dL',false]],
+    preguntas:['La glucosa en ayunas sube estando ya con metformina, ¿procede revisar algo?',
+      'ALT 90, GGT 74 y AST 48 no se repitieron en junio. ¿Conviene repetirlos y valorar ecografía?',
+      '¿Suplementar vitamina D y a qué dosis?',
+      '¿Es adecuado un rango de 1.600-1.750 kcal durante la estimulación ovárica?']
+  } : {
+    peso:'74,8 → 73,9 kg', ritmo:'peso estable · objetivo de recomposición', cintura:'89 → 86,5 cm (−2,5)',
+    rango:'1.950-2.100 kcal', adh:'79 %', enRango:'64 %', prot:'132 g/día',
+    meds:[['Bisoprolol 2,5 mg (½)','97 %'],['Sedotime 15 mg','91 %']],
+    marcadores:[['Sin analítica registrada','Pendiente de subir la primera',true]],
+    preguntas:['Primera analítica pendiente: ¿qué marcadores conviene pedir en mi caso?',
+      'Tomo bisoprolol: ¿condiciona la intensidad de entrenamiento o el uso de pulsómetro?',
+      'He pasado de 5,4 a 2,1 cervezas por semana. ¿Conviene revisar algo hepático?',
+      'Estoy en 1.950-2.100 kcal con 130 g de proteína para perder grasa (gasto estimado ~2.310). ¿Le parece un déficit razonable con bisoprolol de por medio?']
+  };
+  openSheet(`<h3>Informe para la consulta</h3>
+    <div class="meta" style="margin-bottom:16px">Una página · del 24/06 al 19/08/2026 · ${PERFILES[P].nombre}</div>
+    <div class="card" style="box-shadow:none; background:var(--surface-2)">
+      <div class="sec-h" style="margin-top:0">Peso y composición</div>
+      <div class="ing" style="border-top:0"><span class="grow">Peso inicial → actual</span><span style="font-weight:650">${INF.peso}</span></div>
+      <div class="ing"><span class="grow">Ritmo</span><span style="font-weight:650">${INF.ritmo}</span></div>
+      <div class="ing"><span class="grow">Cintura</span><span style="font-weight:650">${INF.cintura}</span></div>
+      <div class="sec-h">Alimentación</div>
+      <div class="ing" style="border-top:0"><span class="grow">Rango calórico actual</span><span style="font-weight:650">${INF.rango}</span></div>
+      <div class="ing"><span class="grow">Adherencia media</span><span style="font-weight:650">${INF.adh}</span></div>
+      <div class="ing"><span class="grow">Días dentro de rango</span><span style="font-weight:650">${INF.enRango}</span></div>
+      <div class="ing"><span class="grow">Proteína media</span><span style="font-weight:650">${INF.prot}</span></div>
+      ${esC?'':`<div class="sec-h">Alcohol</div>
+      <div class="ing" style="border-top:0"><span class="grow">Consumo semanal</span><span style="font-weight:650">5,4 → 2,1 cervezas</span></div>
+      <div class="ing"><span class="grow">Días sin alcohol este mes</span><span style="font-weight:650">19 de 26</span></div>`}
+      <div class="sec-h">Medicación</div>
+      ${INF.meds.map(([n,v],i)=>`<div class="ing" ${i?'':'style="border-top:0"'}><span class="grow">${n}</span><span style="font-weight:650">${v}</span></div>`).join('')}
+      <div class="sec-h">Marcadores</div>
+      ${INF.marcadores.map(([n,v,mal],i)=>`<div class="ing" ${i?'':'style="border-top:0"'}><span class="grow">${n}</span>
+        <span style="font-weight:650; color:${mal?'var(--crit)':'var(--good-ink)'}">${v}</span></div>`).join('')}
+    </div>
+    <div class="banner info" style="margin-top:14px"><b class="t">Preguntas sugeridas para la consulta</b>
+      ${INF.preguntas.map(q=>`• ${q}`).join('<br>')}</div>
+    <div class="note">La app no interpreta ni diagnostica: reúne los datos y propone preguntas. La lectura es del médico.</div>
+    <button class="cta" style="margin-top:14px" onclick="closeSheet()">Exportar PDF</button>`);
+}
+function sheetMedicacion(){
+  const meds=MEDICACION[P];
+  openSheet(`<h3>Medicación de hoy</h3>
+    <div class="meta" style="margin-bottom:16px">Miércoles 19 de agosto</div>
+    ${meds.map((m,i)=>`<div class="qr" ${i?'':'style="border-top:0"'} onclick="toggleMed(${i})">
+      <div class="thumb sm t-lacteo">${m.e}</div>
+      <div class="tx"><div class="when">${m.cuando}${m.comida?' · con comida':''}</div><b>${m.n}</b>
+        ${m.nota?`<div class="note" style="margin:1px 0 0">${m.nota}</div>`:''}</div>
+      <div class="check" style="${MED[P][i]?'background:var(--good);border-color:var(--good);color:#fff':''}">${MED[P][i]?'✓':''}</div></div>`).join('')}
+    <div class="row" style="gap:8px; margin-top:16px">
+      <button class="act" onclick="closeSheet()">Cerrar</button>
+      <button class="act primary" onclick="todasMed()">✓ Marcar todas</button></div>
+    `);
+}
+function toggleMedFila(i){MED[P][i]=!MED[P][i]; pintarQuick()}
+function toggleMed(i){MED[P][i]=!MED[P][i]; sheetMedicacion(); pintarQuick()}
+function todasMed(){MED[P]=MED[P].map(()=>true); closeSheet(); pintarQuick()}
+function sheetCintura(){
+  openSheet(`<h3>Medir cintura</h3>
+    <div class="meta" style="margin-bottom:16px">Una vez al mes, en ayunas, a la altura del ombligo y sin apretar</div>
+    <div class="row" style="justify-content:center; gap:18px; margin-bottom:18px">
+      <button class="icon-btn" style="width:44px;height:44px;font-size:20px">−</button>
+      <div style="font-size:40px; font-weight:700; letter-spacing:-.03em; font-variant-numeric:tabular-nums">
+        112 <span style="font-size:16px; color:var(--muted); font-weight:500">cm</span></div>
+      <button class="icon-btn" style="width:44px;height:44px;font-size:20px">+</button></div>
+    
+    <button class="cta" style="margin-top:14px" onclick="ACC.cintura=true; closeSheet(); pintarQuick()">Guardar</button>`);
+}
+function sheetPasos(){
+  openSheet(`<h3>Pasos de hoy</h3>
+    <div class="meta" style="margin-bottom:18px">Copia el número de ${PULSERA[P]}. Cinco segundos.</div>
+    <div class="row" style="justify-content:center; gap:18px; margin-bottom:18px">
+      <button class="icon-btn" style="width:44px;height:44px;font-size:20px">−</button>
+      <div style="font-size:38px; font-weight:700; letter-spacing:-.03em; font-variant-numeric:tabular-nums">
+        ${PASOS[P].toLocaleString('es')}</div>
+      <button class="icon-btn" style="width:44px;height:44px;font-size:20px">+</button></div>
+    <div class="bar"><i style="width:${Math.min(100,100*PASOS[P]/PASOS_OBJ[P])}%"></i></div>
+    <div class="note">Objetivo ${PASOS_OBJ[P].toLocaleString('es')} · media de la semana 7.140</div>
+    <div class="banner" style="margin-top:14px"><b class="t">Por qué a mano y no automático</b>
+      La pulsera manda los datos a Health Connect, y Health Connect solo lo pueden leer apps nativas de
+      Android — no una web instalada como esta. Google Fit, que sí tenía API web, cierra a finales de 2026
+      y no admite altas nuevas desde 2024. Si con el tiempo molesta, la solución es una app Android pequeña
+      que haga de puente.</div>
+    <button class="cta" style="margin-top:14px" onclick="closeSheet()">Guardar</button>`);
+}
+function sheetPeso(){
+  openSheet(`<h3>Registrar peso</h3>
+    <div class="meta" style="margin-bottom:18px">Solo miércoles y sábados, al levantarte. Cinco segundos.</div>
+    <div class="row" style="justify-content:center; gap:18px; margin-bottom:18px">
+      <button class="icon-btn" style="width:44px;height:44px;font-size:20px">−</button>
+      <div style="font-size:40px; font-weight:700; letter-spacing:-.03em; font-variant-numeric:tabular-nums">
+        ${PERFILES[P].peso} <span style="font-size:16px; color:var(--muted); font-weight:500">kg</span></div>
+      <button class="icon-btn" style="width:44px;height:44px;font-size:20px">+</button></div>
+    <div class="note">Se guarda la media de 7 días, no el dato del día.</div>
+    <button class="cta" style="margin-top:14px" onclick="guardarPeso(${PERFILES[P].peso.replace(',','.')})">Guardar</button>`);
+}
+function guardarPeso(kg){
+  ACC.peso=kg; closeSheet(); pintarQuick(); pintarSalud();
+}
+function sheetAjustes(){
+  openSheet(`<h3>Ajustes</h3>
+    <div class="meta" style="margin-bottom:16px">${PERFILES[SESION.perfil].nombre} · ${SESION.email}</div>
+    <button class="opt" onclick="sheetAcceso()">🔐 <span class="grow">Acceso y seguridad<small>Sesión permanente · bloqueo por huella activado</small></span>›</button>
+    <button class="opt" onclick="sheetNotif()">🔔 <span class="grow">Notificaciones<small>4 al día como máximo · todas silenciables</small></span>›</button>
+    <button class="opt" onclick="sheetDatos()">💾 <span class="grow">Copias y datos<small>Exportación automática el día 1 de cada mes</small></span>›</button>
+    <button class="opt" onclick="sheetRitmo()">🛒 <span class="grow">Ritmo de compra y cocina<small>${AJUSTES_COMPRA.diaCompra?'Compra los '+DIA_LARGO[AJUSTES_COMPRA.diaCompra]:'Compra sin día fijo'} · tanda los ${DIA_LARGO[AJUSTES_COMPRA.diaTanda]}</small></span>›</button>
+    <button class="opt" onclick="sheetOficina()">🏢 <span class="grow">Días de oficina de Tama<small>${OFICINA.t.length} marcados · se llevan túper</small></span>›</button>
+    <button class="opt" onclick="sheetArranque()">🚀 <span class="grow">Asistente de arranque<small>Despensa, precios y primera semana</small></span>›</button>
+    <div class="ing" style="margin-top:14px"><span class="grow">Versión</span><span style="font-weight:650">Prototipo 2.4</span></div>
+    <div class="ing"><span class="grow">Sincronización</span><span style="font-weight:650; color:var(--good-ink)">✓ al día</span></div>
+    <div class="ing"><span class="grow">Modo sin cobertura</span><span style="font-weight:650">activo · 12 cambios en cola</span></div>`);
+}
+const DIA_LARGO={L:'lunes',M:'martes',X:'miércoles',J:'jueves',V:'viernes',S:'sábados',D:'domingos'};
+/* El calendario del mes: se marcan los días de oficina de golpe, que es como os
+   los comunican. La regla es que se lleva túper; comer fuera es la excepción y
+   se registra en el cierre del día. */
+let MES_CAL=8;
+function sheetOficina(){
+  const dias=new Date(2026, MES_CAL, 0).getDate();
+  const primero=new Date(2026, MES_CAL-1, 1).getDay();      // 0=domingo
+  const hueco=(primero+6)%7;                                 // rejilla que empieza en lunes
+  const NOM=['enero','febrero','marzo','abril','mayo','junio','julio','agosto',
+             'septiembre','octubre','noviembre','diciembre'];
+  const f=d=>`2026-${String(MES_CAL).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+  const nOficina=OFICINA.t.filter(x=>x.startsWith(`2026-${String(MES_CAL).padStart(2,'0')}`)).length;
+  openSheet(`<h3>Días de oficina · Tama</h3>
+    <div class="meta" style="margin-bottom:14px">Cristina come en la oficina todos los laborables,
+      así que solo hay que marcar los de Tama</div>
+    <div class="row" style="margin-bottom:10px">
+      <button class="icon-btn" onclick="MES_CAL=MES_CAL>1?MES_CAL-1:12; sheetOficina()">‹</button>
+      <div class="grow" style="text-align:center; font-size:15px; font-weight:700; text-transform:capitalize">
+        ${NOM[MES_CAL-1]} 2026</div>
+      <button class="icon-btn" onclick="MES_CAL=MES_CAL<12?MES_CAL+1:1; sheetOficina()">›</button></div>
+    <div class="cal">
+      ${['L','M','X','J','V','S','D'].map(d=>`<span class="cal-h">${d}</span>`).join('')}
+      ${Array.from({length:hueco},()=>'<span></span>').join('')}
+      ${Array.from({length:dias},(_,i)=>{const d=i+1, fe=f(d);
+        const lab=esLaborable(fe), on=OFICINA.t.includes(fe), des=DESAYUNO_FUERA.t.includes(fe);
+        return `<button class="cal-d ${on?'on':''} ${lab?'':'fin'}" ${lab?`onclick="toggleOficina('${fe}')"`:'disabled'}>
+          ${d}${des?'<i>🥣</i>':''}</button>`}).join('')}
+    </div>
+    <div class="note">${nOficina} ${nOficina===1?'día marcado':'días marcados'} en ${NOM[MES_CAL-1]}.
+      Cada toque avanza un estado: <b>libre → oficina → oficina y desayuno 🥣 → libre</b>.</div>
+    <div class="banner info" style="margin-top:12px"><b class="t">La regla es que se lleva túper</b>
+      Todos los días marcados se planifican con comida y media mañana para llevar. Si un día acabas
+      comiendo fuera con compañeros, eso es la excepción y se marca en el cierre del día.</div>
+    <div class="banner" style="margin-top:10px"><b class="t">Qué cambia con esto</b>
+      Las recetas de comida no cambian: el túper de Cristina ya obliga a que aguanten.
+      Lo que cambia es <b>cuántos túper se preparan</b> la noche antes, <b>qué desayunos y medias mañanas
+      entran</b> —los de oficina tienen que poder llevarse— y <b>quién está en casa</b> para cocinar
+      una cena que dé trabajo.</div>
+    <button class="cta" style="margin-top:14px" onclick="closeSheet(); render()">Guardar</button>`);
+}
+/* Tres estados en un mismo toque: nada → oficina → oficina y desayuno → nada.
+   Mantener pulsado en un móvil es un gesto que nadie descubre solo. */
+function toggleOficina(fe){
+  const i=OFICINA.t.indexOf(fe), j=DESAYUNO_FUERA.t.indexOf(fe);
+  if(i<0)      OFICINA.t.push(fe);                       // nada → oficina
+  else if(j<0) DESAYUNO_FUERA.t.push(fe);                // oficina → + desayuno
+  else { OFICINA.t.splice(i,1); DESAYUNO_FUERA.t.splice(j,1); }   // → nada
+  sheetOficina();
+}
+function sheetRitmo(){
+  const dias=['L','M','X','J','V','S','D'];
+  openSheet(`<h3>Ritmo de compra y cocina</h3>
+    <div class="meta" style="margin-bottom:16px">Dos cosas distintas, y solo una condiciona el menú</div>
+    <div class="f" style="border-top:0"><label>Día de compra
+      <div class="note" style="margin-top:2px">Solo sirve para colocar los avisos. La lista se calcula
+        del menú y la despensa, así que da igual el día.</div></label></div>
+    <div class="seg" style="flex-wrap:wrap; margin-bottom:6px">
+      <span class="chip ${AJUSTES_COMPRA.diaCompra?'':'on'}" onclick="AJUSTES_COMPRA.diaCompra=null; sheetRitmo()">Sin día fijo</span>
+      ${dias.map(d=>`<span class="chip ${AJUSTES_COMPRA.diaCompra===d?'on':''}"
+        onclick="AJUSTES_COMPRA.diaCompra='${d}'; sheetRitmo()">${d}</span>`).join('')}</div>
+    <div class="f"><label>Día de la tanda de cocina
+      <div class="note" style="margin-top:2px">Esta sí manda: produce los túper de la semana y el
+        planificador coloca las recetas alrededor.</div></label></div>
+    <div class="seg" style="flex-wrap:wrap; margin-bottom:6px">
+      ${dias.map(d=>`<span class="chip ${AJUSTES_COMPRA.diaTanda===d?'on':''}"
+        onclick="AJUSTES_COMPRA.diaTanda='${d}'; sheetRitmo()">${d}</span>`).join('')}</div>
+    <div class="f"><label>Fresco y grande, por separado
+      <div class="note" style="margin-top:2px">Cada lista se abre y se cierra por su cuenta,
+        aunque caigan en días distintos.</div></label>
+      <div class="seg"><span class="chip ${AJUSTES_COMPRA.listasSeparadas?'on':''}">Sí</span>
+        <span class="chip ${AJUSTES_COMPRA.listasSeparadas?'':'on'}">No</span></div></div>
+    <div class="banner info" style="margin-top:14px"><b class="t">Sin día fijo no se rompe nada</b>
+      La lista se abre al confirmar el menú y se queda abierta hasta que la cerráis, sea el jueves o el
+      martes siguiente. Lo único que tiene que pasar antes de la tanda es haber comprado.</div>
+    <button class="cta" style="margin-top:14px" onclick="sheetAjustes()">‹ Volver</button>`);
+}
+function sheetAcceso(){
+  const d=PERFILES[SESION.perfil], otro=PERFILES[SESION.perfil==='c'?'t':'c'];
+  openSheet(`<h3>Acceso y seguridad</h3>
+    <div class="meta" style="margin-bottom:16px">Aquí dentro hay analíticas, peso y medicación</div>
+    <div class="qr" style="border-top:0">
+      <div class="thumb sm t-lacteo" style="background:var(--acc); color:#fff; font-weight:750">${d.nombre[0]}</div>
+      <div class="tx"><div class="when">Sesión iniciada</div><b>${d.nombre} · ${SESION.email}</b>
+        <div class="note" style="margin:1px 0 0">No vuelve a pedir contraseña</div></div>
+      <span class="chip good">✓</span></div>
+    <div class="f"><label>Bloqueo por huella al abrir
+      <div class="note" style="margin-top:2px">Si se pierde el móvil, los datos siguen protegidos</div></label>
+      <div class="seg"><span class="chip on">Sí</span><span class="chip">No</span></div></div>
+    <div class="banner info" style="margin-top:14px"><b class="t">Una cuenta cada uno, no una compartida</b>
+      Esta app es la de ${d.nombre}: no hay forma de cambiar de persona y no es un olvido. Las tablas
+      personales tienen la regla <code>profile_id = auth.uid()</code>, así que desde aquí las comidas,
+      el peso y la medicación de ${otro.nombre} <b>ni siquiera se descargan</b>. ${otro.nombre} entra con
+      su correo desde su móvil.</div>
+    <div class="banner" style="margin-top:10px"><b class="t">Y lo que sí es de los dos</b>
+      La compra, la despensa, los preparativos y el menú cuelgan de la casa, no de la persona: los marca
+      cualquiera desde su móvil y al otro le aparecen al momento, con quién lo marcó y a qué hora.</div>
+    <div class="banner info" style="margin-top:10px"><b class="t">Sobre la clave pública del repositorio</b>
+      La app lleva dentro una clave de Supabase que es pública por diseño. Solo es segura porque
+      <b>Row Level Security está activo en las 42 tablas</b>: sin eso, publicar el código sería publicar
+      vuestras analíticas. Repositorio privado, además.</div>
+    <button class="cta" style="margin-top:14px" onclick="sheetAjustes()">‹ Volver</button>`);
+}
+function sheetDatos(){
+  openSheet(`<h3>Copias y datos</h3>
+    <div class="meta" style="margin-bottom:16px">Son datos de salud de dos personas durante años</div>
+    <div class="card" style="box-shadow:none; background:var(--surface-2)">
+      <div class="row"><div class="grow"><div class="meta">Última exportación</div>
+        <div style="font-size:15px; font-weight:650; margin-top:2px">1 de agosto · 2,4 MB</div></div>
+        <span class="chip good">✓ automática</span></div>
+      <div class="note">Un JSON con todo —comidas, peso, entrenos, analíticas, tickets— a vuestro Drive el día 1 de cada mes.</div></div>
+    <div class="banner" style="margin-top:12px"><b class="t">Por qué hace falta esto</b>
+      El plan gratuito de Supabase <b>no incluye copias de seguridad automáticas</b>. Sin esta exportación,
+      un borrado accidental o un problema en el proyecto se lleva años de historial por delante.</div>
+    <div class="note">Con el mismo código sale gratis un botón de «exportar ahora» dentro de la app. No lo has
+      pedido, así que lo dejo apuntado: cuesta lo mismo y evita que los datos queden atados al proyecto.</div>
+    <button class="cta" style="margin-top:14px" onclick="sheetAjustes()">‹ Volver</button>`);
+}
+function sheetArranque(){
+  const pasos=[['Dos cuentas en Supabase','Una para cada uno · cada móvil entra con la suya','ok'],
+    ['Perfiles y objetivos','Hecho','ok'],['Biblioteca de recetas',Object.keys(R).length+' recetas · las 4 estaciones cubiertas','ok'],
+    ['Inventario de despensa','41 productos · pendiente el recuento real','wip'],
+    ['Precios de los básicos','Estimados · se corrigen con cada ticket','wip'],
+    ['Mapeo de nombres del ticket','7 de ~50 aprendidos','wip'],
+    ['Primera semana confirmada','Hecho','ok'],['Pauta del profesional sanitario','Pendiente de consulta','no']];
+  openSheet(`<h3>Asistente de arranque</h3>
+    <div class="meta" style="margin-bottom:16px">Lo que falta para que la app funcione con vuestros datos reales</div>
+    ${pasos.map(([n,d,st],i)=>`<div class="qr" ${i?'':'style="border-top:0"'}>
+      <div class="thumb sm ${st==='ok'?'t-verdura':st==='wip'?'t-fruta':'t-off'}">${st==='ok'?'✓':st==='wip'?'◐':'·'}</div>
+      <div class="tx"><b>${n}</b><div class="note" style="margin:1px 0 0">${d}</div></div></div>`).join('')}
+    <div class="banner info" style="margin-top:14px"><b class="t">Dos sesiones de 20 minutos</b>
+      El inventario de despensa se hace por secciones —congelador, nevera, armario— con la lista delante y sin pesar nada:
+      basta con «hay», «queda poco» o «no hay». Los precios se corrigen solos con los tickets, así que no hay que
+      teclear ninguno.</div>
+    <button class="cta" style="margin-top:14px" onclick="sheetAjustes()">‹ Volver</button>`);
+}
+function sheetNotif(){
+  const N=[['21:45','Cierra el día','Las comidas del día en una pantalla. Miércoles y viernes a las 22:15, cuando Tama vuelve de entrenar.',1],
+   ['08:00 / 21:00','Medicación','Según la pauta de cada uno. La metformina avisa junto a la comida, no suelta.',1],
+   ['07:30 · mié y sáb','Peso','Solo los dos días que toca.',1],
+   ['Sábado 11:00','Revisa el menú','La semana siguiente está propuesta y espera confirmación.',1],
+   ['Domingo 11:00','Tanda de cocina','Con el guion cronometrado listo para seguir.',1],
+   ['Cuando el otro cierra','Tu pareja ha cerrado el día','Aviso suave, sin comparar ni marcar quién va por detrás.',1],
+   ['2 días antes','Algo va a caducar','Con la receta que lo aprovecha.',0]];
+  openSheet(`<h3>Notificaciones</h3>
+    <div class="meta" style="margin-bottom:16px">Máximo 4 al día. Todas silenciables por separado.</div>
+    ${N.map(([h,t,d,on])=>`<div class="ing" style="align-items:flex-start">
+      <div class="grow"><div style="font-size:14px; font-weight:650">${t}</div>
+        <div class="note" style="margin:1px 0 0">${h} · ${d}</div></div>
+      <div class="check ${on?'':''}" style="${on?'background:var(--good);border-color:var(--good);color:#fff':''}">${on?'✓':''}</div></div>`).join('')}
+    <div class="banner" style="margin:16px 0"><b class="t">Una regla sobre el aviso de pareja</b>
+      Nunca dirá «Cristina ya ha registrado y tú no». Un aviso que compara genera resentimiento y acaba
+      silenciado. Dirá solo que el otro ha cerrado su día, y punto.</div>
+    <div class="card" style="box-shadow:none; margin:16px 0; background:var(--surface-2)">
+      <div class="sec-h" style="margin-top:0">Widget de pantalla de inicio · Android</div>
+      <div style="background:var(--surface); border-radius:14px; padding:12px; border:1px solid var(--border)">
+        <div class="row"><div class="thumb sm t-verdura">🥣</div>
+          <div class="grow"><div class="when">Cena · 21:15</div>
+            <b style="font-size:13.5px">Crema de calabacín y pollo</b></div>
+          <div class="check" style="border-color:var(--good)"></div></div></div>
+      <div class="note">Marcar una comida sin desbloquear ni abrir la app: es la menor fricción posible
+        y, en Android, no tiene ninguna limitación.</div></div>
+    <div class="banner"><b class="t">Aviso técnico</b>
+      En iPhone las notificaciones solo funcionan si la app se instala en la pantalla de inicio.
+      Hay que probarlo pronto: el cierre del día a las 21:45 es la pieza central del registro.</div>
+    <button class="cta" style="margin-top:14px" onclick="sheetAjustes()">‹ Volver</button>`);
+}
+/* ═══ COMPRA · flujo A (llega sola) + C (cierra la lista) ══════════════════ */
+
+/* A · lo primero que se ve en Compra: o ha llegado un ticket, o hay una lista
+   abierta esperando a cerrarse. Nunca un botón que pida trabajo sin motivo. */
+/* Lo que ha llegado y pide acción va ARRIBA DEL TODO, como el «ahora toca» de Hoy.
+   Lo informativo —presupuesto, palancas— puede esperar unos centímetros. */
+function avisoTicket(){
+  const nueva=COMPRAS.find(c=>c.nueva);
+  return nueva?`<div class="card tap" style="border-color:var(--acc); border-width:1.5px; margin-bottom:11px"
+      onclick="sheetTicketDigital()">
+    <div class="row"><div class="thumb t-legumbre">🧾</div>
+      <div class="grow"><div class="when" style="color:var(--acc-txt)">Ha llegado · ${ENTRANTE.hace}</div>
+        <div class="name" style="margin:2px 0 3px">${ENTRANTE.sitio} · ${ENTRANTE.fecha}</div>
+        <div class="meta">${eur(ENTRANTE.total)} · ${ENTRANTE.lineas} líneas · ${ENTRANTE.sinIdentificar
+          ? `<b style="color:var(--crit)">${ENTRANTE.sinIdentificar} sin identificar</b>` : 'todo reconocido'}</div></div>
+      <button class="act primary" style="flex:0 0 auto; padding:11px 15px">Revisar</button></div></div>`:'';
+}
+function bloqueEstadoCompra(){
+  const nueva=null;
+  return `
+  ${nueva?`<div class="card tap" style="border-color:var(--acc); border-width:1.5px; margin-bottom:11px"
+      onclick="sheetTicketDigital()">
+    <div class="row"><div class="thumb t-legumbre">🧾</div>
+      <div class="grow"><div class="when" style="color:var(--acc-txt)">Ha llegado · ${ENTRANTE.hace}</div>
+        <div class="name" style="margin:2px 0 3px">${ENTRANTE.sitio} · ${ENTRANTE.fecha}</div>
+        <div class="meta">${eur(ENTRANTE.total)} · ${ENTRANTE.lineas} líneas · ${ENTRANTE.sinIdentificar
+          ? `<b style="color:var(--crit)">${ENTRANTE.sinIdentificar} sin identificar</b>` : 'todo reconocido'}</div></div>
+      <button class="act primary" style="flex:0 0 auto; padding:11px 15px">Revisar</button></div></div>`:''}
+  <div class="card flush" style="margin-bottom:14px">
+    ${COMPRAS.filter(c=>!c.nueva).slice(0,2).map((c,i)=>`
+      <div class="qr" ${i?'':'style="border-top:0"'} onclick="sheetCompra('${c.id}')">
+        <div class="thumb sm ${FIDELIDAD[c.fid][2]}">${FIDELIDAD[c.fid][0]}</div>
+        <div class="tx"><div class="when">${c.fecha} · ${c.sitio}</div>
+          <b>${eur(c.total)}<span class="chip" style="margin-left:7px; font-size:10.5px; padding:2px 7px">${FIDELIDAD[c.fid][1]}</span></b></div>
+        <div class="check" style="border:0; color:var(--muted)">›</div></div>`).join('')}
+    <div class="qr" onclick="sheetRegistrar()">
+      <div class="thumb sm t-off" style="color:var(--acc-txt); font-size:19px">+</div>
+      <div class="tx"><div class="when">No ha llegado solo</div>
+        <b style="color:var(--acc-txt)">Registrar una compra</b></div>
+      <div class="check" style="border:0"></div></div>
+  </div>`;
+}
+
+/* Las cuatro puertas: cada una dice de antemano lo que va a costar */
+function sheetRegistrar(){
+  openSheet(`<h3>Registrar la compra</h3>
+    <div class="meta" style="margin-bottom:16px">De menos trabajo a más. No hay día fijo de compra:
+      registra cuando toque.</div>
+    ${PUERTAS.map(([id,e,n,d,fid])=>`<button class="opt" onclick="puerta('${id}')">${e}
+      <span class="grow">${n}<small>${d}</small></span>
+      <span class="chip" style="font-size:10.5px; padding:3px 8px">${FIDELIDAD[fid][1]}</span></button>`).join('')}
+    <div class="note">La etiqueta de la derecha dice cuánto podrá fiarse la despensa de esa compra.</div>`);
+}
+function puerta(id){
+  if(id==='digital') return sheetTicketDigital();
+  if(id==='suelto')  return sheetAnadirDespensa();
+  if(id==='otro')    return sheetOtroSuper();
+  sheetFoto();
+}
+
+/* C · cerrar la lista. El ticket no es una importación suelta: es lo que cuadra
+   lo comprado con lo previsto. */
+function sheetCerrar(k){
+  const L=LISTAS[k], lista=listaCompra();
+  const n=L.secciones.flatMap(x=>lista[x]||[]).length;
+  /* Solo hay ticket si la compra fue en un sitio que manda ticket digital Y
+     ese ticket ha llegado. Si fuiste a Lidl, no lo hay: no se puede ofrecer. */
+  const hayTicket = !!COMPRAS.find(c=>c.nueva) && (COMPRA_EN_CURSO.comercio==='Mercadona');
+  openSheet(`<h3>Cerrar la compra · ${L.n}</h3>
+    <div class="meta" style="margin-bottom:16px">Abierta desde el ${L.abierta} · ${Math.min(L.cogidos,n)} de ${n} cogidos</div>
+    ${hayTicket
+      ? `<div class="banner info"><b class="t">Hay un ticket de Mercadona sin usar</b>
+          Del ${ENTRANTE.fecha}, ${eur(ENTRANTE.total)}. Si lo uso para cerrar, las cantidades y los precios
+          salen de él y la despensa queda exacta.</div>
+        <div class="card" style="box-shadow:none; background:var(--surface-2); margin-top:12px">
+          <div class="sec-h" style="margin-top:0">Lo que saldría al cruzarlo</div>
+          <div class="ing" style="border-top:0"><span class="grow">Coincide con la lista</span>
+            <span class="chip good">${CONCILIA.coincide}</span></div>
+          <div class="ing"><span class="grow">No estaba en la lista</span>
+            <span class="chip warn">${CONCILIA.extra.length} · ${eur(CONCILIA.extra.reduce((a,x)=>a+x[1],0))}</span></div>
+          <div class="ing"><span class="grow">No había en el súper</span>
+            <span class="chip">${CONCILIA.noHabia.length}</span></div>
+          <div class="ing"><span class="grow">Precios que se corrigen</span>
+            <span class="chip acc">${CONCILIA.precios}</span></div></div>
+        <button class="cta" style="margin-top:14px" onclick="sheetConciliacion()">Cerrar con el ticket</button>
+        <button class="act" style="width:100%; margin-top:8px" onclick="sheetOtroSuper()">Cerrar sin ticket · solo el total</button>`
+      : `<div class="banner"><b class="t">Sin ticket digital</b>
+          Las cantidades saldrán de lo que marcaste en el súper, que ya las calculó la app.
+          Lo único que falta es lo que pagaste.</div>
+        <button class="cta" style="margin-top:14px" onclick="sheetOtroSuper()">Poner el total y cerrar</button>`}
+    <div class="note">La lista no caduca: se queda abierta hasta que la cierres, sea hoy o el martes.</div>`);
+}
+
+/* El resultado del cruce: lo interesante no es lo que coincide, es lo que no */
+function sheetConciliacion(){
+  openSheet(`<h3>Compra cerrada</h3>
+    <div class="meta" style="margin-bottom:16px">${ENTRANTE.sitio} · ${ENTRANTE.fecha} · ${eur(ENTRANTE.total)}
+      <span class="chip good" style="margin-left:6px">Exacta</span></div>
+    <div class="card" style="box-shadow:none; background:var(--surface-2)">
+      <div class="row"><div class="thumb sm t-verdura" style="color:var(--good-ink)">✓</div>
+        <div class="grow"><b style="font-size:14px">${CONCILIA.coincide} productos como estaban previstos</b>
+          <div class="note" style="margin:1px 0 0">Ya están en la despensa con su cantidad real</div></div></div></div>
+    <div class="sec-h">No estaba en la lista · ${eur(CONCILIA.extra.reduce((a,x)=>a+x[1],0))}</div>
+    ${CONCILIA.extra.map(([n,p])=>`<div class="ing"><span class="grow">${n}</span>
+      <span style="font-weight:650">${eur(p)}</span></div>`).join('')}
+    <div class="note">No es un reproche: es el número que os dirá si el presupuesto se va por la lista
+      o por lo que cae en el carro sin estar en ella.</div>
+    <div class="sec-h">No había en el súper</div>
+    ${CONCILIA.noHabia.map(n=>`<div class="ing"><span class="grow">${n}</span>
+      <span class="chip warn">a sustituir</span></div>`).join('')}
+    <div class="note">El planificador recoloca las recetas que dependían de esto.</div>
+    <button class="cta" style="margin-top:14px" onclick="closeSheet()">Hecho</button>`);
+}
+
+/* La pantalla de después, diseñada para la TERCERA compra, no para la primera:
+   lo que está bien se pliega, lo dudoso ocupa la pantalla. */
+function sheetTicketDigital(){
+  const dudosas=TICKET.filter(t=>!t[4]), buenas=TICKET.filter(t=>t[4]);
+  const totalBuenas=buenas.reduce((a,t)=>a+parseFloat(t[3].replace(',','.')),0);
+  openSheet(`<h3>Ticket digital</h3>
+    <div class="meta" style="margin-bottom:14px">${ENTRANTE.sitio} · ${ENTRANTE.fecha} ·
+      ${ENTRANTE.lineas} líneas · ${eur(ENTRANTE.total)}</div>
+    <div class="card flush" style="margin-bottom:12px">
+      <div class="qr" style="border-top:0" onclick="VER_TICKET=!VER_TICKET; sheetTicketDigital()">
+        <div class="thumb sm t-verdura" style="color:var(--good-ink)">✓</div>
+        <div class="tx"><div class="when">Reconocidos</div>
+          <b style="color:var(--muted)">${buenas.length} productos · ${eur(totalBuenas)}</b></div>
+        <div class="kc" style="color:var(--acc-txt); font-weight:650">${VER_TICKET?'ocultar':'ver'}</div></div>
+      ${VER_TICKET?buenas.map(([ocr,prod,cant,imp])=>`<div class="ing" style="font-size:12.5px">
+        <span class="grow"><span style="font-family:ui-monospace,monospace; color:var(--muted)">${ocr}</span>
+          <span style="display:block; font-weight:600">${prod} · ${cant}</span></span>
+        <span style="font-weight:650">${imp} €</span></div>`).join(''):''}
+    </div>
+    ${dudosas.map(([ocr,,cant,imp])=>`
+      <div class="card" style="border-color:var(--warn); border-width:1.5px; margin-bottom:12px">
+        <div class="when" style="color:var(--warn)">Por identificar</div>
+        <div style="font-family:ui-monospace,monospace; font-size:13px; color:var(--muted); margin:6px 0 2px">${ocr} · ${cant} · ${imp} €</div>
+        <div class="meta" style="margin-bottom:10px">¿Qué es esto?</div>
+        ${(CANDIDATOS[ocr]||[]).map(([n,por],i)=>`<button class="opt" onclick="closeSheet()">
+          ${i?'🔎':'🍆'} <span class="grow">${n}<small>${por}</small></span>
+          ${i?'':'<span class="chip good" style="font-size:10.5px; padding:3px 8px">probable</span>'}</button>`).join('')}
+        <button class="opt" onclick="closeSheet()">🔎 <span class="grow">Buscar otro ingrediente</span>›</button>
+        <button class="opt" onclick="closeSheet()">🚫 <span class="grow">No entra en la despensa
+          <small>papel de horno, detergente… solo cuenta para el gasto</small></span>›</button>
+      </div>`).join('')}
+    <div class="card" style="box-shadow:none; background:var(--surface-2)">
+      <div class="sec-h" style="margin-top:0">Precios que se corrigen con este ticket</div>
+      ${Object.entries(PRECIO_REAL).map(([n,v])=>`<div class="ing" style="font-size:13px">
+        <span class="grow">${n}</span>
+        <span style="font-weight:650"><span style="color:var(--muted); text-decoration:line-through">${eur(PRECIO[n])}</span>
+        → <span style="color:${v<PRECIO[n]?'var(--good-ink)':'var(--crit)'}">${eur(v)}</span>/kg</span></div>`).join('')}
+      <div class="note">A partir de ahora la previsión usa vuestros precios, no mis estimaciones.</div></div>
+    <div class="note">La primera compra son 40-60 nombres que confirmar una vez. De la tercera en adelante,
+      esta pantalla enseña una línea o ninguna.</div>
+    <button class="cta" style="margin-top:14px" onclick="sheetConciliacion()">Confirmar y cerrar la compra</button>`);
+}
+
+/* Otro supermercado: las cantidades ya las sabe la app. Solo falta un número. */
+function sheetOtroSuper(k){
+  k = k || 'fresco';
+  const lista=listaCompra(), L=LISTAS[k];
+  const items=L.secciones.flatMap(x=>lista[x]||[]);
+  const cogidos=items.filter(i=>(MARCAS[i.n]||{}).cogido);
+  const faltan=items.filter(i=>(MARCAS[i.n]||{}).noHabia);
+  const est=cogidos.reduce((a,i)=>{const m=MARCAS[i.n]||{};
+    return a + (m.g!=null ? i.precio*m.g/i.comprado : i.precio)},0);
+  const C=CADENAS[COMPRA_EN_CURSO.comercio]||CADENAS.Otro;
+  const prevista=est*C.factor;
+  openSheet(`<h3>Cerrar sin ticket</h3>
+    <div class="meta" style="margin-bottom:16px">Las cantidades salen de lo que marcaste.
+      Solo falta lo que pagaste.</div>
+    <div class="f" style="border-top:0"><label>¿Dónde?</label></div>
+    <div class="seg" style="flex-wrap:wrap; margin-bottom:8px">
+      ${Object.keys(CADENAS).map(c=>`<span class="chip ${COMPRA_EN_CURSO.comercio===c?'on':''}"
+        onclick="COMPRA_EN_CURSO.comercio='${c}'; sheetOtroSuper('${k}')">${c}</span>`).join('')}</div>
+    ${C.compras>=3?`<div class="note" style="margin:-2px 0 10px">Con ${C.compras} compras aquí, la app ya sabe que
+      pagáis un <b>${Math.abs(Math.round((C.factor-1)*100))} % ${C.factor<1?'menos':'más'}</b> que mis precios de
+      referencia. Estimación para esta: <b>${eur(prevista)}</b>.</div>`
+      :`<div class="note" style="margin:-2px 0 10px">Todavía ${C.compras===0?'no hay compras':'solo hay '+C.compras}
+      en ${COMPRA_EN_CURSO.comercio}: hacen falta 3 para que la app sepa cuánto se desvía. Estimación con precios
+      de Mercadona: <b>${eur(est)}</b>.</div>`}
+    <div class="f"><label>Total pagado</label>
+      <input id="total-pagado" placeholder="0,00" style="width:96px; text-align:right; font-size:16px; font-weight:650"> €</div>
+    <div class="card" style="box-shadow:none; background:var(--surface-2); margin-top:12px">
+      <div class="sec-h" style="margin-top:0">Lo que entra en la despensa</div>
+      <div class="ing" style="border-top:0"><span class="grow">Productos marcados</span>
+        <span style="font-weight:650">${cogidos.length} de ${items.length}</span></div>
+      ${cogidos.filter(i=>MARCAS[i.n].g!=null).length?`<div class="ing">
+        <span class="grow">Con cantidad corregida</span>
+        <span style="font-weight:650; color:var(--acc-txt)">${cogidos.filter(i=>MARCAS[i.n].g!=null).length}</span></div>`:''}
+      ${faltan.length?`<div class="ing"><span class="grow">No había</span>
+        <span style="font-weight:650; color:var(--crit)">${faltan.length}</span></div>`:''}
+      <div class="ing"><span class="grow">Sin marcar · no entran</span>
+        <span style="font-weight:650; color:var(--muted)">${items.length-cogidos.length-faltan.length}</span></div>
+    </div>
+    <div class="banner info" style="margin-top:12px"><b class="t">Esta compra quedará como «Desde la lista»</b>
+      El gasto será exacto. La despensa entra con las cantidades que marcaste, corregidas donde hiciera falta.
+      No se aprenden precios por producto —los de ${COMPRA_EN_CURSO.comercio} no valen para Mercadona—
+      pero sí <b>cuánto se desvía esta cadena en total</b>, que es lo que sirve para prever el mes.</div>
+    <button class="cta" style="margin-top:14px" onclick="cerrarSinTicket('${k}',${est})">Cerrar la compra</button>`);
+}
+function cerrarSinTicket(k, est){
+  const inp=document.getElementById('total-pagado');
+  const pagado=parseFloat((inp&&inp.value||'').replace(',','.'))||est;
+  const c=COMPRA_EN_CURSO.comercio, C=CADENAS[c];
+  /* El factor se actualiza como media móvil: una compra rara no lo desvía entero. */
+  const nuevo=est?pagado/est:1;
+  const anterior=C.factor;
+  C.factor=+(((C.factor*C.compras)+nuevo)/(C.compras+1)).toFixed(3);
+  C.compras++;
+  LISTAS[k].estado='cerrada'; LISTAS[k].cerrada='hoy';
+  COMPRAS.unshift({id:'cx'+C.compras, sitio:c, fecha:'hoy', total:pagado, fid:'lista', lineas:null, pendientes:0});
+  closeSheet(); pintarCompra();
+  openSheet(`<h3>Compra cerrada</h3>
+    <div class="meta" style="margin-bottom:16px">${c} · ${eur(pagado)}
+      <span class="chip warn" style="margin-left:6px">Desde la lista</span></div>
+    <div class="card" style="box-shadow:none; background:var(--surface-2)">
+      <div class="ing" style="border-top:0"><span class="grow">Estimado con precios de referencia</span>
+        <span style="font-weight:650; color:var(--muted)">${eur(est)}</span></div>
+      <div class="ing"><span class="grow">Pagado de verdad</span>
+        <span style="font-weight:650">${eur(pagado)}</span></div>
+      <div class="ing"><span class="grow">Diferencia</span>
+        <span style="font-weight:650; color:${pagado<est?'var(--good-ink)':'var(--crit)'}">
+          ${pagado<est?'−':'+'}${eur(Math.abs(pagado-est))} · ${Math.abs(Math.round((nuevo-1)*100))} %</span></div>
+    </div>
+    <div class="banner info" style="margin-top:12px"><b class="t">Lo que la app aprende de esto</b>
+      ${C.compras<3
+        ? `Compra ${C.compras} de 3 en ${c}. Con una más, la previsión del mes podrá contar con que aquí
+           se paga distinto. Hasta entonces no se toca nada: una compra suelta no es un patrón.`
+        : `El factor de ${c} pasa de ×${anterior.toFixed(2).replace('.',',')} a
+           <b>×${C.factor.toFixed(2).replace('.',',')}</b> sobre ${C.compras} compras. La previsión del mes ya
+           lo usa. Los precios por producto no se tocan: los de ${c} no valen para Mercadona.`}</div>
+    <button class="cta" style="margin-top:14px" onclick="closeSheet()">Hecho</button>`);
+}
+function sheetFoto(){
+  openSheet(`<h3>Foto del ticket</h3>
+    <div class="meta" style="margin-bottom:16px">Para cuando no llega el digital</div>
+    <div class="scan" style="margin-bottom:14px"><div style="font-size:34px">📷</div>
+      <div style="font-weight:650; margin-top:8px">Hacer la foto</div>
+      <div class="note" style="margin-top:4px">Ticket estirado, con luz, y que quepa entero</div></div>
+    <div class="banner"><b class="t">Es el camino peor, y conviene saberlo</b>
+      El papel térmico de Mercadona se borra y se dobla, así que la lectura falla más que la del correo.
+      Si pagasteis con la tarjeta de siempre, el digital ya está esperando: usadlo.</div>
+    <button class="cta" style="margin-top:14px" onclick="closeSheet()">Continuar con la foto</button>`);
+}
+
+function sheetCompra(id){
+  const c=COMPRAS.find(x=>x.id===id), F=FIDELIDAD[c.fid];
+  openSheet(`<h3>${c.sitio} · ${c.fecha}</h3>
+    <div class="meta" style="margin-bottom:16px">${eur(c.total)}
+      <span class="chip" style="margin-left:6px">${F[1]}</span></div>
+    <div class="banner info"><b class="t">Qué significa «${F[1]}»</b>${F[3]}.</div>
+    ${c.lineas?`<div class="ing" style="margin-top:12px"><span class="grow">Líneas del ticket</span>
+      <span style="font-weight:650">${c.lineas}</span></div>`:''}
+    <div class="ing"><span class="grow">Sin identificar</span>
+      <span style="font-weight:650">${c.pendientes||'ninguna'}</span></div>
+    <button class="cta" style="margin-top:14px" onclick="closeSheet()">Cerrar</button>`);
+}
+
+/* ───── render ───── */
+function pintarHero(){
+  const d=PERFILES[P], h=HOY[P];
+  const extra=EXTRAS[P].reduce((a,x)=>a+x.ing.reduce((b,[n,q])=>b+q*ING[n][0]/100,0),0);
+  const sueltos=EXTRA_LOG[P].reduce((a,x)=>a+x.kcal*x.n2,0);
+  const kcal=Math.round(extra)+sueltos+h.reduce((s,m)=>s+(m.estado&&m.estado!=='saltado'?nutre(m.r,P).kcal:0),0);
+  const prot=h.reduce((s,m)=>s+(m.estado&&m.estado!=='saltado'?nutre(m.r,P).prot:0),0);
+  const reg=h.filter(m=>m.estado).length, pct=Math.min(1,kcal/d.kcalMax), C=2*Math.PI*32;
+  $('#hero').innerHTML=`<div class="row">
+    <div class="ring"><svg width="78" height="78">
+      <circle cx="39" cy="39" r="32" fill="none" stroke="rgba(255,255,255,.25)" stroke-width="7"/>
+      <circle cx="39" cy="39" r="32" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round"
+        stroke-dasharray="${C}" stroke-dashoffset="${C*(1-pct)}"/></svg>
+      <b>${kcal.toLocaleString('es')}<i>KCAL</i></b></div>
+    <div class="grow" style="display:flex; flex-direction:column; gap:8px">
+      <div class="hstat">Objetivo del día<b>${d.kcalMin.toLocaleString('es')} – ${d.kcalMax.toLocaleString('es')} kcal</b></div>
+      <div class="hstat">Proteína · mínimo ${d.protMin} g<b>${prot} g</b>
+        <div class="mini"><i style="width:${Math.min(100,prot/d.protMin*100)}%"></i></div></div>
+      <div class="hstat">Registrado<b>${reg} de 5 comidas</b></div></div></div>`;
+}
+const DIAS_ATRAS=['Hoy · miércoles 19','Ayer · martes 18','Anteayer · lunes 17'];
+/* ═══ QUÉ ES DE LA CASA Y QUÉ ES DE CADA UNO ══════════════════════════════
+   Sigue siendo la columna vertebral, aunque ya no haya que bloquear nada: es lo
+   que decide qué cuelga de household_id y qué de profile_id en Supabase.
+     DE LA CASA  → compra, despensa, preparativos, menú, tanda
+     DE CADA UNO → comidas, medicación, deporte, salud, cierre del día
+   Lo de la casa lo marca cualquiera de los dos y el otro lo ve al momento.
+   Lo personal no se comparte ni en lectura: para eso están los avisos
+   («tu pareja ha cerrado el día») y hablar. */
+const AMBITO={
+  compra:'casa', despensa:'casa', preparativos:'casa', menu:'casa', tanda:'casa',
+  comida:'persona', medicacion:'persona', deporte:'persona', salud:'persona', cierre:'persona'};
+const esDeLaCasa = b => AMBITO[b]==='casa';
+
+/* Quién marcó cada cosa compartida y cuándo: sin esto, «¿lo has sacado tú del
+   congelador?» sigue siendo una conversación en vez de un dato. */
+const POR={};
+function marcarCasa(id){
+  if(ACC[id]) { delete ACC[id]; delete POR[id]; }
+  else { ACC[id]='hecho'; POR[id]={quien:SESION.perfil, hora:String(HORA).padStart(2,'0')+':'+
+        String(new Date().getMinutes()).padStart(2,'0')}; }
+  pintarQuick();
+}
+const firma = id => POR[id] ? `<div class="note" style="margin:1px 0 0">Lo marcó
+  ${PERFILES[POR[id].quien].nombre} a las ${POR[id].hora}</div>` : '';
+
+function pintarAvisos(){
+  const partes=[];
+  if(DIA<0) partes.push(`<div class="banner" style="margin-bottom:11px"><b class="t">⏪ ${DIAS_ATRAS[-DIA]}</b>
+    Puedes completar lo que falte. Pasadas 48 horas el día se cierra como «sin registrar», que también es un dato.</div>`);
+  $('#aviso-modo').innerHTML=partes.join('');
+  $('#dia-ant').style.visibility = DIA>-2?'visible':'hidden';
+  $('#dia-sig').style.visibility = DIA<0?'visible':'hidden';
+}
+function pintarAhora(){
+  if(DIA<0){$('#ahora').innerHTML=''; return}
+  if(HORA>=22){
+    const faltan=HOY[P].filter(m=>!m.estado).length;
+    $('#ahora').innerHTML=`<div class="card tap" style="border-color:var(--acc); border-width:1.5px" onclick="sheetCierre()">
+      <div class="row"><div class="thumb t-lacteo">🌙</div>
+        <div class="grow"><div class="when" style="color:var(--acc-txt)">Ahora toca · cierre del día</div>
+          <div class="name" style="margin:2px 0 3px">¿Cómo ha ido hoy?</div>
+          <div class="meta">${faltan?faltan+' comidas sin registrar · ':''}hambre, energía y sueño en 3 toques</div></div>
+        <button class="act primary" style="flex:0 0 auto; padding:11px 15px">Cerrar</button></div></div>`;
+    return;
+  }
+  const pend=HOY[P].find(m=>!m.estado);
+  if(!pend){$('#ahora').innerHTML=`<div class="card" style="border-color:var(--good)">
+    <div class="row"><div class="thumb sm t-verdura">✓</div>
+      <div class="grow"><div class="when" style="color:var(--good-ink)">Día completo</div>
+      <div class="name" style="margin:0">Todo registrado</div></div></div></div>`; return}
+  const r=R[pend.r], i=HOY[P].indexOf(pend);
+  $('#ahora').innerHTML=`<div class="card tap" style="border-color:var(--acc); border-width:1.5px" onclick="sheetComida(${i})">
+    <div class="row">
+      <div class="thumb ${r.t}">${r.e}</div>
+      <div class="grow"><div class="when" style="color:var(--acc-txt)">Ahora toca · ${MOMLAB[pend.k]}</div>
+        <div class="name" style="margin:2px 0 3px">${r.n}</div>
+        <div class="meta">${nutre(pend.r,P).kcal} kcal · ${nutre(pend.r,P).prot} g P</div></div>
+      <button class="act primary" style="flex:0 0 auto; padding:11px 15px"
+        onclick="event.stopPropagation(); marcar(${i},'hecho')">✓ Hecho</button></div></div>`;
+}
+function bloque(titulo, contenido, resumen, completo){
+  if(completo) return `<h2>${titulo}</h2><div class="card flush">
+    <div class="qr on" style="border-top:0"><div class="thumb sm t-off" style="color:var(--good-ink)">✓</div>
+      <div class="tx"><b style="color:var(--muted)">${resumen}</b></div>
+      <div class="check" style="background:var(--good); border-color:var(--good); color:#fff">✓</div></div></div>`;
+  return `<h2>${titulo}</h2><div class="card flush">${contenido}</div>`;
+}
+function pintarQuick(){
+  const hechas=HOY[P].map((m,i)=>({m,i})).filter(x=>x.m.estado);
+  let pend=HOY[P].map((m,i)=>({m,i})).filter(x=>!x.m.estado);
+  if(DIA===0 && pend.length) pend=pend.slice(1);   // la primera vive en el bloque "Ahora"
+  const fila=({m,i})=>{
+    const r=R[m.r], cls=m.estado==='hecho'?'on':m.estado?'on alt':'';
+    const ico={hecho:'✓',cambiado:'↔',fuera:'🍽',saltado:'⏭'}[m.estado]||'';
+    return `<div class="qr ${cls}" onclick="sheetComida(${i})">
+      <div class="thumb sm ${r.t}">${r.e}</div>
+      <div class="tx"><div class="when">${MOMLAB[m.k]}</div><b>${r.n}</b></div>
+      <div class="kc">${nutre(m.r,P).kcal}</div><div class="check">${ico}</div></div>
+      ${m.estado==='hecho' && !PUNT[m.r] ? `<div class="qr" style="padding-top:0; border-top:0">
+        <div style="width:38px"></div>
+        <div class="tx"><div class="when" style="color:var(--acc-txt)">¿Repetimos este plato?</div></div>
+        <div class="seg">
+          <span class="chip" onclick="event.stopPropagation(); puntuar('${m.r}','si')">👍</span>
+          <span class="chip" onclick="event.stopPropagation(); puntuar('${m.r}','ok')">😐</span>
+          <span class="chip" onclick="event.stopPropagation(); puntuar('${m.r}','no')">👎</span></div></div>` : ''}`};
+  const htmlComida=`
+    ${hechas.length?`<div class="qr" style="border-top:0" onclick="VER_HECHAS=!VER_HECHAS; pintarQuick()">
+      <div class="thumb sm t-off" style="color:var(--good-ink); font-size:15px">✓</div>
+      <div class="tx"><div class="when">Ya registradas</div><b style="color:var(--muted)">${hechas.length} comidas · ${hechas.map(x=>MOMLAB[x.m.k].toLowerCase()).join(', ')}</b></div>
+      <div class="kc" style="color:var(--acc-txt); font-weight:650">${VER_HECHAS?'ocultar':'ver'}</div></div>`:''}
+    ${VER_HECHAS?hechas.map(fila).join(''):''}
+    ${pend.length?'':`<div class="qr" style="border-top:0"><div class="thumb sm t-off" style="color:var(--muted)">↑</div>
+      <div class="tx"><b style="color:var(--muted); font-size:13.5px">Solo queda lo de arriba</b></div></div>`}
+    ${pend.map(fila).join('')}
+    ${EXTRA_LOG[P].map((x,i)=>`<div class="qr on alt" onclick="quitarExtra(${i})">
+      <div class="thumb sm t-fruta">${x.e}</div>
+      <div class="tx"><div class="when">Fuera del plan${x.alc?' · alcohol':''}</div><b>${x.n}${x.n2>1?' ×'+x.n2:''}</b></div>
+      <div class="kc">${x.kcal*x.n2}</div><div class="check">↔</div></div>`).join('')}
+    <div class="qr" onclick="sheetExtra()">
+      <div class="thumb sm t-off" style="color:var(--acc-txt); font-size:19px">+</div>
+      <div class="tx"><div class="when">Fuera del plan</div>
+        <b style="color:var(--acc-txt)">Añadir una bebida o un picoteo</b></div>
+      <div class="kc"></div><div class="check" style="border:0"></div></div>`;
+
+  const per=PERFILES[P], e=per.entreno;
+  const meds=MEDICACION[P], tomadas=MED[P].filter(Boolean).length;
+  const tocaPeso=DIAS_PESO.includes(3);          // hoy es miércoles
+
+  /* ── DEPORTE ── */
+  const htmlDeporte=`
+    ${e.tipo==='profesional'
+      ? `<div class="qr" style="border-top:0"><div class="thumb sm t-off" style="color:var(--muted)">🚫</div>
+          <div class="tx"><div class="when">Agenda · no es entrenamiento tuyo</div>
+            <b style="color:var(--muted)">Impartes entreno · 20:00-21:30</b>
+            <div class="note" style="margin:1px 0 0">Bloquea la tarde: no se te programa nada aquí</div></div>
+          <div class="check" style="border:0"></div></div>
+         <div class="qr"><div class="thumb sm t-off" style="color:var(--muted)">·</div>
+          <div class="tx"><div class="when">Sesión propia</div><b style="color:var(--muted)">Hoy no toca · la siguiente, jueves</b></div>
+          <div class="check" style="border:0"></div></div>`
+      : `<div class="qr" style="border-top:0" onclick="sheetSesion(0)">
+          <div class="thumb sm t-gym">🏋</div>
+          <div class="tx"><div class="when">Sesión de hoy</div><b>${e.titulo}</b></div>
+          <div class="kc">${e.meta.split('·').pop().trim()}</div>
+          <div class="check" style="${ACC.sesion?'background:var(--good);border-color:var(--good);color:#fff':''}">${ACC.sesion?'✓':''}</div></div>`}
+    ${RUTINA_DIARIA[P]?`<div class="qr ${ACC.rutina?'on':''}" onclick="sheetRutina()">
+      <div class="thumb sm t-lacteo">${RUTINA_DIARIA[P].e}</div>
+      <div class="tx"><div class="when">Rutina diaria · ${RUTINA_DIARIA[P].cuando}</div>
+        <b>${RUTINA_DIARIA[P].n}</b>
+        <div class="note" style="margin:1px 0 0">${RUTINA_DIARIA[P].min} min · no es sesión, es mantenimiento</div></div>
+      <div class="kc">${RUTINA_DIARIA[P].min}'</div><div class="check">${ACC.rutina?'✓':''}</div></div>`:''}
+    <div class="qr">
+      <div class="thumb sm t-verdura">👟</div>
+      <div class="tx"><div class="when">Base diaria · desde ${PULSERA[P]}</div>
+        <b>${PASOS[P].toLocaleString('es')} de ${PASOS_OBJ[P].toLocaleString('es')} pasos</b>
+        <div class="bar" style="height:5px; margin-top:5px"><i style="width:${Math.min(100,100*PASOS[P]/PASOS_OBJ[P])}%"></i></div></div>
+      <div class="kc">${Math.max(0,PASOS_OBJ[P]-PASOS[P]).toLocaleString('es')}<br>faltan</div>
+      <div class="check" style="border:0"></div></div>
+    ${P==='c'?`<div class="qr ${ACC.paseo?'on':''}" onclick="accCheck('paseo')">
+      <div class="thumb sm t-fruta">🚶</div>
+      <div class="tx"><div class="when">Paseo después de comer · 12 min</div>
+        <b>${ACC.paseo?'Los dos hechos':'Pendiente el de la cena'}</b></div>
+      <div class="kc">${ACC.paseo?'2 de 2':'1 de 2'}</div><div class="check">${ACC.paseo?'✓':''}</div></div>`:''}
+    ${!ACC.actExtra?`<div class="qr" onclick="sheetActividad()">
+      <div class="thumb sm t-off" style="color:var(--acc-txt); font-size:19px">+</div>
+      <div class="tx"><div class="when">Fuera del plan</div><b style="color:var(--acc-txt)">Añadir una actividad</b></div>
+      <div class="kc"></div><div class="check" style="border:0"></div></div>`:''}`;
+
+  /* ── MEDICACIÓN ── */
+  const htmlMed=meds.map((m,i)=>`
+    <div class="qr ${MED[P][i]?'on':''}" ${i?'':'style="border-top:0"'} onclick="toggleMedFila(${i})">
+      <div class="thumb sm t-lacteo">${m.e}</div>
+      <div class="tx"><div class="when">${m.cuando}${m.comida?' · con comida':''}</div><b>${m.n}</b></div>
+      <div class="kc">${m.nota||''}</div><div class="check">${MED[P][i]?'✓':''}</div></div>`).join('');
+
+  /* ── SALUD (solo si hay algo que hacer) ── */
+  const htmlSalud=[
+    tocaPeso?`<div class="qr ${ACC.peso?'on':''}" onclick="sheetPeso()">
+      <div class="thumb sm t-lacteo">⚖️</div>
+      <div class="tx"><div class="when">Peso · hoy toca (miércoles)</div>
+        <b>${ACC.peso?ACC.peso.toFixed(1).replace('.',',')+' kg registrados':'Registrar peso'}</b></div>
+      <div class="kc">${ACC.peso?'hoy':'últ. '+per.peso+' kg'}</div>
+      <div class="check">${ACC.peso?'✓':''}</div></div>`:'',
+    `<div class="qr ${ACC.cintura?'on':''}" onclick="sheetCintura()">
+      <div class="thumb sm t-fruta">📏</div>
+      <div class="tx"><div class="when">Cintura · toca este mes</div>
+        <b>${ACC.cintura?'Medida registrada':'Medir cintura'}</b>
+        ${ACC.cintura?'':`<div class="note" style="margin:1px 0 0">Última: 22 de julio · ${CINTURA[P].at(-1)} cm</div>`}</div>
+      <div class="check">${ACC.cintura?'✓':''}</div></div>`,
+    `<div class="qr"><div class="thumb sm t-off" style="color:var(--muted)">🧪</div>
+      <div class="tx"><div class="when">Próxima analítica</div><b style="color:var(--muted)">Septiembre · a los 3 meses</b></div>
+      <div class="check" style="border:0"></div></div>`
+  ].join('').replace('class="qr','class="qr" data-x="');
+  const htmlSaludFix=[
+    tocaPeso?`<div class="qr ${ACC.peso?'on':''}" style="border-top:0" onclick="sheetPeso()">
+      <div class="thumb sm t-lacteo">⚖️</div>
+      <div class="tx"><div class="when">Peso · hoy toca (miércoles)</div>
+        <b>${ACC.peso?ACC.peso.toFixed(1).replace('.',',')+' kg registrados':'Registrar peso'}</b></div>
+      <div class="kc">${ACC.peso?'hoy':'últ. '+per.peso+' kg'}</div>
+      <div class="check">${ACC.peso?'✓':''}</div></div>`:'',
+    `<div class="qr ${ACC.cintura?'on':''}" ${tocaPeso?'':'style="border-top:0"'} onclick="sheetCintura()">
+      <div class="thumb sm t-fruta">📏</div>
+      <div class="tx"><div class="when">Cintura · toca este mes</div>
+        <b>${ACC.cintura?CINTURA[P].at(-1)+' cm · registrada':'Medir cintura'}</b>
+        ${ACC.cintura?'':`<div class="note" style="margin:1px 0 0">Última: 22 de julio · ${CINTURA[P].at(-1)} cm</div>`}</div>
+      <div class="check">${ACC.cintura?'✓':''}</div></div>`,
+    `<div class="qr"><div class="thumb sm t-off" style="color:var(--muted)">🧪</div>
+      <div class="tx"><div class="when">Próxima analítica</div><b style="color:var(--muted)">Septiembre · a los 3 meses</b></div>
+      <div class="check" style="border:0"></div></div>`
+  ].join('');
+
+  /* ── PREPARATIVOS: los de mañana solo a partir de las 20 h ── */
+  /* Los preparativos de mañana solo tienen sentido por la noche. Pero lo que caduca
+     y lo que ha entrado sin ticket hay que gastarlo YA: eso se ve a cualquier hora. */
+  const acc=accionesDeHoy().filter(a=>HORA>=20 || a.when.startsWith('Caduca') || a.tipo==='menu');
+  const htmlPrep=acc.map(a=>{
+      const st=ACC[a.id];
+      return `<div class="qr ${st?'on'+(st!=='hecho'?' alt':''):''}"
+        onclick="${a.tipo==='check'?`marcarCasa('${a.id}')`:`sheetCaducidad('${a.id}','${a.ing}',${a.g})`}">
+        <div class="thumb sm ${a.t}">${a.e}</div>
+        <div class="tx"><div class="when">${st?ESTADO_ACC[st]:a.when}</div><b>${a.txt}</b>
+          ${st?firma(a.id):`<div class="note" style="margin:1px 0 0">${a.nota}</div>`}</div>
+        ${a.tipo==='check'
+          ? `<div class="check">${st?'✓':''}</div>`
+          : st
+            ? `<div class="check" style="border:0; font-size:15px">${{usado:'✓',congelado:'❄️',tirado:'🗑',pospuesto:'⏰'}[st]}</div>`
+            : `<div class="kc"><span class="chip acc">Resolver</span></div>`}
+      </div>`}).join('');
+
+  /* ── montaje: bloques temáticos, los completos se pliegan ── */
+  const nComidas=HOY[P].filter(m=>m.estado).length;
+  const dep = e.tipo==='profesional' ? !!ACC.paseo : (!!ACC.sesion && (P!=='c'||!!ACC.paseo));
+  $('#bloques').innerHTML=[
+    bloque(`Comida <span class="r" onclick="ir('menu')">Ver menú ›</span>`, htmlComida,
+           `${nComidas} comidas registradas · ${EXTRA_LOG[P].length} extras`, nComidas===5),
+    bloque('Deporte', htmlDeporte, 'Sesión hecha y pasos al día', dep),
+    bloque('Medicación', htmlMed, `Todo tomado hoy · ${meds.length} de ${meds.length}`, tomadas===meds.length),
+    bloque('Salud', htmlSaludFix, 'Todo al día', false),
+    acc.length ? bloque((acc.some(a=>!a.when.startsWith('Caduca'))?'Preparativos · para mañana':'Preparativos')
+      +' <span class="chip" style="margin-left:8px; font-size:10px; padding:3px 8px; text-transform:none; letter-spacing:0">🏠 de los dos</span>',
+      htmlPrep, '', false) : '',
+    HORA<22 ? bloque('Cierre del día', `<div class="qr" style="border-top:0" onclick="sheetCierre()">
+        <div class="thumb sm t-lacteo">🌙</div>
+        <div class="tx"><div class="when">A partir de las 22:00</div><b>¿Cómo ha ido hoy?</b></div>
+        <div class="kc">3 toques</div><div class="check"></div></div>`, '', false) : ''
+  ].join('');
+
+  /* La tarjeta «Hoy, los dos» sale: el resumen del otro no aporta y para eso
+     está el aviso de «tu pareja ha cerrado el día». Además su dato no se podría
+     leer: weight_logs y meal_logs son `profile_id = auth.uid()`. */
+}
+
+function semanaHTML(datos, editable, cocina, sem){
+  sem = sem || (editable ? 's2' : 's1');
+  return datos.map(day=>{
+    /* Lo que se come fuera no lo pone la app: no puede contarlo como si lo pusiera.
+       El día se calcula sin esa comida y se dice en el total. */
+    const dentro = MOM.filter(k=>{const e=excepcionDe(sem, day.n, k); return !(e && e.tipo==='fuera')});
+    const fuera = MOM.length - dentro.length;
+    const tc=dentro.reduce((a,k)=>a+nutre(day[k],'c').kcal,0), tt=dentro.reduce((a,k)=>a+nutre(day[k],'t').kcal,0);
+    const pc=dentro.reduce((a,k)=>a+nutre(day[k],'c').prot,0), pt=dentro.reduce((a,k)=>a+nutre(day[k],'t').prot,0);
+    /* El día se muestra YA ajustado: es lo que se va a comer de verdad. Si el menú viene
+       escrito a mano en vez de generado, se calcula aquí el mismo ajuste de ración de ±10 %
+       que aplica el generador, para no enseñar un total que parece incumplir las reglas. */
+    const ac=(fuera?null:day._c)||ajusteDia(tc,pc,OBJ.c)||{f:1,kcal:tc,prot:Math.round(pc)};
+    const at=(fuera?null:day._t)||ajusteDia(tt,pt,OBJ.t)||{f:1,kcal:tt,prot:Math.round(pt)};
+    const fueraC=!fuera&&(ac.kcal<OBJ.c.min||ac.kcal>OBJ.c.max), fueraT=!fuera&&(at.kcal<OBJ.t.min||at.kcal>OBJ.t.max);
+    return `<div class="card">
+      <div class="row" style="margin-bottom:6px">
+        <div class="dcol ${day.n==='19'?'today':''}" style="width:38px"><b>${day.n}</b><span>${day.d}</span></div>
+        <span class="grow"></span>
+        <span class="chip" onclick="event.stopPropagation(); sheetCocinero('${day.n}')" style="cursor:pointer">
+          👨‍🍳 ${QUIEN[(cocina||COCINA)[day.n]||'n'].split(' ·')[0]}</span>
+        ${(()=>{const fe=FECHA_DE[day.n]; if(!fe) return '';
+          const t=tupersDe(fe); if(!t.length) return '';
+          return `<span class="chip" title="${t.map(x=>x.nombre).join(' y ')} en la oficina">🏢 ${
+            t.length===2?'los dos':t[0].nombre} · ${t.length} túper</span>`})()}
+        ${day.d==='D'?'<span class="chip acc">tanda</span>':''}
+        ${['19','21','26','28'].includes(day.n)?'<span class="chip warn">cena 21:45</span>':''}</div>
+      ${MOM.map(k=>{const r=R[day[k]]; const exc=excepcionDe(sem, day.n, k); return `
+        <div class="qr" style="cursor:pointer${exc?'; opacity:.62':''}" onclick="sheetReceta('${day[k]}')">
+          <div class="thumb xs ${exc?TIPOS_EXC[exc.tipo][3]:r.t}">${exc?TIPOS_EXC[exc.tipo][0]:r.e}</div>
+          <div class="tx"><div class="when">${MOMLAB[k]}${exc?' · '+exc.txt:''}</div>
+            <b style="font-size:13.5px${exc&&exc.tipo==='fuera'?'; text-decoration:line-through; color:var(--muted)':''}">${r.n}</b></div>
+          <div class="kc" style="line-height:1.3">${exc&&exc.tipo==='fuera'?'<span style="color:var(--muted)">—</span>'
+            :`<span style="color:var(--s1-txt)">${nutre(day[k],'c').kcal}</span><br>
+            <span style="color:var(--s2-txt)">${exc&&exc.personas?Math.round(nutre(day[k],'t').kcal):nutre(day[k],'t').kcal}</span>`}</div>
+          ${editable?`<div class="check" style="border:0; color:var(--acc-txt); font-size:16px"
+            onclick="event.stopPropagation(); sheetCambiarPlato('${day.n}','${k}')">⇄</div>`:''}</div>`}).join('')}
+      <div class="note">Total${fuera?' de lo que pone la app':''} ·
+        <span style="color:var(--s1-txt); font-weight:650">Cristina ${ac.kcal} kcal / ${ac.prot} g P${fueraC?' ⚠':''}</span>
+        · <span style="color:var(--s2-txt); font-weight:650">Tama ${at.kcal} kcal / ${at.prot} g P${fueraT?' ⚠':''}</span>
+        ${fuera?`<br>${fuera===1?'Una comida fuera de casa':fuera+' comidas fuera de casa'}: no se cuenta ni se compra,
+          y ese día no dispara avisos de rango.`
+        :(ac.f!==1||at.f!==1)?`<br>Ración del día ajustada ×${ac.f} y ×${at.f} para cuadrar en rango sin cambiar de plato.`:''}
+        ${(fueraC||fueraT)?'<br><b style="color:var(--crit)">Este día no cuadra ni ajustando la ración: hay que cambiar un plato.</b>':''}</div></div>`}).join('');
+}
+/* Las dos tarjetas de cabecera del menú. Antes estaban escritas a mano y las de
+   la semana siguiente enseñaban las excepciones de ESTA, con sus fechas. */
+function tarjetaExcepciones(sem){
+  const l=EXCEPCIONES[sem]||[];
+  return `<div class="card tap" onclick="sheetExcepciones('${sem}')">
+    <div class="row"><div class="thumb ${l.length?TIPOS_EXC[l[0].tipo][3]:'t-off'}">${l.length?TIPOS_EXC[l[0].tipo][0]:'📅'}</div>
+      <div class="grow"><div class="when">Excepciones</div>
+        <div class="name">${l.length?l.length+(l.length===1?' comida':' comidas')+' fuera del plan':'Ninguna esta semana'}</div>
+        <div class="meta">${l.length?l.map(x=>x.txt.toLowerCase()+' el '+x.dia.toLowerCase()).join(' · ')
+          :'Añade una cena fuera, invitados o vacaciones antes de que la app compre de más'}</div></div>
+      <span style="color:var(--muted); font-size:18px">›</span></div></div>`;
+}
+function tarjetaTanda(sem){
+  const T=TANDAS[sem], st=TANDA_ESTADO[sem];
+  const est={hecha:['✓ hecha','good'], corta:['tanda corta de 30 min','warn'],
+             saltada:['saltada · semana replanificada','crit'], movida:['movida al lunes','warn']}[st];
+  return `<div class="card tap" onclick="sheetTanda('${sem}')" style="border-color:var(--acc)">
+    <div class="row"><div class="thumb t-legumbre">👨‍🍳</div>
+      <div class="grow"><div class="when">${T.dia} · ${sem==='s1'?'hecha':'prevista'}</div>
+        <div class="name">Tanda de cocina · ${T.min} min</div>
+        <div class="meta">${T.tapers} tápers · ${T.nota||'cubre las comidas de lunes a jueves'}</div></div>
+      ${est?`<span class="chip ${est[1]}">${est[0]}</span>`:'<span style="color:var(--muted); font-size:18px">›</span>'}</div></div>`;
+}
+function pintarMenu(){
+  const sub={s1:'17-23 agosto · confirmada',s2:'24-30 agosto · propuesta, aún editable',
+             prev:'Cuatro semanas vista · para anticipar cocina y compra',
+             hist:'Lo que habéis comido · para repetir lo que funcionó'};
+  $('#menu-sub').textContent=sub[TABM];
+  if(TABM==='s1'){
+    $('#menu-body').innerHTML=`
+      <div class="banner"><b class="t">⚠ Alergia · Cristina: calamar y sepia</b>
+        Bloqueo duro, no una preferencia: ninguna receta con esos ingredientes puede entrar en el menú,
+        ni siquiera cambiada a mano. El pulpo sí está permitido. Ojo con los preparados fritos y las
+        paellas mixtas, donde suelen ir mezclados.</div>
+      <div class="card" style="box-shadow:none; background:var(--surface-2)">
+        <div class="row"><div class="thumb sm t-verdura">🌾</div>
+          <div class="grow"><div class="when">Temporada · agosto</div>
+            <b style="font-size:14px">${Object.keys(R).filter(k=>R[k].meses.includes(MES)).length} de ${Object.keys(R).length} recetas disponibles</b>
+            <div class="note" style="margin:1px 0 0">El resto vuelve cuando entre su temporada.
+              En noviembre habrá ${Object.keys(R).filter(k=>R[k].meses.includes(11)).length}.</div></div></div></div>
+      <div class="banner info"><b class="t">Ración de cada uno: Cristina ×${FACTOR.c.toFixed(2).replace('.',',')} · Tama ×${FACTOR.t.toFixed(2).replace('.',',')}</b>
+        Sale del objetivo calórico de cada uno. Como el aceite y las especias no escalan,
+        la diferencia real de energía entre los dos platos es del ${(() => {
+          const d=MENU.find(x=>x.n==='19');
+          const a=MOM.reduce((x,k)=>x+nutre(d[k],'c').kcal,0), b=MOM.reduce((x,k)=>x+nutre(d[k],'t').kcal,0);
+          return Math.round(100*(b/a-1));})()} %, no del ${Math.round(100*(FACTOR.t/FACTOR.c-1))} %.</div>
+      ${tarjetaExcepciones('s1')}
+      ${tarjetaTanda('s1')}
+      ${semanaHTML(MENU, false, COCINA, 's1')}`;
+  } else if(TABM==='s2'){
+    $('#menu-body').innerHTML=`
+      <div class="banner info"><b class="t">Semana propuesta, todavía editable</b>
+        Rota las recetas para no repetir, reutiliza lo que quede en despensa y mantiene los rangos.
+        Se confirma el sábado; hasta entonces cambia lo que quieras.</div>
+      ${tarjetaExcepciones('s2')}
+      ${tarjetaTanda('s2')}
+      ${semanaHTML(MENU2, true, COCINA2, 's2')}
+      <div class="row" style="gap:8px; margin:4px 0 10px">
+        <button class="act" onclick="regenerar()">↻ Regenerar</button>
+        <button class="act primary">✓ Confirmar semana</button></div>
+      <div class="note" id="gen-info"></div>`;
+  } else if(TABM==='hist'){
+    $('#menu-body').innerHTML=HISTORIAL.map(h=>`
+      <div class="card">
+        <div class="row" style="margin-bottom:10px">
+          <div class="grow"><div class="name" style="margin:0">${h.sem}</div>
+            <div class="meta">Plato más repetido: ${h.fav}</div></div>
+          <span class="chip ${h.adh>=80?'good':h.adh>=70?'acc':'warn'}">${h.adh} %</span></div>
+        <div class="ing" style="font-size:13px"><span class="grow">Adherencia · días en rango</span>
+          <span style="font-weight:650">${h.adh} % · ${h.rango} %</span></div>
+        <div class="ing" style="font-size:13px"><span class="grow">Coste de la compra</span>
+          <span style="font-weight:650; color:${h.coste>52?'var(--crit)':'var(--good-ink)'}">${h.coste} €</span></div>
+        ${h.nota?`<div class="note">${h.nota}</div>`:''}
+        <button class="act" style="width:100%; margin-top:11px" onclick="alert('Se copiaría este menú a la semana siguiente, recalculando la compra con la despensa de ahora.')">↻ Repetir esta semana</button>
+      </div>`).join('')+`
+      <div class="card"><div class="sec-h" style="margin-top:0">Puntuación del recetario</div>
+        ${['si','ok','no'].map(v=>{const l=Object.keys(R).filter(k=>PUNT[k]===v);
+          return `<div class="ing" style="font-size:13px"><span class="grow">
+            ${v==='si'?'👍 Favoritas · salen más a menudo':v==='ok'?'😐 Normales':'👎 Retiradas · el generador no las propone'}</span>
+            <span style="font-weight:650">${l.length}</span></div>`}).join('')}
+        <div class="ing" style="font-size:13px"><span class="grow" style="color:var(--muted)">Sin puntuar</span>
+          <span style="font-weight:650; color:var(--muted)">${Object.keys(R).filter(k=>!PUNT[k]).length}</span></div>
+        <div class="note">${Object.keys(R).filter(k=>PUNT[k]==='no').map(k=>R[k].n).join(' · ')||'Ninguna retirada todavía'}</div></div>
+      `;
+  } else {
+    $('#menu-body').innerHTML=`
+      <div class="card"><div class="meta">Coste previsto de las 4 semanas</div>
+        <div style="font-size:22px; font-weight:700; letter-spacing:-.03em">
+          ${PREVISION.reduce((a,p)=>a+p.coste,0)} €
+          <span style="font-size:13px; color:var(--muted); font-weight:400">de 225 € objetivo</span></div>
+        <div class="bar" style="margin-top:9px"><i style="width:100%; background:var(--crit)"></i></div>
+        </div>
+      ${PREVISION.map(p=>`
+        <div class="card">
+          <div class="row" style="margin-bottom:9px">
+            <div class="grow"><div class="name" style="margin:0">${p.sem}</div>
+              <div class="meta">${p.nuevas?p.nuevas+' recetas nuevas':'sin recetas nuevas'}</div></div>
+            <span class="chip ${p.estado==='confirmada'?'good':p.estado==='propuesta'?'acc':''}">${p.estado}</span></div>
+          <div class="ing" style="font-size:13px"><span class="grow">👨‍🍳 Tanda de cocina</span><span style="font-weight:650">${p.tanda}</span></div>
+          <div class="ing" style="font-size:13px"><span class="grow">🛒 Compra</span><span style="font-weight:650">${p.compra} · ~${p.coste} €</span></div>
+          ${p.avisos.map(a=>`<div class="note" style="margin-top:8px">• ${a}</div>`).join('')}
+        </div>`).join('')}
+      `;
+  }
+}
+function sheetCambiarPlato(dn, mom){
+  const idx=MENU2.findIndex(x=>x.n===dn); if(idx<0) return;
+  const day=MENU2[idx], actual=day[mom];
+  const mm=(mom==='media'||mom==='merienda')?'snack':mom;
+  const base=p=>MOM.reduce((a,k)=>a+(k===mom?0:nutre(day[k],p).kcal),0);
+  const bc=base('c'), bt=base('t');
+  /* Aquí es donde vive «qué cocino»: cuando el plato de hoy no vale. Lo que
+     manda no es el orden alfabético, es lo que ya hay en casa — si hay que ir
+     al súper a por la alternativa, no es una alternativa. */
+  const stock=Object.fromEntries(cocinablesAhora().map(x=>[x.k,x]));
+  const cands=Object.keys(R).filter(k=>R[k].mom===mm && k!==actual).map(k=>{
+    const c=bc+nutre(k,'c').kcal, t=bt+nutre(k,'t').kcal;
+    const ac=ajusteDia(c, 999, {min:1600,max:1750,prot:0}), at=ajusteDia(t, 999, {min:1950,max:2100,prot:0});
+    const st=stock[k]||{falta:99,pct:0};
+    return {k, c, t, ok:!!(ac&&at), falta:st.falta, pct:st.pct};
+  }).sort((a,b)=>(b.ok-a.ok) || (a.falta-b.falta) || (R[a.k].tot-R[b.k].tot));
+  const sobras=SOBRAS.filter(x=>R[x.r] && R[x.r].mom===mm);
+  const listas=cands.filter(x=>x.ok && x.falta===0);
+  openSheet(`<h3>Cambiar ${MOMLAB[mom].toLowerCase()}</h3>
+    <div class="meta" style="margin-bottom:16px">${day.d} ${day.n} · ahora: ${R[actual].n}</div>
+    ${sobras.length?`<div class="sec-h" style="margin-top:0">Ya está hecho · sobras</div>
+      ${sobras.map(x=>`<button class="opt" onclick="cambiarPlato('${dn}','${mom}','${x.r}')">
+        <span class="thumb sm ${R[x.r].t}">${R[x.r].e}</span>
+        <span class="grow">${R[x.r].n}<small>${x.raciones} ${x.raciones>1?'raciones':'ración'} ·
+          ${x.origen} · caduca ${x.cad.slice(8)}/${x.cad.slice(5,7)}</small></span>
+        <span class="chip good">0 min</span></button>`).join('')}`:''}
+    <div class="sec-h">${listas.length?`Con lo que hay en casa · ${listas.length}`:'Sin nada completo en casa'}</div>
+    ${listas.length?'':'<div class="note" style="margin:0 0 8px">Ninguna alternativa sale entera con la despensa de ahora. Las de abajo necesitan comprar algo.</div>'}
+    ${cands.map(x=>`<button class="opt" ${x.ok?`onclick="cambiarPlato('${dn}','${mom}','${x.k}')"`:'style="opacity:.45"'}>
+      <span class="thumb sm ${R[x.k].t}">${R[x.k].e}</span>
+      <span class="grow">${R[x.k].n}
+        <small>${R[x.k].tot} min · ${!x.ok?'se sale de rango: '+x.c+' / '+x.t+' kcal'
+          : x.falta===0?'todo en casa' : `faltan ${x.falta} ${x.falta===1?'ingrediente':'ingredientes'}`}</small></span>
+      ${!x.ok?'<span class="chip crit">✗</span>'
+        : x.falta===0?'<span class="chip good">✓ listo</span>'
+        : `<span class="chip warn">−${x.falta}</span>`}</button>`).join('')}
+    <div class="note">Ordenadas por lo que ya tienes: si hay que bajar al súper, no es una alternativa.
+      Las grises romperían el rango del día.</div>`);
+}
+function cambiarPlato(dn, mom, k){
+  const d=MENU2.find(x=>x.n===dn); d[mom]=k; delete d._c; delete d._t;
+  closeSheet(); pintarMenu();
+}
+function sheetCocinero(dn){
+  openSheet(`<h3>¿Quién cocina?</h3>
+    <div class="meta" style="margin-bottom:16px">Día ${dn} · el reparto sale de vuestras agendas, pero se puede cambiar</div>
+    ${Object.entries(QUIEN).map(([k,v])=>`<button class="opt" onclick="closeSheet()">
+      ${k==='c'?'👩':k==='t'?'👨':k==='x'?'👫':'🥡'} <span class="grow">${v}</span></button>`).join('')}
+    `);
+}
+const recetasQueUsan = n => Object.keys(R).filter(k =>
+  R[k].meses.includes(MES) && R[k].ing.some(([x]) => x === n));
+
+/* Antes esto era decorado: el buscador no filtraba y los cuatro botones de origen
+   llamaban todos a 'Calabaza, 1200 g'. Ahora se busca de verdad sobre los 91
+   ingredientes y se elige qué, cuánto y de dónde. */
+let ALTA={q:'', n:null, g:1000, origen:'huerta'};
+function sheetAnadirDespensa(reset){
+  if(reset!==false) ALTA={q:'', n:null, g:1000, origen:'huerta'};
+  pintarAlta();
+}
+function altaSet(k,v){ ALTA[k]=v; pintarAlta(); }
+function altaBuscar(v){ ALTA.q=v; ALTA.n=null; pintarAlta(true); }
+function pintarAlta(mantenerFoco){
+  const q=(ALTA.q||'').trim().toLowerCase();
+  const norm=x=>x.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  const res = q.length<2 ? [] : Object.keys(ING)
+    .filter(n=>norm(n).includes(norm(q)))
+    .sort((a,b)=>norm(a).indexOf(norm(q))-norm(b).indexOf(norm(q)) || a.localeCompare(b))
+    .slice(0,8);
+  const sug=['Calabacín','Tomate maduro','Calabaza','Higos frescos','Acelgas','Uvas'];
+  openSheet(`<h3>Añadir a la despensa</h3>
+    <div class="meta" style="margin-bottom:14px">Lo que llega sin pasar por caja: huerta, regalos, otra tienda</div>
+    <input class="search" id="alta-q" placeholder="Buscar ingrediente…" value="${ALTA.q||''}"
+      oninput="altaBuscar(this.value)">
+    ${ALTA.n ? `<div class="qr" style="border-top:0">
+        <div class="thumb sm t-verdura">✓</div>
+        <div class="tx"><div class="when">Ingrediente</div><b>${ALTA.n}</b></div>
+        <span class="chip" onclick="altaSet('n',null)" style="cursor:pointer">cambiar</span></div>`
+     : q.length<2
+       ? `<div class="sec-h">De lo que más entra</div>
+          <div class="sports">${sug.map(n=>`<button class="sport" onclick="altaSet('n','${n}')">
+            <span class="e">${ING[n]?'🥬':'·'}</span><span class="l">${n}</span></button>`).join('')}</div>`
+       : res.length
+         ? res.map((n,i)=>`<div class="qr" ${i?'':'style="border-top:0"'} onclick="altaSet('n','${n}')">
+             <div class="thumb sm ${['t-verdura','t-fruta','t-carne'][i%3]}">·</div>
+             <div class="tx"><div class="when">${ING[n][2]}</div><b>${n}</b></div>
+             <span style="color:var(--muted); font-size:18px">›</span></div>`).join('')
+         : `<div class="banner"><b class="t">No hay ningún ingrediente que se llame así</b>
+             El catálogo tiene ${Object.keys(ING).length} y solo entran los que usa alguna receta.
+             Si es algo nuevo, se añade al recetario primero.</div>`}
+    ${ALTA.n?`
+      <div class="sec-h">¿Cuánto?</div>
+      <div class="seg" style="flex-wrap:wrap; margin-bottom:6px">
+        ${[250,500,1000,1500,2000,3000].map(g=>`<span class="chip ${ALTA.g===g?'on':''}"
+          onclick="altaSet('g',${g})">${kg(g)}</span>`).join('')}</div>
+      <div class="sec-h">¿De dónde viene?</div>
+      <div class="sports">${Object.entries(ORIGENES).filter(([k])=>k!=='ticket').map(([k,[e,n]])=>
+        `<button class="sport" style="${ALTA.origen===k?'border-color:var(--acc); background:color-mix(in srgb,var(--acc) 10%,transparent)':''}"
+          onclick="altaSet('origen','${k}')"><span class="e">${e}</span><span class="l">${n}</span></button>`).join('')}</div>
+      <div class="note">Vale ${eur(ALTA.g*(PRECIO[ALTA.n]||0)/1000)} a precio de referencia.
+        Cuesta 0 € en caja, pero sí cuenta en «lo que cuesta comer»: así la huerta se ve como el ahorro
+        que es, en vez de desaparecer del cálculo.</div>
+      <button class="cta" style="margin-top:12px" onclick="guardarAlta()">Añadir a la despensa</button>`
+    :''}`);
+  if(mantenerFoco){const i=document.getElementById('alta-q'); if(i){i.focus(); i.setSelectionRange(i.value.length,i.value.length)}}
+}
+function guardarAlta(){
+  const {n,g,origen}=ALTA;
+  const dias={huerta:7, regalo:10, otra:10, pesca:3}[origen]||7;
+  const cad=new Date(2026,7,19+dias).toISOString().slice(0,10);
+  ESPONTANEOS.push({n, g, origen, fecha:'hoy', cad});
+  DESPENSA[n]=[(DESPENSA[n]?DESPENSA[n][0]:0)+g, cad];
+  closeSheet(); pintarCompra(); pintarQuick();
+  sheetEspontaneo(n, g);
+}
+function sheetEspontaneo(n, g){
+  const recs = recetasQueUsan(n);
+  openSheet(`<h3>${n}</h3>
+    <div class="meta" style="margin-bottom:16px">${kg(g)} · sin ticket · vale ${eur(g*(PRECIO[n]||0)/1000)} a precio de referencia</div>
+    ${recs.length ? `
+      <div class="banner info"><b class="t">${recs.length} recetas lo usan este mes</b>
+        El planificador ya lo va a colocar antes que nada, por delante incluso de lo que caduca comprado.</div>
+      ${recs.slice(0,4).map(k=>`<button class="opt" onclick="sheetReceta('${k}')">
+        <span class="thumb sm ${R[k].t}">${R[k].e}</span>
+        <span class="grow">${R[k].n}<small>${R[k].tot} min · ${MOMLAB[R[k].mom]||'Snack'}</small></span>›</button>`).join('')}
+      <div class="sec-h">Si es más de lo que os vais a comer</div>`
+    : `<div class="banner"><b class="t">⚠ Ninguna receta de esta temporada lo usa</b>
+        Sin receta, esto se queda en la despensa hasta que se estropea. Dos salidas: conservarlo
+        para más adelante, o pedir recetas que lo aprovechen.</div>`}
+    ${CONSERVAS.map(c=>`<button class="opt" onclick="conservar('${n}',${g},'${c.id}')">${c.e}
+      <span class="grow">${c.m}<small>${c.nota}</small></span>
+      <span class="chip acc">${c.dura}</span></button>`).join('')}
+    <button class="opt" onclick="pedirReceta('${n}')">📝 <span class="grow">Pedir recetas con este ingrediente
+      <small>Entra en la próxima tanda del recetario</small></span></button>`);
+}
+/* Conservar mueve el alimento de sitio, le cambia la fecha y le aplica la merma.
+   Si no hiciera las tres cosas, la despensa seguiría creyendo que hay 1,4 kg de
+   calabacín fresco en la nevera que en realidad están congelados en raciones. */
+const MESES_ES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+function conservar(n, g, id){
+  const c=CONSERVAS.find(x=>x.id===id);
+  if(id==='regalar'){
+    delete DESPENSA[n];
+    const i=ESPONTANEOS.findIndex(x=>x.n===n); if(i>=0) ESPONTANEOS.splice(i,1);
+    closeSheet(); pintarCompra();
+    return openSheet(`<h3>Regalado</h3>
+      <div class="meta" style="margin-bottom:14px">${kg(g)} de ${n.toLowerCase()} fuera de la despensa</div>
+      <div class="banner info">No cuenta como desperdicio: no se ha tirado. Sale del stock y el planificador
+        deja de contar con ello.</div>
+      <button class="cta" style="margin-top:14px" onclick="closeSheet()">Hecho</button>`);
+  }
+  const final=Math.round(g*c.merma);
+  const d=new Date(2026,7,19); d.setMonth(d.getMonth()+c.meses);
+  const cad=d.toISOString().slice(0,10);
+  CONSERVAS_HECHAS.push({n, metodo:c.m, e:c.e, origen:g, g:final, ubic:c.ubic, cad, fecha:'hoy'});
+  DESPENSA[n+' · '+c.m.toLowerCase()]=[final, cad];
+  UBIC[n+' · '+c.m.toLowerCase()]=c.ubic;
+  PRECIO[n+' · '+c.m.toLowerCase()]=PRECIO[n]||0;
+  delete DESPENSA[n];
+  const i=ESPONTANEOS.findIndex(x=>x.n===n); if(i>=0) ESPONTANEOS.splice(i,1);
+  closeSheet(); pintarCompra();
+  openSheet(`<h3>${c.e} ${c.m}</h3>
+    <div class="meta" style="margin-bottom:16px">${n} · hecho hoy</div>
+    <div class="card" style="box-shadow:none; background:var(--surface-2)">
+      <div class="ing" style="border-top:0"><span class="grow">Entraba</span>
+        <span style="font-weight:650">${kg(g)} fresco</span></div>
+      <div class="ing"><span class="grow">Queda</span>
+        <span style="font-weight:650">${kg(final)}${c.merma<0.9?` · ${Math.round((1-c.merma)*100)} % de merma`:''}</span></div>
+      <div class="ing"><span class="grow">Dónde</span>
+        <span style="font-weight:650">${UB_LAB[c.ubic][0]} ${UB_LAB[c.ubic][1]}</span></div>
+      <div class="ing"><span class="grow">Caduca</span>
+        <span style="font-weight:650">${+cad.slice(8)} ${MESES_ES[+cad.slice(5,7)-1]} ${cad.slice(0,4)}</span></div>
+    </div>
+    <div class="banner info" style="margin-top:12px"><b class="t">Ya está en la despensa</b>
+      Aparece en ${UB_LAB[c.ubic][1].toLowerCase()} como «${n} · ${c.m.toLowerCase()}», con su fecha nueva.
+      Deja de estar en la lista de lo que caduca esta semana y el planificador vuelve a contar con ello
+      cuando se acerque su fecha.</div>
+    <button class="cta" style="margin-top:14px" onclick="closeSheet(); ir('compra'); TAB='despensa'; pintarCompra()">
+      Ver en la despensa</button>`);
+}
+function pedirReceta(n){
+  closeSheet();
+  openSheet(`<h3>Recetas con ${n.toLowerCase()}</h3>
+    <div class="meta" style="margin-bottom:16px">Petición anotada</div>
+    <div class="banner info"><b class="t">Esto no lo resuelve la app sola</b>
+      El recetario lo amplío yo, no se genera. Queda apuntado que hace falta al menos una receta de
+      temporada con ${n.toLowerCase()}, y entra en la próxima tanda.</div>
+    <div class="note">Mientras tanto, lo sensato es conservarlo: así no depende de que llegue la receta
+      antes que la caducidad.</div>
+    <button class="cta" style="margin-top:14px" onclick="closeSheet()">Entendido</button>`);
+}
+/* Un toque en la casilla = cogido con la cantidad prevista. Es el 90 % de los
+   casos y tiene que costar un solo toque, de pie y con el carro. */
+function marcarItem(n){
+  const m=MARCAS[n]=MARCAS[n]||{};
+  m.cogido=!m.cogido; if(m.cogido) delete m.noHabia; else delete m.g;
+  pintarCompra();
+}
+/* Y si el formato de esta cadena no coincide, se corrige aquí: la lista pide
+   2 kg de melocotón porque en Mercadona va en bolsa de 1 kg; en Lidl la bandeja
+   es de 750 g y compras 1,5. Sin esto, la despensa arrastra el error. */
+function sheetItem(n){
+  const lista=listaCompra(), i=Object.values(lista).flat().find(x=>x.n===n);
+  if(!i) return;
+  const m=MARCAS[n]||{}, f=i.formato;
+  const ops=[1,2,3,4].map(k=>k*f).filter(g=>g!==i.comprado);
+  openSheet(`<h3>${n}</h3>
+    <div class="meta" style="margin-bottom:16px">La lista pide ${kg(i.comprado)}
+      (${i.envases} × ${fmt(f)}) para cubrir ${kg(i.g)} de recetas</div>
+    <button class="opt" onclick="marcarConCantidad('${n}',${i.comprado})">
+      ${m.cogido&&m.g==null?'✅':'⬜'} <span class="grow">Cogido, lo que pedía la lista
+        <small>${kg(i.comprado)} · ${eur(i.precio)}</small></span></button>
+    <div class="sec-h">Si el formato de este súper es otro</div>
+    ${ops.map(g=>`<button class="opt" onclick="marcarConCantidad('${n}',${g})">
+      ${m.g===g?'✅':'⬜'} <span class="grow">${kg(g)}<small>${g<i.g?'se queda corto para las recetas':
+        g<i.comprado?'justo para las recetas':'sobra y se queda en despensa'}</small></span></button>`).join('')}
+    <div class="f"><label>Otra cantidad</label>
+      <input id="cant-otra" placeholder="${i.comprado}" style="width:80px; text-align:right">
+      <span class="meta" style="width:22px">g</span></div>
+    <button class="cta" style="margin-top:10px"
+      onclick="marcarConCantidad('${n}', +document.getElementById('cant-otra').value || ${i.comprado})">Guardar</button>
+    <button class="act" style="width:100%; margin-top:8px" onclick="noHabia('${n}')">No había</button>`);
+}
+function marcarConCantidad(n,g){
+  const lista=listaCompra(), i=Object.values(lista).flat().find(x=>x.n===n);
+  const m=MARCAS[n]=MARCAS[n]||{};
+  m.cogido=true; delete m.noHabia;
+  if(i && g===i.comprado) delete m.g; else m.g=g;
+  closeSheet(); pintarCompra();
+}
+function noHabia(n){
+  openSheet(`<h3>No había ${n}</h3>
+    <div class="meta" style="margin-bottom:16px">Pasa constantemente y hasta ahora rompía el plan en silencio.</div>
+    <button class="opt" onclick="resolverFalta('${n}','sustituido')">🔄 <span class="grow">Sustituir en el menú<small>El planificador cambia los platos que lo usan y recalcula el día</small></span></button>
+    <button class="opt" onclick="resolverFalta('${n}','pendiente')">📅 <span class="grow">Lo compro en otro sitio<small>Se queda pendiente, sin tocar el menú</small></span></button>
+    <button class="opt" onclick="resolverFalta('${n}','quitado')">🚫 <span class="grow">Quitarlo de esta compra<small>Se replanifican solo las comidas afectadas</small></span></button>`);
+}
+const MOTIVO_FALTA={sustituido:'sustituido en el menú', pendiente:'pendiente de otro sitio', quitado:'quitado de la semana'};
+function resolverFalta(n,motivo){
+  const m=MARCAS[n]=MARCAS[n]||{};
+  m.noHabia=MOTIVO_FALTA[motivo]; m.cogido=false; delete m.g;
+  const afectadas=Object.keys(R).filter(k=>R[k].ing.some(([x])=>x===n) &&
+    [...MENU,...MENU2].some(d=>MOM.some(mo=>d[mo]===k)));
+  closeSheet(); pintarCompra();
+  if(motivo!=='pendiente' && afectadas.length)
+    openSheet(`<h3>${afectadas.length} ${afectadas.length===1?'comida afectada':'comidas afectadas'}</h3>
+      <div class="meta" style="margin-bottom:16px">Sin ${n.toLowerCase()} estas recetas de la semana no salen</div>
+      ${afectadas.map(k=>`<div class="qr" style="border-top:0">
+        <div class="thumb sm ${R[k].t}">${R[k].e}</div>
+        <div class="tx"><div class="when">${MOMLAB[R[k].mom]}</div><b>${R[k].n}</b></div>
+        <span class="chip ${motivo==='sustituido'?'acc':'warn'}">${motivo==='sustituido'?'a sustituir':'se quita'}</span></div>`).join('')}
+      <div class="note">${motivo==='sustituido'
+        ? 'El planificador busca recetas equivalentes con lo que sí hay en despensa y recalcula el día.'
+        : 'Esos días quedan sin ese plato: al volver al menú aparecen marcados para cambiarlos a mano.'}</div>
+      <button class="cta" style="margin-top:14px" onclick="closeSheet()">Entendido</button>`);
+}
+/* Recetas que se pueden cocinar el mismo día, sin tanda previa */
+const rapidas = mom => Object.keys(R).filter(k => R[k].mom===mom && R[k].meses.includes(MES) &&
+  (R[k].tot<=25) && (mom!=='comida' || R[k].tupper>=1));
+
+/* Si el domingo no se cocina, las comidas de lunes a jueves que salían de la
+   tanda dejan de existir. Hay que sustituirlas por algo cocinable en el día. */
+function planB(modo, sem){
+  sem = sem || TABM;
+  const semana = sem==='s2' ? MENU2 : MENU;          // ← el fallo era este: siempre tocaba MENU
+  const dias = semana.filter(d=>['L','M','X','J'].includes(d.d));
+  const cand = rapidas('comida');
+  if(!cand.length){ alert('No hay recetas rápidas suficientes en esta temporada.'); return; }
+
+  const conserva = modo==='media' ? 2 : 0;      // "tengo 30 min" salva 2 comidas
+  const usos = {}, cambios = [];
+  /* Una receta rápida no vale solo por ser rápida: si deja el día fuera de rango
+     el plan B habría cambiado un problema por otro. Se prefieren las que cuadran. */
+  const cuadra = (d, k) => {
+    const kc = p => MOM.reduce((a,m)=>a+nutre(m==='comida'?k:d[m], p).kcal, 0);
+    const pr = p => MOM.reduce((a,m)=>a+nutre(m==='comida'?k:d[m], p).prot, 0);
+    return !!(ajusteDia(kc('c'),pr('c'),OBJ.c) && ajusteDia(kc('t'),pr('t'),OBJ.t));
+  };
+  let sinCuadrar = 0;
+  dias.forEach((d,i)=>{
+    if(i < conserva) return;                    // esas siguen saliendo de la tanda corta
+    const antes = d.comida;
+    const opciones = cand.filter(k => k!==antes)
+      .sort((a,b)=>(cuadra(d,b)-cuadra(d,a))                 // primero las que dejan el día en rango
+                || ((usos[a]||0)-(usos[b]||0))               // luego rota: menos usada primero
+                || (R[a].tot-R[b].tot));                     // y a igualdad, la más rápida
+    const nueva = opciones[0] || cand[0];
+    if(!cuadra(d,nueva)) sinCuadrar++;
+    usos[nueva] = (usos[nueva]||0)+1;
+    d.comida = nueva; delete d._c; delete d._t;
+    cambios.push([d.d+' '+d.n, R[antes].n, R[nueva].n, R[nueva].tot, cuadra(d,nueva)]);
+  });
+  TANDA_ESTADO[sem] = modo==='media' ? 'corta' : 'saltada';
+
+  const minDia = cambios.reduce((a,c)=>a+c[3],0);
+  closeSheet(); render();
+  openSheet(`<h3>Semana replanificada</h3>
+    <div class="meta" style="margin-bottom:16px">${sem==='s2'?'Semana del 24 al 30':'Esta semana'} ·
+      ${modo==='media'?'tanda corta de 30 min':'sin tanda de cocina'} · ${cambios.length} comidas cambiadas</div>
+    ${cambios.map(([dia,a,b,t,ok])=>`<div class="ing" style="align-items:flex-start">
+      <div class="grow"><div class="when">${dia}</div>
+        <div style="font-size:13.5px"><span style="color:var(--muted); text-decoration:line-through">${a}</span></div>
+        <div style="font-size:14px; font-weight:650">${b}</div></div>
+      <span class="chip ${ok?'acc':'warn'}">${t} min${ok?'':' · fuera de rango'}</span></div>`).join('')}
+    ${sinCuadrar?`<div class="banner" style="margin-top:12px"><b class="t">${sinCuadrar} ${sinCuadrar===1?'día se queda':'días se quedan'} fuera de rango</b>
+      Con las recetas rápidas de esta temporada no hay forma de cuadrar ${sinCuadrar===1?'ese día':'esos días'}
+      sin cocinar. Se puede ajustar con un extra en la merienda, o asumirlo: un día suelto no rompe la media.</div>`:''}
+    <div class="banner" style="margin-top:14px"><b class="t">Lo que cuesta no cocinar el domingo</b>
+      Esas cuatro comidas pasan de estar hechas a cocinarse el mismo día: <b>${minDia} minutos más</b>
+      repartidos entre semana. Es el coste real de saltarse el domingo, y por eso conviene verlo antes
+      de decidirlo.</div>
+    <button class="cta" onclick="sheetTanda('${sem}')">Ver cómo queda la tanda</button>
+    <button class="act" style="width:100%; margin-top:8px" onclick="closeSheet()">Cerrar</button>`);
+}
+function regenerar(){
+  const r=generarSemana();
+  if(!r){alert('No se ha encontrado una semana válida. Con la biblioteca actual pasa: hacen falta más recetas.');return}
+  const D=['L','M','X','J','V','S','D'], N=['24','25','26','27','28','29','30'];
+  MENU2=r.semana.map((d,i)=>({d:D[i],n:N[i],desayuno:d.desayuno,media:d.media,comida:d.comida,
+                              merienda:d.merienda,cena:d.cena,_c:d._c,_t:d._t}));
+  pintarMenu();
+  $('#gen-info').innerHTML=`Generada aplicando las 8 restricciones duras y las 10 blandas ·
+    ${r.intentos} ${r.intentos===1?'intento':'intentos'} hasta encontrar una semana válida.`;
+}
+function pintarCompra(){
+  const lista=listaCompra();
+  const total=Object.values(lista).flat().reduce((s,i)=>s+i.precio,0);
+  $('#compra-sub').textContent={lista:'Semana 17-23 agosto · calculado desde el menú y la despensa',
+    despensa:'Lo que hay en casa ahora mismo'}[TAB];
+  if(TAB==='lista'){
+    const semanal=225/4.33, consumo=costeConsumo(), mes=consumo*4.33, exceso=Math.round((mes/225-1)*100);
+    const sobra=Object.values(lista).flat().reduce((a,i)=>a+i.sobra,0);
+    const caros=Object.values(lista).flat().sort((a,b)=>b.precio-a.precio).slice(0,3);
+    $('#compra-body').innerHTML=`
+      ${avisoTicket()}
+      <div class="card">
+        <div class="row" style="gap:8px; margin-bottom:12px">
+          <div style="flex:1; background:var(--surface-2); border-radius:14px; padding:11px">
+            <div style="font-size:11.5px; font-weight:750; letter-spacing:.06em; text-transform:uppercase; color:var(--muted)">Pagas en caja</div>
+            <div style="font-size:19px; font-weight:700; letter-spacing:-.02em; margin-top:3px">${eur(total)}</div>
+            <div style="font-size:11.5px; color:var(--muted)">${eur(sobra)} se queda en despensa</div></div>
+          <div style="flex:1; background:var(--surface-2); border-radius:14px; padding:11px">
+            <div style="font-size:11.5px; font-weight:750; letter-spacing:.06em; text-transform:uppercase; color:var(--muted)">Cuesta comer</div>
+            <div style="font-size:19px; font-weight:700; letter-spacing:-.02em; margin-top:3px">${eur(consumo)}</div>
+            <div style="font-size:11.5px; color:var(--muted)">consumo real de la semana</div></div></div>
+        <div class="bar"><i style="width:${Math.min(100,consumo/semanal*100).toFixed(0)}%; background:${exceso>5?'var(--crit)':'var(--acc)'}"></i></div>
+        <div class="note">Lo que pagas incluye envases que duran semanas. El presupuesto se juzga por lo segundo.</div></div>
+      ${exceso>5?`<div class="banner" style="margin-bottom:11px"><b class="t">Objetivo 225 € · provisional, a validar con tickets reales</b>
+        <div style="margin:6px 0">A este ritmo el mes saldría por <b>${Math.round(mes)} €</b>. Dos avisos honestos:
+        el inventario real de despensa abarata <b>las primeras semanas</b>, pero no el consumo de régimen;
+        y mis precios de referencia pueden estar desviados. Se decide con cuatro tickets vuestros, no antes.</div>
+        El menú de esta semana es alto en proteína y en fruta, y eso se paga. Tres palancas concretas, calculadas sobre esta lista:
+        <div style="margin-top:9px">${caros.map(c=>`<div class="ing" style="font-size:12.5px; padding:6px 0">
+          <span class="grow">${c.n} — ${ALT_BARATO[c.n]||'reducir ración o alternar'}</span>
+          <span style="font-weight:700">−${eur(c.precio*0.45)}</span></div>`).join('')}</div>
+        <div style="margin-top:8px">Aplicando las tres, la semana baja a ${eur(total-caros.reduce((s,c)=>s+c.precio*0.45,0))} y el mes a
+        ${Math.round((total-caros.reduce((s,c)=>s+c.precio*0.45,0))*4.33)} €.</div></div>`:''}
+      ${bloqueEstadoCompra()}
+      ${Object.entries(LISTAS).map(([k,L])=>{
+        const secs=L.secciones;
+        const subt=secs.flatMap(x=>lista[x]||[]).reduce((a,i)=>a+i.precio,0);
+        if(!subt) return '';
+        const items=secs.flatMap(x=>lista[x]||[]);
+        const n=items.length;
+        L.cogidos=items.filter(i=>(MARCAS[i.n]||{}).cogido).length;
+        return `<div class="card">
+        <div class="row" style="margin-bottom:4px"><strong style="font-size:14.5px" class="grow">${L.n} · ${L.cadencia}</strong>
+          <span class="chip acc">${eur(subt)}</span></div>
+        <div class="row" style="margin:2px 0 8px">
+          <span class="grow note" style="margin:0">${L.estado==='abierta'
+            ? `Abierta desde el ${L.abierta} · ${Math.min(L.cogidos,n)} de ${n} cogidos`
+            : `Cerrada el ${L.cerrada}`}</span>
+          ${L.estado==='abierta'
+            ? `<span class="chip" onclick="sheetCerrar('${k}')" style="cursor:pointer; background:var(--acc); color:#fff">✓ Cerrar</span>`
+            : '<span class="chip good">✓ cerrada</span>'}</div>
+        ${L.estado==='abierta'?`<div class="bar" style="margin-bottom:10px"><i style="width:${Math.min(100,Math.round(100*L.cogidos/n))}%"></i></div>`:''}
+        ${secs.filter(x=>lista[x]).map(sec=>`
+        <div class="sec-h">${sec}<span>${eur(lista[sec].reduce((s,i)=>s+i.precio,0))}</span></div>
+        ${lista[sec].map(i=>{const m=MARCAS[i.n]||{};
+          const real=m.g!=null?m.g:i.comprado, difiere=m.g!=null && m.g!==i.comprado;
+          return `<div class="item" style="${m.noHabia?'opacity:.5':''}">
+          <span class="box ${m.cogido?'on':''}" onclick="marcarItem('${i.n}')">${m.cogido?'✓':''}</span>
+          <span class="grow" onclick="sheetItem('${i.n}')" style="cursor:pointer">
+            ${i.n} <b style="color:var(--acc-txt)">${kg(i.comprado)}</b>
+            <span class="note" style="margin:0; display:block">
+              ${m.noHabia?'<b style="color:var(--crit)">no había · '+m.noHabia+'</b>'
+               :difiere?`<b style="color:var(--acc-txt)">cogido ${kg(real)}</b> · la lista pedía ${kg(i.comprado)}`
+               /* El total en gramos manda; los envases son una pista. Poner «3 × 240 g»
+                  delante hace que se compren 3 unidades y no 3 envases: pasó de verdad
+                  con el atún en la primera compra. */
+               :`${i.envases>1?i.envases+' envases de '+fmt(i.formato):'1 envase de '+fmt(i.formato)} ·
+                  necesitas ${kg(i.g)}${i.tengo?` · tenías ${kg(i.tengo)}`:''}`}</span></span>
+          <span class="price">${eur(difiere?i.precio*real/i.comprado:i.precio)}</span>
+          <span class="chip" style="cursor:pointer" onclick="noHabia('${i.n}')">✕</span></div>`}).join('')}`).join('')}
+        </div>`}).join('')}`;
+  } else if(TAB==='despensa'){
+    const need=necesidades();
+    const rows=Object.entries(DESPENSA).sort((a,b)=>a[1][1].localeCompare(b[1][1]));
+    const grupos={congelador:[],nevera:[],armario:[]};
+    rows.forEach(r=>grupos[ubic(r[0])].push(r));
+    const tirado=DESPERDICIO.reduce((a,x)=>a+x.eur,0);
+    $('#compra-body').innerHTML=`
+      <div class="card" style="border-color:var(--acc)">
+        <div class="row" style="margin-bottom:8px">
+          <div class="grow"><div class="sec-h" style="margin:0">🌱 Entradas sin ticket</div></div>
+          <span class="chip acc">se gastan primero</span></div>
+        ${ESPONTANEOS.map(x=>`<div class="qr tap" onclick="sheetEspontaneo('${x.n}',${x.g})">
+          <div class="thumb sm t-verdura">${ORIGENES[x.origen][0]}</div>
+          <div class="tx"><div class="when">${ORIGENES[x.origen][1]} · ${x.fecha}</div>
+            <b>${x.n} · ${kg(x.g)}</b>
+            <div class="note" style="margin:1px 0 0">${recetasQueUsan(x.n).length
+              ? recetasQueUsan(x.n).length+' recetas lo usan · vale '+eur(x.g*(PRECIO[x.n]||0)/1000)
+              : '⚠ ninguna receta lo usa este mes'}</div></div>
+          <div class="kc"><span class="chip ${x.cad<'2026-08-24'?'warn':''}">cad. ${x.cad.slice(8)}/${x.cad.slice(5,7)}</span></div></div>`).join('')}
+        <button class="fab" style="margin-top:10px" onclick="sheetAnadirDespensa()">＋ Añadir algo sin ticket</button></div>
+      <div class="card"><div class="sec-h" style="margin-top:0">Listas para comer · sobras</div>
+        ${SOBRAS.map(x=>{const r=R[x.r]; return `<div class="qr tap" onclick="sheetReceta('${x.r}')">
+          <div class="thumb sm ${r.t}">${r.e}</div>
+          <div class="tx"><div class="when">${x.raciones} ${x.raciones>1?'raciones':'ración'} · ${x.origen}</div><b>${r.n}</b></div>
+          <div class="kc">caduca ${x.cad.slice(8)}/${x.cad.slice(5,7)}</div>
+          <div class="check" style="border:0; color:var(--muted)">›</div></div>`}).join('')}
+        <div class="note">Cuando sobra una ración, un toque la devuelve aquí y el planificador la coloca en los próximos días. Sin esto, o se tira comida o se descuadra el stock.</div></div>
+      <div class="card"><div class="row">
+        <div class="grow"><div class="meta">Productos en despensa</div>
+          <div style="font-size:22px; font-weight:700; letter-spacing:-.03em">${rows.length}</div></div>
+        <span class="chip warn">2 caducan esta semana</span></div>
+        <div class="note">Entra con el ticket escaneado. Sale sola al marcar las comidas como hechas. El ajuste manual es una vez al mes.</div></div>
+      <div class="card">
+        <div class="row"><div class="grow"><div class="meta">Comida tirada este mes</div>
+          <div style="font-size:22px; font-weight:700; letter-spacing:-.03em">${eur(tirado)}</div></div>
+          <span class="chip ${tirado<3?'good':'warn'}">${DESPERDICIO.length} productos</span></div>
+        ${DESPERDICIO.map(x=>`<div class="ing" style="font-size:13px"><span class="grow">${x.n}
+          <span class="note" style="margin:0; display:block">${x.fecha} · ${x.motivo} · ${kg(x.g)}</span></span>
+          <span style="font-weight:650">${eur(x.eur)}</span></div>`).join('')}
+        <div class="note">A este ritmo, ${eur(tirado*12)} al año.</div></div>
+      ${['congelador','nevera','armario'].map(u=>`
+        <div class="card"><div class="sec-h" style="margin-top:0">${UB_LAB[u][0]} ${UB_LAB[u][1]}
+          <span>${grupos[u].length} productos</span></div>
+        ${grupos[u].map(([n,[g,cad]])=>{
+          const req=need[n]||0, pct=req?Math.min(100,g/req*100):100, pronto=cad<'2026-08-24';
+          return `<div class="stock"><div class="grow"><div style="font-size:14px; font-weight:600">${n}</div>
+            <div class="note" style="margin:1px 0 0">${kg(g)}${req?` · la semana pide ${kg(req)}`:''}</div></div>
+            ${pronto?'<span class="chip warn">caduca ya</span>':''}
+            <div class="lvl"><i style="width:${pct}%; background:${pct<100?'var(--crit)':'var(--good)'}"></i></div></div>`}).join('')}
+        </div>`).join('')}`;
+  }
+}
+function pintarEntreno(){
+  const d=PERFILES[P];
+  $('#ent-sub').textContent=`${d.nombre} · bloque de 8 semanas · semana 3`;
+  $('#ent-logica').innerHTML=`<div class="row" style="margin-bottom:10px">
+      <div class="grow"><strong style="font-size:14.5px">La lógica del bloque</strong></div>
+      <span class="chip good">✓ progresión activa</span></div>
+    ${d.logica.map(l=>`<div class="ing" style="display:block; font-size:13px; line-height:1.5; color:var(--ink-2)">${l}</div>`).join('')}
+    <div class="ing" style="display:block; font-size:13px; line-height:1.5; color:var(--ink-2)">
+      <b>Semana 8 · descarga.</b> El bloque cierra con una semana al 60 % de carga y un resumen:
+      cuánto subió cada ejercicio y qué toca en el siguiente. Entrenar ocho semanas seguidas sin bajar
+      el pie es como se llega al estancamiento.</div>`;
+  const col={gym:['t-gym','🏋'],off:['t-off','·'],work:['t-off','🚫'],soft:['t-verdura','🚶'],
+             cardio:['t-pescado','🚴'],sport:['t-carne','⚽']};
+  $('#ent-semana').innerHTML=`
+    <div class="qr" style="border-top:0; background:color-mix(in srgb, var(--acc) 7%, transparent); margin:-15px -15px 6px; padding:12px 15px; border-radius:19px 19px 0 0">
+      <div class="thumb sm t-verdura">👟</div>
+      <div class="tx"><div class="when">Base diaria · todos los días</div>
+        <b>${PASOS_OBJ[P].toLocaleString('es')} pasos</b>
+        <div class="note" style="margin:1px 0 0">No es una sesión ni sustituye a nada: es el suelo sobre el que se apoya el resto</div></div></div>
+    ${RUTINA_DIARIA[P]?`<div class="qr tap" style="margin:0 -15px 6px; padding:12px 15px" onclick="sheetRutina()">
+      <div class="thumb sm t-lacteo">${RUTINA_DIARIA[P].e}</div>
+      <div class="tx"><div class="when">Rutina diaria · ${RUTINA_DIARIA[P].cuando}</div>
+        <b>${RUTINA_DIARIA[P].n}</b>
+        <div class="note" style="margin:1px 0 0">${RUTINA_DIARIA[P].min} min · ${RUTINA_DIARIA[P].pasos.length} ejercicios · ver cómo se hace</div></div>
+      <div class="kc" style="color:var(--acc-txt); font-weight:650">ver ›</div></div>`:''}`+
+    d.semana.map(([dia,n,txt,tipo])=>`
+    <div class="day"><div class="dcol ${n==='19'?'today':''}"><b>${n}</b><span>${dia}</span></div>
+      <div class="thumb sm ${col[tipo][0]}">${col[tipo][1]}</div>
+      <div class="grow" style="padding-top:8px">
+        <div style="font-size:14px; font-weight:${tipo==='off'?'400':'650'}; color:${tipo==='off'?'var(--muted)':'var(--ink)'}">${txt}</div>
+        ${tipo==='work'?'<div class="meta" style="font-size:11.5px; color:var(--muted)">agenda ocupada · 20:00-21:30 · no se programa nada</div>':''}
+      </div></div>`).join('');
+  /* adherencia al entrenamiento */
+  const a=ADH_ENT[P], hechas=a.reduce((x,y)=>x+y,0), plan=a.length*2;
+  $('#ent-adh').innerHTML=`
+    <div class="row" style="margin-bottom:10px">
+      <div class="grow"><div class="meta">Sesiones hechas de las planificadas</div>
+        <div style="font-size:22px; font-weight:700; letter-spacing:-.03em">${hechas} de ${plan}
+          <span style="font-size:13px; color:var(--muted); font-weight:400">· ${Math.round(100*hechas/plan)} %</span></div></div>
+      <span class="chip ${hechas/plan>=.8?'good':'warn'}">${hechas/plan>=.8?'✓ en objetivo':'por debajo'}</span></div>
+    <div class="bar"><i style="width:${100*hechas/plan}%"></i></div>
+    <div class="note">Las 2 que faltaron: una por tiempo y otra por cansancio.</div>`;
+
+  /* progresión de cargas */
+  const ejs=Object.keys(CARGAS[P]);
+  $('#ent-cargas').innerHTML=ejs.map((n,idx)=>{
+    const v=CARGAS[P][n], W=404,H=90,L=6,R2=44,T=10,B=10;
+    const mn=Math.min(...v), mx=Math.max(...v);
+    const x=i=>L+i*(W-L-R2)/(v.length-1), y=k=>T+(mx-k)*(H-T-B)/((mx-mn)||1);
+    return `<div style="${idx?'border-top:1px solid var(--grid); padding-top:12px; ':''}margin-bottom:${idx===ejs.length-1?0:12}px">
+      <div class="row" style="margin-bottom:2px"><strong style="font-size:13.5px" class="grow">${n}</strong>
+        <span class="chip good">+${(v[v.length-1]-v[0]).toFixed(1).replace('.0','').replace('.',',')} kg</span></div>
+      <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">
+        <path d="${v.map((k,i)=>(i?'L':'M')+x(i).toFixed(1)+' '+y(k).toFixed(1)).join(' ')}"
+          fill="none" stroke="var(--acc)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        ${v.map((k,i)=>`<circle cx="${x(i)}" cy="${y(k)}" r="2.5" fill="var(--acc)" opacity=".55"/>`).join('')}
+        <circle cx="${x(v.length-1)}" cy="${y(v[v.length-1])}" r="4.5" fill="var(--acc)" stroke="var(--surface)" stroke-width="2.5"/>
+        <text x="${x(v.length-1)+9}" y="${y(v[v.length-1])+4}" font-size="12" font-weight="700" fill="var(--ink-2)">${String(v[v.length-1]).replace('.',',')} kg</text>
+      </svg></div>`}).join('')+
+    `<div class="note">Ocho semanas de bloque. ${P==='c'
+      ? 'Fuerza subiendo mientras el peso baja: es la prueba de que lo que se pierde es grasa y no músculo.'
+      : 'Con el peso estable y las cargas subiendo, la recomposición va por donde debe.'}</div>`;
+
+  $('#ejercicios').innerHTML=`
+    <div class="card tap" onclick="sheetCardio()">
+      <div class="row"><div class="thumb t-pescado">🚴</div>
+        <div class="grow"><div class="when">${P==='c'?'Martes':'Sábado'} · sesión de cardio en Forus</div>
+          <div class="name" style="margin:2px 0 3px">Elegir actividad</div>
+          <div class="meta">6 opciones con objetivo de tiempo o distancia</div></div>
+        <span style="color:var(--muted); font-size:18px">›</span></div></div>
+    <div class="card tap" style="border-color:var(--acc)" onclick="sheetSesion(0)">
+      <div class="row"><div class="thumb t-gym">▶</div>
+        <div class="grow"><div class="when">Hoy 19:00 · Forus o en casa</div>
+          <div class="name" style="margin:2px 0 3px">Empezar sesión</div>
+          <div class="meta">${d.ejercicios.length} ejercicios · calentamiento incluido · ~45 min</div></div>
+        <span style="color:var(--muted); font-size:18px">›</span></div></div>`+
+    d.ejercicios.map(ex=>`
+    <div class="card"><div class="row"><div class="grow">
+      <div class="name" style="margin-top:0">${ex.n}</div><div class="meta">Prescrito: ${ex.p}</div></div></div>
+      ${ex.sets.map((s,si)=>`<div class="set"><span class="n">${si+1}</span>
+        <input value="${s[0]}"><span class="x">${ex.t?'seg':'reps'}</span>
+        ${ex.t||!s[1]?'':`<input value="${s[1]}"><span class="x">kg</span>`}
+        <span class="grow"></span><span class="box"></span></div>`).join('')}
+      </div>`).join('');
+}
+function pintarSalud(){
+  const d=PERFILES[P];
+  $('#salud-sub').textContent=`${d.nombre} · últimas 8 semanas`;
+
+  /* alerta de bienestar: dos semanas seguidas de hambre alta */
+  const hb=BIENESTAR[P].hambre, alta=hb.slice(-4,-1).filter(x=>x===3).length>=2;
+  $('#alerta-bienestar').innerHTML = alta ? `
+    <div class="banner"><b class="t">⚠ Tres semanas con hambre alta</b>
+      No es falta de fuerza de voluntad: es la señal de que el rango está demasiado apretado. La app propone
+      <b>subir 100 kcal</b> (1.700-1.850) durante dos semanas y volver a mirar. Perder algo más despacio y
+      seguir es mejor que ir rápido y abandonar.
+      <div class="row" style="gap:8px; margin-top:11px">
+        <button class="act">Ahora no</button>
+        <button class="act primary">Subir el rango</button></div></div>` : '';
+
+  /* cintura */
+  const cin=CINTURA[P], W=404,H=110,L=28,R2=44,T=12,B=18;
+  const mn=Math.min(...cin)-1, mx=Math.max(...cin)+1;
+  const cx=i=>L+i*(W-L-R2)/(cin.length-1), cy=v=>T+(mx-v)*(H-T-B)/(mx-mn);
+  $('#c-cintura').innerHTML=`
+    <div class="row" style="margin-bottom:6px">
+      <div class="grow"><strong style="font-size:14.5px">Perímetro de cintura</strong>
+        <div class="note" style="margin:1px 0 0">Baja aunque la báscula se estanque. Es mejor indicador de riesgo metabólico que el peso.</div></div>
+      <span class="chip good">−${(cin[0]-cin[cin.length-1]).toFixed(1).replace('.0','').replace('.',',')} cm</span></div>
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">
+      <line x1="${L}" x2="${W-R2}" y1="${cy(mx-1)}" y2="${cy(mx-1)}" stroke="var(--grid)"/>
+      <line x1="${L}" x2="${W-R2}" y1="${cy(mn+1)}" y2="${cy(mn+1)}" stroke="var(--grid)"/>
+      <text x="${L-6}" y="${cy(mx-1)+4}" text-anchor="end" font-size="10" fill="var(--muted)">${(mx-1).toFixed(0)}</text>
+      <text x="${L-6}" y="${cy(mn+1)+4}" text-anchor="end" font-size="10" fill="var(--muted)">${(mn+1).toFixed(0)}</text>
+      <path d="${cin.map((v,i)=>(i?'L':'M')+cx(i).toFixed(1)+' '+cy(v).toFixed(1)).join(' ')}"
+        fill="none" stroke="var(--acc)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="${cx(cin.length-1)}" cy="${cy(cin[cin.length-1])}" r="4.5" fill="var(--acc)" stroke="var(--surface)" stroke-width="2.5"/>
+      <text x="${cx(cin.length-1)+9}" y="${cy(cin[cin.length-1])+4}" font-size="11.5" font-weight="700" fill="var(--ink-2)">${String(cin[cin.length-1]).replace('.',',')} cm</text>
+    </svg>`;
+
+  /* bienestar: tira ordinal de 8 semanas */
+  /* verde/ámbar/rojo por VALENCIA, no por magnitud: en hambre lo alto es malo
+     y en energía o sueño es bueno. Cada nivel lleva además su forma, para no depender del color. */
+  const EST={bien:['#0ca30c','●'], medio:['#fab219','■'], mal:['#d03b3b','▲']};
+  const VAL={hambre:['bien','medio','mal'], energia:['mal','medio','bien'], sueno:['mal','medio','bien']};
+  const ETQ={hambre:['Nada','Algo','Bastante'],energia:['Baja','Normal','Alta'],sueno:['Mal','Regular','Bien']};
+  $('#c-bienestar').innerHTML=`
+    <div class="note" style="margin:0 0 12px">Del cierre del día. Es la señal que mejor anticipa un abandono: mucho antes que el peso.
+      El color va por lo que <b>conviene</b>, no por el número: en hambre lo alto es malo, en energía y sueño es bueno.</div>
+    ${['hambre','energia','sueno'].map(k=>`
+      <div class="row" style="margin-bottom:9px; gap:8px">
+        <span style="width:60px; font-size:12px; color:var(--ink-2); font-weight:600">${k==='sueno'?'Sueño':k[0].toUpperCase()+k.slice(1)}</span>
+        <span class="grow" style="display:flex; gap:4px">${BIENESTAR[P][k].map(v=>{
+          const e=EST[VAL[k][v-1]];
+          return `<i title="${ETQ[k][v-1]}" style="flex:1; height:24px; border-radius:6px; background:${e[0]};
+            display:grid; place-items:center; color:#fff; font-size:11.5px; font-style:normal">${e[1]}</i>`}).join('')}</span></div>`).join('')}
+    <div class="row" style="gap:8px; font-size:11.5px; color:var(--muted); margin-top:10px">
+      <span style="width:60px"></span><span>S1</span><span class="grow"></span><span>S8 · esta semana</span></div>
+    <div class="legend" style="margin-top:10px; flex-wrap:wrap">
+      <span><i style="background:${EST.bien[0]}"></i>● bien</span>
+      <span><i style="background:${EST.medio[0]}"></i>■ regular</span>
+      <span><i style="background:${EST.mal[0]}"></i>▲ mal</span></div>
+    `;
+
+  /* adherencia a la medicación */
+  $('#c-medadh').innerHTML=MED_ADH[P].map((m,i)=>`
+    <div class="ing" ${i?'':'style="border-top:0"'}>
+      <div class="grow"><div style="font-size:14px; font-weight:600">${m.n}</div>
+        <div class="bar" style="height:6px; margin-top:6px"><i style="width:${m.pct}%; background:${m.pct>=90?'var(--good)':'var(--warn)'}"></i></div></div>
+      <span style="font-weight:700; width:48px; text-align:right">${m.pct} %</span></div>`).join('')+
+    `<div class="note">Últimos 90 días.</div>`;
+
+  $('#ind-adh').innerHTML=`${d.adherencia} %`;
+  $('#ind-rango').innerHTML=`${d.enRango} %`;
+  $('#calib').innerHTML=`${d.calib.map(([s,r,m],i)=>`
+    <div class="ing" ${i?'':'style="border-top:0"'}><div class="grow">
+      <div style="font-size:14px; font-weight:650">${s} · ${r} kcal</div>
+      <div class="note" style="margin:1px 0 0">${m}</div></div>
+      ${i===d.calib.length-1?'<span class="chip acc">actual</span>':''}</div>`).join('')}
+    <div class="note">La app revisa el rango cada 3 semanas con vuestros datos reales.</div>`;
+  $('#alcohol').innerHTML = P==='t' ? `
+    <h2>Objetivo · retirar la cerveza</h2>
+    <div class="card"><div class="row" style="margin-bottom:9px">
+        <div class="grow"><div class="meta">Días sin alcohol este mes</div>
+          <div style="font-size:22px; font-weight:700; letter-spacing:-.03em">19 <span style="font-size:13px; color:var(--muted); font-weight:400">de 26</span></div></div>
+        <span class="chip good">↑ 4 más que el mes pasado</span></div>
+      <div class="bar"><i style="width:73%"></i></div>
+      <div class="note">Consumo medio: 2,1 cervezas por semana · 300 kcal · frente a 5,4 en junio.
+        Es el hábito que más directamente enlaza con tus transaminasas, así que aparece junto a ellas en el informe médico.</div></div>` : '';
+  if(P==='c'){
+    $('#h-hito').textContent='Progreso hacia los hitos';
+    $('#hito').innerHTML=`<div class="row" style="margin-bottom:9px">
+        <div class="grow"><div class="meta">Hito 1 · −5 % (86,4 kg)</div></div>
+        <span class="chip acc">2,5 de 4,5 kg</span></div>
+      <div class="bar"><i style="width:56%"></i></div>
+      <div class="note">Ritmo actual 0,45 kg/semana → dentro del objetivo de 2-4 kg/mes.</div>`;
+    $('#h-lab').textContent='Analítica · 14/03 → 05/06/2026';
+    const num=x=>String(x).replace('.',',');
+    const fuera=[['Glucosa',121,127,'74-106',true],['ALT (GPT)',90,null,'10-49',false],
+                 ['GGT',74,null,'<38',false],['Vitamina D',24,null,'30-100',false]];
+    $('#lab-card').innerHTML=`
+      <table><thead><tr><th>Marcador</th><th class="num">Marzo</th><th class="num">Junio</th><th class="num">Ref.</th><th></th></tr></thead>
+      <tbody>${LABS_EVO.map(([n,mar,jun,ref,u,mejor])=>{
+        const hay = jun!==null;
+        const d = hay ? jun-mar : 0, flecha = !hay ? '' : Math.abs(d)<0.05?'=':(d>0?'▲':'▼');
+        const bien = mejor==='—' ? null : (mejor==='baja' ? d<0 : d>0);
+        const col = !hay||Math.abs(d)<0.05||bien===null ? 'var(--muted)' : bien ? 'var(--good-ink)' : 'var(--crit)';
+        const val = hay?jun:mar;
+        const fueraR = (n==='Glucosa'&&val>106)||(n==='ALT (GPT)'&&val>49)||(n==='GGT'&&val>38)||(n==='AST (GOT)'&&val>34)||
+                       (n==='LDL'&&val>116)||(n==='HDL'&&val<50)||(n==='Vitamina D'&&val<30);
+        return `<tr><td>${n}</td><td class="num" style="color:var(--muted)">${num(mar)}</td>
+          <td class="num" style="font-weight:650">${hay?num(jun)+' <span style="color:'+col+'">'+flecha+'</span>'
+            :'<span class="chip warn" style="padding:2px 7px">no medido</span>'}</td>
+          <td class="num" style="color:var(--muted)">${ref}</td>
+          <td class="num">${fueraR?'<span class="chip crit">⚠</span>':'<span class="chip good">✓</span>'}</td></tr>`}).join('')}</tbody></table>
+      <div class="note" style="margin-bottom:12px">La flecha compara con la analítica anterior y sabe qué dirección es buena
+        en cada marcador. Lo importante de la glucosa no es que esté en 127: es que <b>subió desde 121 estando ya con metformina</b>.</div>
+      <div class="banner" style="margin-bottom:14px"><b class="t">⚠ La analítica de junio fue más corta que la de marzo</b>
+        Ocho marcadores no se repitieron, y entre ellos están <b>los tres que peor pintaban</b>: ALT 90, GGT 74 y AST 48.
+        Es decir, no sabemos si el hígado ha mejorado o ha empeorado desde marzo. Merece pedirlo expresamente en la próxima.</div>
+      <div class="sec-h">Los cuatro fuera de rango</div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px">
+        ${fuera.map(([n,a,b,r,hay])=>{
+          const sube=hay&&b>a, igual=hay&&a===b;
+          return `<div style="background:var(--surface-2); border-radius:13px; padding:11px">
+            <div style="font-size:11.5px; color:var(--muted); font-weight:650">${n}</div>
+            <div style="display:flex; align-items:baseline; gap:6px; margin-top:3px">
+              <span style="color:var(--muted); font-size:13px">${num(a)}</span>
+              <span style="color:var(--muted)">→</span>
+              ${hay?`<span style="font-size:19px; font-weight:700; letter-spacing:-.02em; color:${sube?'var(--crit)':'var(--good-ink)'}">${num(b)}</span>`
+                   :`<span style="font-size:13px; color:var(--muted)">sin repetir</span>`}</div>
+            ${hay?`<svg viewBox="0 0 100 26" style="width:100%; height:26px; margin-top:4px">
+              <line x1="8" y1="${sube?20:6}" x2="92" y2="${sube?6:20}" stroke="${sube?'var(--crit)':'var(--good-ink)'}" stroke-width="2.5" stroke-linecap="round"/>
+              <circle cx="8" cy="${sube?20:6}" r="3" fill="var(--muted)"/>
+              <circle cx="92" cy="${sube?6:20}" r="3.5" fill="${sube?'var(--crit)':'var(--good-ink)'}"/></svg>`
+              :`<svg viewBox="0 0 100 26" style="width:100%; height:26px; margin-top:4px">
+              <line x1="8" y1="13" x2="46" y2="13" stroke="var(--muted)" stroke-width="2.5" stroke-linecap="round"/>
+              <line x1="54" y1="13" x2="92" y2="13" stroke="var(--axis)" stroke-width="2.5" stroke-dasharray="3 4" stroke-linecap="round"/>
+              <circle cx="8" cy="13" r="3" fill="var(--muted)"/></svg>`}
+            <div style="font-size:11.5px; color:var(--muted)">ref. ${r}</div></div>`}).join('')}
+      </div>
+      <button class="act" style="width:100%; margin-top:14px" onclick="sheetNuevaAnalitica()">＋ Añadir analítica nueva</button>`;
+  } else {
+    $('#h-hito').textContent='Objetivo de recomposición';
+    $('#hito').innerHTML=`<div class="row" style="margin-bottom:9px">
+        <div class="grow"><div class="meta">Peso estable · bajando % de grasa</div></div>
+        <span class="chip good">✓ en rango</span></div>
+      <div class="bar"><i style="width:82%"></i></div>
+      <div class="note">−0,9 kg en 8 semanas con las cargas subiendo.</div>`;
+    $('#h-lab').textContent='Analítica';
+    $('#lab-card').innerHTML=`<div class="name" style="margin-top:0">Sin analítica registrada</div>
+      <div class="note">Sube el PDF de Echevarne y los marcadores aparecerán aquí.</div>
+      <button class="act" style="margin-top:12px">📄 Subir analítica</button>`;
+  }
+}
+/* gráficos */
+const tip=$('#tip');
+const showTip=(e,h)=>{tip.innerHTML=h; tip.style.opacity=1;
+  tip.style.left=Math.min(e.clientX+12,innerWidth-tip.offsetWidth-8)+'px'; tip.style.top=(e.clientY-40)+'px'};
+const hideTip=()=>tip.style.opacity=0;
+function pintarPeso(){
+  const W=404,H=180,L=32,R2=44,T=10,B=22;
+  /* Solo tu línea: el peso del otro es `profile_id = auth.uid()` y no se puede
+     leer desde este móvil. Antes se pintaban las dos porque en el prototipo todo
+     estaba en el mismo objeto; en Supabase esa consulta devuelve cero filas. */
+  const mio = P==='c' ? media(PESO_C) : media(PESO_T);
+  const crudo = P==='c' ? PESO_C : PESO_T;
+  const mc=mio, mt=mio, all=[...mio];
+  const min=Math.floor(Math.min(...all)-1),max=Math.ceil(Math.max(...all)+1);
+  const x=i=>L+i*(W-L-R2)/15, y=v=>T+(max-v)*(H-T-B)/(max-min);
+  const path=a=>a.map((v,i)=>(i?'L':'M')+x(i).toFixed(1)+' '+y(v).toFixed(1)).join(' ');
+  $('#chart-peso').innerHTML=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block" id="svg-peso">
+    ${[min,(min+max)/2,max].map(t=>`<line x1="${L}" x2="${W-R2}" y1="${y(t)}" y2="${y(t)}" stroke="var(--grid)"/>
+      <text x="${L-7}" y="${y(t)+4}" text-anchor="end" font-size="10" fill="var(--muted)">${t.toFixed(0)}</text>`).join('')}
+    <path d="${path(mio)}" fill="none" stroke="var(--acc)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    ${crudo.map((v,i)=>`<circle cx="${x(i)}" cy="${y(v)}" r="1.7" fill="var(--acc)" opacity=".3"/>`).join('')}
+    <circle cx="${x(15)}" cy="${y(mio[15])}" r="4.5" fill="var(--acc)" stroke="var(--surface)" stroke-width="2.5"/>
+    <text x="${x(15)+9}" y="${y(mio[15])+4}" font-size="11.5" font-weight="700" fill="var(--ink-2)">${mio[15].toFixed(1)}</text>
+    <line id="cross" x1="0" x2="0" y1="${T}" y2="${H-B}" stroke="var(--axis)" opacity="0"/>
+    <text x="${L}" y="${H-5}" font-size="10" fill="var(--muted)">hace 8 sem.</text>
+    <text x="${W-R2}" y="${H-5}" font-size="10" fill="var(--muted)" text-anchor="end">hoy</text></svg>`;
+  const svg=$('#svg-peso');
+  svg.onmousemove=e=>{const r=svg.getBoundingClientRect(),px=(e.clientX-r.left)*W/r.width;
+    let i=Math.max(0,Math.min(15,Math.round((px-L)/((W-L-R2)/15))));
+    const c=svg.querySelector('#cross'); c.setAttribute('x1',x(i)); c.setAttribute('x2',x(i)); c.setAttribute('opacity','.5');
+    showTip(e,`<b>Semana ${Math.floor(i/2)+1}</b><br>Cristina ${mc[i].toFixed(1)} kg<br>Tama ${mt[i].toFixed(1)} kg`)};
+  svg.onmouseleave=()=>{hideTip(); svg.querySelector('#cross').setAttribute('opacity','0')};
+}
+function pintarAdh(){
+  const W=404,H=150,L=28,R2=8,T=16,B=22,n=ADH.length,bw=(W-L-R2)/n-10,y=v=>T+(100-v)*(H-T-B)/100;
+  $('#chart-adh').innerHTML=`
+    <div class="legend"><span><i style="background:var(--acc)"></i>Adherencia</span>
+      <span><i style="background:var(--muted)"></i>Días en rango</span></div>
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">
+    ${[0,50,100].map(t=>`<line x1="${L}" x2="${W-R2}" y1="${y(t)}" y2="${y(t)}" stroke="var(--grid)"/>
+      <text x="${L-6}" y="${y(t)+4}" text-anchor="end" font-size="10" fill="var(--muted)">${t}</text>`).join('')}
+    <line x1="${L}" x2="${W-R2}" y1="${y(75)}" y2="${y(75)}" stroke="var(--axis)" stroke-dasharray="3 3"/>
+    <text x="${L+4}" y="${y(75)-6}" font-size="10" fill="var(--muted)">objetivo 75 %</text>
+    ${ADH.map((v,i)=>{const bx=L+i*(W-L-R2)/n+4, w2=bw/2-1; return `
+      <rect x="${bx}" y="${y(v)}" width="${w2}" height="${H-B-y(v)}" rx="3" fill="var(--s${P==='c'?1:2})"
+        opacity="${i===n-1?1:.68}" class="bar-r" data-v="${v}" data-r="${RANGO[i]}" data-i="${i}"/>
+      <rect x="${bx+w2+2}" y="${y(RANGO[i])}" width="${w2}" height="${H-B-y(RANGO[i])}" rx="3" fill="var(--muted)"
+        opacity="${i===n-1?.9:.45}" class="bar-r" data-v="${v}" data-r="${RANGO[i]}" data-i="${i}"/>
+      <text x="${bx+bw/2}" y="${H-7}" text-anchor="middle" font-size="9.5" fill="var(--muted)">S${i+1}</text>`}).join('')}</svg>`;
+  document.querySelectorAll('.bar-r').forEach(r=>{
+    const h=e=>showTip(e,`<b>Semana ${+r.dataset.i+1}</b><br>Adherencia ${r.dataset.v} %<br>Días en rango ${r.dataset.r} %`);
+    r.onmouseenter=h; r.onmousemove=h; r.onmouseleave=hideTip});
+}
+function ir(s){
+  document.querySelectorAll('#nav button').forEach(x=>x.classList.toggle('on',x.dataset.s===s));
+  document.querySelectorAll('.screen').forEach(x=>x.classList.remove('on'));
+  $('#s-'+s).classList.add('on'); scrollTo(0,0);
+}
+document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>ir(b.dataset.s));
+
+document.querySelectorAll('#tabs-menu button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#tabs-menu button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); TABM=b.dataset.t; pintarMenu()});
+$('#notif').onclick=sheetAjustes;
+document.querySelectorAll('#tabs-compra button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#tabs-compra button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); TAB=b.dataset.t; pintarCompra()});
+/* Entreno y Salud eran cuatro pantallas de scroll: ahora van por bloques como Menú y Compra. */
+function subPestanas(idTabs, attr){
+  document.querySelectorAll('#'+idTabs+' button').forEach(b=>b.onclick=()=>{
+    document.querySelectorAll('#'+idTabs+' button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    document.querySelectorAll('['+attr+']').forEach(x=>x.hidden = x.getAttribute(attr)!==b.dataset.t);
+    scrollTo(0,0);
+  });
+}
+subPestanas('tabs-entreno','data-tab-e');
+subPestanas('tabs-salud','data-tab-s');
+$('#theme').onclick=()=>{const d=document.documentElement;
+  d.dataset.theme=d.dataset.theme==='dark'?'light':'dark'; pintarPeso(); pintarAdh()};
+$('#add-act').onclick=()=>sheetActividad();
+$('#btn-informe').onclick=sheetInforme;
+$('#hora').onchange=e=>{
+  const v=+e.target.value;
+  HORA = v<0 ? new Date().getHours() : v;
+  if(v>=0) sembrarDia(HORA);          // el estado de ejemplo acompaña a la hora simulada
+  render();
+};
+$('#dia-ant').onclick=()=>{if(DIA>-2){DIA--; render()}};
+$('#dia-sig').onclick=()=>{if(DIA<0){DIA++; render()}};
+document.addEventListener('click',e=>{
+  /* Las casillas de la lista de la compra tienen su propio manejador y su propio
+     estado: si este las tocara también, se destogglearían solas. */
+  const b=e.target.closest('.box'); if(b && !b.hasAttribute('onclick')){b.classList.toggle('on'); b.closest('.item')?.classList.toggle('on')}
+  const c=e.target.closest('.seg .chip');
+  if(c){c.parentElement.querySelectorAll('.chip').forEach(x=>x.classList.remove('on')); c.classList.add('on')}});
+
+function render(){
+  const d=PERFILES[P];
+  document.documentElement.style.setProperty('--acc',d.acc);
+  $('#quien').innerHTML=`<i>${d.nombre[0]}</i>${d.nombre}`;
+  document.documentElement.style.setProperty('--acc-txt', document.documentElement.dataset.theme==='dark' ? d.acc : d.accTxt);
+  const hola=HORA<13?'Buenos días':HORA<20?'Buenas tardes':'Buenas noches';
+  $('#saludo').textContent=DIA===0?`${hola}, ${d.nombre}`:DIAS_ATRAS[-DIA].split(' · ')[0];
+  $('#hoy-sub').textContent=DIA===0?('Miércoles 19 de agosto · '+d.lugar):DIAS_ATRAS[-DIA].split(' · ')[1];
+  pintarAvisos(); pintarAhora();
+  pintarHero(); pintarQuick(); pintarMenu(); pintarCompra(); pintarEntreno(); pintarSalud(); pintarPeso(); pintarAdh();
+}
+/* El arranque lo lleva hidratar.js: primero sesión y datos, después pintar.
+   Si no hay conexión con la base, cae a los datos de ejemplo y lo avisa. */
+if (typeof arrancarApp === 'function') arrancarApp();
+else render();   // prototipo suelto, sin capa de datos
+
+/* ── PWA: registra el service worker para que se instale y funcione sin cobertura.
+   Solo sirve servida por http(s); abierta como archivo suelto se salta sin ruido. ── */
+if ('serviceWorker' in navigator && location.protocol.startsWith('http'))
+  navigator.serviceWorker.register('sw.js').catch(()=>{});
+
+/* ── El puente correo → app, versión barata: la app está declarada en el
+   manifiesto como destino de «Compartir». Abres el correo de Mercadona,
+   Compartir → T&C, y el texto del ticket llega aquí. Dos toques, cero
+   infraestructura. El reenvío automático es el siguiente paso, no el primero. ── */
+(function recibirCompartido(){
+  const p=new URLSearchParams(location.search), txt=p.get('text')||p.get('url');
+  if(!txt) return;
+  ir('compra');
+  setTimeout(()=>sheetTicketDigital(), 300);
+})();
+</script>
+</body>
+</html>

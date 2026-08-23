@@ -1,0 +1,155 @@
+<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Prueba de conexión — App T&C</title>
+<style>
+:root{--pl:#f4f4f1;--s:#fff;--s2:#f2f1ed;--ink:#0b0b0b;--i2:#52514e;--mu:#6f6d67;--gr:#e6e5df;
+ --acc:#1f5da8;--gi:#006300;--ok:#e4f3e4;--crit:#b82f2f;--bad:#fdeaea;--warn:#fdf4e0;
+ --sh:0 1px 2px rgba(11,11,11,.04),0 8px 24px -12px rgba(11,11,11,.14)}
+@media(prefers-color-scheme:dark){:root{--pl:#0b0b0b;--s:#1a1a19;--s2:#242423;--ink:#fff;--i2:#c3c2b7;
+ --mu:#8c8a84;--gr:#2c2c2a;--acc:#7cb4f2;--gi:#22c322;--ok:#16301a;--bad:#3a1616;--warn:#3a2f14}}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--pl);color:var(--ink);font-family:system-ui,-apple-system,sans-serif;
+ padding:26px 16px 60px;max-width:620px;margin:0 auto;line-height:1.5;-webkit-font-smoothing:antialiased}
+h1{font-size:24px;letter-spacing:-.03em;margin-bottom:6px}
+.sub{font-size:13.5px;color:var(--mu);margin-bottom:20px}
+.card{background:var(--s);border-radius:20px;padding:18px;box-shadow:var(--sh);margin-bottom:12px}
+label{display:block;font-size:12px;font-weight:750;letter-spacing:.06em;text-transform:uppercase;
+ color:var(--mu);margin-bottom:5px}
+input{width:100%;padding:12px 14px;border:1.5px solid var(--gr);border-radius:12px;font:inherit;
+ font-size:15px;background:var(--s2);color:var(--ink);margin-bottom:12px}
+button{width:100%;padding:14px;border:0;border-radius:14px;background:var(--ink);color:var(--pl);
+ font:inherit;font-size:15px;font-weight:700;cursor:pointer}
+button:disabled{opacity:.5;cursor:default}
+.r{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-top:1px solid var(--gr);font-size:14px}
+.r:first-child{border-top:0}
+.r .i{flex:0 0 20px;font-weight:800}
+.r .t{flex:1;color:var(--i2)} .r .t b{color:var(--ink)}
+.r .v{font-weight:700;white-space:nowrap}
+.ok .i{color:var(--gi)} .bad .i{color:var(--crit)}
+.box{border-radius:16px;padding:14px 16px;font-size:13.5px;line-height:1.6;margin-top:12px;color:var(--i2)}
+.box.g{background:var(--ok)} .box.r2{background:var(--bad)} .box.w{background:var(--warn)}
+.box b{color:var(--ink)}
+pre{background:var(--s2);border-radius:10px;padding:11px;font-size:11.5px;overflow-x:auto;margin-top:9px;
+ white-space:pre-wrap;word-break:break-word;color:var(--i2)}
+</style></head><body>
+
+<h1>Prueba de conexión</h1>
+<p class="sub">Comprueba de una vez la URL, la clave, las cuentas, los perfiles, el catálogo,
+la despensa y —lo más importante— que cada uno solo ve lo suyo.</p>
+
+<div class="card" id="login">
+  <label>Correo</label><input id="e" type="email" autocomplete="username" placeholder="tu@correo.com">
+  <label>Contraseña</label><input id="p" type="password" autocomplete="current-password">
+  <button id="b">Entrar y comprobar</button>
+  <div class="box w" id="aviso" style="display:none"></div>
+</div>
+
+<div id="out"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+/* Si el CDN no carga —red caída, bloqueador— hay que decirlo claro y no dejar
+   un «supabase is not defined» en la consola que nadie va a mirar. */
+if (typeof supabase === 'undefined') {
+  document.getElementById('aviso').style.display = 'block';
+  document.getElementById('aviso').innerHTML =
+    '<b>No se ha podido cargar la librería de Supabase.</b><br>' +
+    'Suele ser un bloqueador de anuncios o falta de conexión. Desactívalo para esta página ' +
+    'y recarga. Necesita llegar a <code>cdn.jsdelivr.net</code>.';
+  document.getElementById('b').disabled = true;
+}
+const URL_ = 'https://cevujurdekimsaqtrwmy.supabase.co';
+const KEY  = 'sb_publishable_XMnWrEuY-aJZ824GMTpSsg_4DBW3j7X';
+const db = typeof supabase !== 'undefined'
+  ? supabase.createClient(URL_, KEY, {auth:{persistSession:false}}) : null;
+
+const out = document.getElementById('out');
+const filas = [];
+const add = (ok, texto, valor='') => filas.push({ok, texto, valor});
+const pinta = () => out.innerHTML = `<div class="card">` + filas.map(f =>
+  `<div class="r ${f.ok?'ok':'bad'}"><span class="i">${f.ok?'✓':'✗'}</span>
+   <span class="t">${f.texto}</span><span class="v">${f.valor}</span></div>`).join('') + `</div>`;
+
+document.getElementById('b').onclick = async () => {
+  const b = document.getElementById('b'); b.disabled = true; b.textContent = 'Comprobando…';
+  filas.length = 0; out.innerHTML = '';
+  const email = document.getElementById('e').value.trim();
+  const pass  = document.getElementById('p').value;
+
+  const {data: sesion, error: eLogin} = await db.auth.signInWithPassword({email, password: pass});
+  if (eLogin) {
+    add(false, '<b>No ha podido entrar</b>', '');
+    out.innerHTML = `<div class="box r2"><b>${eLogin.message}</b><br><br>
+      Si dice «Invalid login credentials», o la contraseña no es esa, o el correo no coincide
+      exactamente con el que diste de alta.</div>`;
+    b.disabled = false; b.textContent = 'Entrar y comprobar'; return;
+  }
+  add(true, 'Conexión y acceso', 'ok');
+
+  const {data: perfil, error: ePerf} = await db.from('profiles')
+    .select('nombre, sexo, altura_cm, kcal_min, kcal_max, proteina_min_g, household_id')
+    .eq('id', sesion.user.id).maybeSingle();
+
+  if (!perfil) {
+    add(false, '<b>Cuenta sin perfil</b>', '');
+    out.innerHTML += `<div class="box r2"><b>La cuenta existe pero no tiene perfil.</b><br><br>
+      Es el cerrojo funcionando: ese correo no está en <code>correos_permitidos</code>, o está
+      escrito distinto. Sin perfil no se ve ni una fila. Revisa la tabla y vuelve a crear la cuenta.</div>`;
+    pinta(); b.disabled = false; b.textContent = 'Entrar y comprobar'; return;
+  }
+  add(true, `Perfil: <b>${perfil.nombre}</b>`, `${perfil.kcal_min}-${perfil.kcal_max} kcal`);
+  add(perfil.proteina_min_g > 0, 'Proteína mínima', `${perfil.proteina_min_g} g`);
+
+  const cuenta = async (t, sel='*') => {
+    const {count, error} = await db.from(t).select(sel, {count:'exact', head:true});
+    return error ? -1 : count;
+  };
+  const ing = await cuenta('ingredients'), rec = await cuenta('recipes'),
+        des = await cuenta('pantry'),      per = await cuenta('profiles'),
+        pes = await cuenta('weight_logs'), med = await cuenta('medications');
+
+  add(ing === 96,  'Ingredientes del catálogo', ing);
+  add(rec === 100, 'Recetas', rec);
+  add(des === 34,  'Productos en la despensa', des);
+  add(per === 2,   'Perfiles de la casa visibles', per);
+
+  add(true, 'Pesos que ves (solo los tuyos)', pes);
+  add(true, 'Medicaciones que ves (solo las tuyas)', med);
+
+  /* La prueba de fuego: intentar leer el peso del OTRO explícitamente. */
+  const {data: otros} = await db.from('profiles').select('id, nombre').neq('id', sesion.user.id);
+  let aislado = true, nombreOtro = '—';
+  if (otros && otros.length) {
+    nombreOtro = otros[0].nombre;
+    const {data: suPeso} = await db.from('weight_logs').select('*').eq('profile_id', otros[0].id);
+    const {data: suMed}  = await db.from('medications').select('*').eq('profile_id', otros[0].id);
+    aislado = (!suPeso || !suPeso.length) && (!suMed || !suMed.length);
+  }
+  add(aislado, `Pidiendo el peso y la medicación de <b>${nombreOtro}</b>`,
+      aislado ? '0 filas' : '¡SE VEN!');
+
+  /* Una receta de verdad, con sus ingredientes: lo que cargará la app. */
+  const {data: unaRec} = await db.from('recipes')
+    .select('nombre, emoji, clave, transportable, recipe_ingredients(cantidad, unidad, ingredients(nombre))')
+    .limit(1).maybeSingle();
+  const nIng = unaRec ? (unaRec.recipe_ingredients||[]).length : 0;
+  add(nIng > 0, 'Receta de muestra con sus ingredientes', nIng ? `${nIng} líneas` : 'vacía');
+
+  pinta();
+
+  const todoOk = filas.every(f => f.ok);
+  out.innerHTML += todoOk
+    ? `<div class="box g"><b>Todo correcto.</b> La base está bien montada, las cuentas funcionan y el
+       aislamiento entre vosotros dos es real: pedir el peso de ${nombreOtro} devuelve cero filas.
+       Ya puedo conectar la app.</div>`
+    : `<div class="box r2"><b>Algo no cuadra.</b> Pásame una foto de esta pantalla y lo miro.</div>`;
+
+  if (unaRec) out.innerHTML += `<pre>Receta de muestra
+${unaRec.emoji} ${unaRec.nombre}   ·   clave: ${unaRec.clave}   ·   transportable: ${unaRec.transportable}
+${(unaRec.recipe_ingredients||[]).map(x=>'  · '+x.ingredients.nombre+' '+(+x.cantidad)+' '+x.unidad).join('\n')}</pre>`;
+
+  await db.auth.signOut();
+  b.disabled = false; b.textContent = 'Comprobar otra vez';
+};
+</script>
+</body></html>

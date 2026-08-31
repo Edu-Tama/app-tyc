@@ -13,7 +13,6 @@ const ING = {
   'Pan integral':          [250, 9,   'Despensa',   null, 'p'],
   'Pan de centeno':        [240, 8,   'Despensa',   null, 'p'],
   'Pan del día anterior':  [270, 8,   'Despensa',   null, 'p'],
-  'Tomate maduro':         [18,  0.9, 'Frutería',   null, 'p'],
   'Tomate':                [18,  0.9, 'Frutería',   null, 'p'],
   'Tomate triturado':      [30,  1.3, 'Despensa',   null, 'p'],
   'Pavo en lonchas':       [110, 18,  'Charcutería',null, 'p'],
@@ -47,8 +46,6 @@ const ING = {
   'Almendras crudas':      [579, 21,  'Despensa',   null, 'p'],
   'Crema de cacahuete':    [600, 25,  'Despensa',   null, 'p'],
   'Pepino':                [15,  0.7, 'Frutería',   null, 'p'],
-  'Pimiento verde':        [20,  1,   'Frutería',   null, 'p'],
-  'Pimiento rojo':         [31,  1,   'Frutería',   null, 'p'],
   'Pimiento':              [26,  1,   'Frutería',   null, 'p'],
   'Cebolla':               [40,  1.1, 'Frutería',   null, 'p'],
   'Cebolleta':             [32,  1.1, 'Frutería',   null, 'p'],
@@ -113,7 +110,7 @@ const MACROS = {
   'Quinoa':[64,6,7,53], 'Frutos rojos congelados':[8,0.3,4,25], 'Harina de avena':[60,7,10,45],
   'Filete de ternera':[0,5,0,0], 'Semillas de chía':[42,31,34,1],
  'Pan integral':[41,3.5,7,55],'Pan de centeno':[45,1.7,8,50],'Pan del día anterior':[52,3,3,70],
- 'Tomate maduro':[3.9,0.2,1.2,30],'Tomate':[3.9,0.2,1.2,30],'Tomate triturado':[5,0.2,1.4,35],
+ 'Tomate':[3.9,0.2,1.2,30],'Tomate triturado':[5,0.2,1.4,35],
  'Pavo en lonchas':[1.5,3,0,0],'Pavo en tiras':[0,2,0,0],'Pavo picado':[0,4,0,0],'Jamón serrano':[0.3,12,0,0],
  'Aceite de oliva':[0,100,0,0],'Vinagre de Jerez':[0.4,0,0,0],
  'Salsa de soja':[5,0,0,0],'Ajo':[33,0.5,2.1,30],'Canela':[0,0,0,0],'Comino':[0,0,0,0],
@@ -123,7 +120,7 @@ const MACROS = {
  'Copos de avena':[59,7,10,55],'Melocotón':[9.5,0.3,1.5,42],'Plátano':[23,0.3,2.6,51],'Pera':[15,0.1,3.1,38],
  'Higos frescos':[19,0.3,2.9,35],'Sandía':[7.6,0.2,0.4,72],'Uvas':[17,0.2,0.9,53],'Nueces':[14,65,6.7,15],
  'Almendras crudas':[22,50,12,15],'Crema de cacahuete':[20,50,6,14],'Pepino':[3.6,0.1,0.5,15],
- 'Pimiento verde':[4.6,0.2,1.7,15],'Pimiento rojo':[6,0.3,2.1,15],'Pimiento':[5,0.3,1.9,15],
+ 'Pimiento':[5,0.3,1.9,15],
  'Cebolla':[9,0.1,1.7,15],'Cebolleta':[7,0.2,2.6,15],'Berenjena':[6,0.2,3,15],'Calabacín':[3.1,0.3,1,15],
  'Patata':[17,0.1,2.2,70],'Zanahoria':[9.6,0.2,2.8,35],'Judías verdes congeladas':[7,0.2,3.4,15],
  'Lentejas pardina':[60,1.1,11,29],'Garbanzos de bote':[18,2.6,5,28],'Alubias de bote':[15,0.5,6,30],
@@ -137,7 +134,7 @@ for (const n in MACROS) if (ING[n]) ING[n].push(...MACROS[n]);
 const R = {
   tostada_tomate:{n:'Tostada de tomate, aceite y pavo', e:'🍅', t:'t-verdura', mom:'desayuno',
     act:6, tot:6, metodo:'Tostadora', temp:'tomate de temporada', tags:['salado','6 minutos'],
-    ing:[['Pan integral',75],['Tomate maduro',120],['Pavo en lonchas',75],['Aceite de oliva',8]],
+    ing:[['Pan integral',75],['Tomate',120],['Pavo en lonchas',75],['Aceite de oliva',8]],
     pasos:['Tuesta el pan.','Ralla el tomate y extiéndelo con el aceite y una pizca de sal.','Cubre con el pavo.']},
   revuelto_champi:{n:'Revuelto de champiñones y queso fresco', e:'🍳', t:'t-huevo', mom:'desayuno',
     act:8, tot:8, metodo:'Sartén', tags:['salado','alto en proteína'],
@@ -189,23 +186,23 @@ const R = {
     pasos:['Revuelve los huevos a fuego suave.','Sirve con el aguacate en láminas sobre el pan tostado.']},
   tostada_atun:{n:'Tostada de atún y tomate', e:'🐟', t:'t-pescado', mom:'desayuno',
     act:5, tot:5, metodo:'Tostadora', temp:'tomate de temporada', tags:['salado','5 minutos'],
-    ing:[['Pan integral',70],['Atún al natural',1,'ud'],['Tomate maduro',100],['Aceite de oliva',8]],
+    ing:[['Pan integral',70],['Atún al natural',1,'ud'],['Tomate',100],['Aceite de oliva',8]],
     pasos:['Tuesta el pan.','Ralla el tomate encima con el aceite.','Cubre con el atún escurrido.']},
   gazpacho_pollo:{n:'Gazpacho con pollo a la plancha', e:'🥤', t:'t-verdura', mom:'comida',
     act:12, tot:20, metodo:'Thermomix + sartén', temp:'tomate y pepino de temporada',
     tags:['túper 3 días','el gazpacho aguanta 4 días'], tupper:3,
-    ing:[['Tomate maduro',300],['Pepino',60],['Pimiento verde',40],['Aceite de oliva',15],
+    ing:[['Tomate',300],['Pepino',60],['Pimiento',40],['Aceite de oliva',15],
          ['Vinagre de Jerez',5],['Pechuga de pollo',170],['Ajo',3]],
     pasos:['Tritura tomate, pepino, pimiento y ajo 2 min vel. 10.','Emulsiona con el aceite y el vinagre.','Marca el pollo 4 min por cara.','Enfría el gazpacho 2 h.']},
   lentejas_frias:{n:'Ensalada templada de lentejas y pimiento', e:'🥗', t:'t-legumbre', mom:'comida',
     act:12, tot:35, metodo:'Olla', tags:['túper 3 días','tanda del domingo','IG bajo'], tupper:3, batch:true,
-    ing:[['Lentejas pardina',85],['Pimiento rojo',60],['Cebolleta',40],['Tomate',80],
+    ing:[['Lentejas pardina',85],['Pimiento',60],['Cebolleta',40],['Tomate',80],
          ['Huevo',1,'ud'],['Aceite de oliva',10],['Comino',1]],
     pasos:['Cuece las lentejas 25 min y escúrrelas.','Pica el pimiento, la cebolleta y el tomate en crudo.','Mezcla con el aceite y el comino.','Corona con el huevo cocido.']},
   pisto_huevo:{n:'Pisto de verduras con huevo al horno', e:'🍆', t:'t-verdura', mom:'comida',
     act:15, tot:45, metodo:'Horno', temp:'berenjena, calabacín y pimiento de temporada',
     tags:['túper 3 días','congelable'], tupper:3,
-    ing:[['Berenjena',150],['Calabacín',150],['Pimiento rojo',80],['Cebolla',60],
+    ing:[['Berenjena',150],['Calabacín',150],['Pimiento',80],['Cebolla',60],
          ['Tomate triturado',100],['Patata',120],['Huevo',2,'ud'],['Aceite de oliva',12]],
     pasos:['Pocha la verdura en dados 20 min.','Añade el tomate y cocina 10 min más.','Haz dos huecos, casca los huevos y hornea 8 min a 190°.']},
   merluza_pisto:{n:'Merluza a la airfryer con pisto', e:'🐟', t:'t-pescado', mom:'cena',
@@ -297,7 +294,7 @@ const R = {
     pasos:['Saltea el calabacín rallado 5 min.','Bate huevos y claras con el atún escurrido.','Cuaja 4 min por cada lado.']},
   salmorejo_huevo:{n:'Salmorejo con huevo y jamón', e:'🍅', t:'t-verdura', mom:'cena',
     act:10, tot:12, metodo:'Thermomix', temp:'tomate de temporada', tags:['sin fuego','aguanta 3 días'], tupper:3, lista:5,
-    ing:[['Tomate maduro',350],['Pan del día anterior',50],['Aceite de oliva',15],
+    ing:[['Tomate',350],['Pan del día anterior',50],['Aceite de oliva',15],
          ['Ajo',2],['Huevo',1,'ud'],['Jamón serrano',35]],
     pasos:['Tritura tomate, pan y ajo 2 min.','Emulsiona con el aceite hasta que espese.','Sirve muy frío con el huevo cocido y el jamón picado.']},
   pavo_verduras:{n:'Salteado de pavo con verduras de temporada', e:'🥘', t:'t-carne', mom:'cena',
@@ -531,7 +528,7 @@ const R = {
   tortilla_pimientos:{n:'Tortilla de pimientos', e:'🫑', t:'t-huevo', mom:'cena',
     meses:[5,6,7,8,9,10], act:12, tot:18, metodo:'Sartén', temp:'pimiento de temporada',
     tags:['18 minutos'], lista:18,
-    ing:[['Huevo',2,'ud'],['Clara de huevo',80],['Pimiento rojo',100],['Pimiento verde',80],
+    ing:[['Huevo',2,'ud'],['Clara de huevo',80],['Pimiento',180],
          ['Cebolla',50],['Aceite de oliva',10]],
     pasos:['Pocha los pimientos con la cebolla 12 min.','Bate huevos y claras.','Cuaja 4 min por lado.']},
   crema_judias:{n:'Crema de judías verdes y patata con pavo', e:'🥣', t:'t-verdura', mom:'cena',
@@ -1194,6 +1191,12 @@ const MARCAS={};
 let GUARDAR_MARCA = null;
 let CERRAR_LISTA  = null;
 let GUARDAR_OFICINA = null;
+/* Los ganchos de registro. Los rellena hidratar.js cuando hay base de datos;
+   sin ella la app sigue funcionando en local, pero avisando de que no guarda. */
+let GUARDAR_COMIDA=null, GUARDAR_MED=null, GUARDAR_PESO=null, GUARDAR_CINTURA=null,
+    GUARDAR_CIERRE=null, GUARDAR_CHECK=null, GUARDAR_ENTRENO=null, GUARDAR_CARDIO=null;
+/* Lo que ya se cerró hoy, para no volver a preguntarlo en blanco. */
+let CIERRE_HOY = null;
 
 /* Cadenas: cada una desvía distinto de mis precios de referencia, que son de
    Mercadona. Con tres o cuatro compras el factor deja de ser una suposición. */

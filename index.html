@@ -291,6 +291,7 @@
       <button class="icon-btn" id="dia-sig">›</button>
     </div>
     <div id="aviso-modo"></div>
+    <div id="aviso-cola"></div>
     <div class="hero" id="hero"></div>
     <div id="ahora"></div>
     <div id="bloques"></div>
@@ -452,7 +453,11 @@ const INICIO_PLAN = new Date(2026, 7, 31, 12);
 const isoLocal = f => `${f.getFullYear()}-${String(f.getMonth()+1).padStart(2,'0')}-${String(f.getDate()).padStart(2,'0')}`;
 const isoDe = off => isoLocal(fechaDe(off));
 const HOY_ISO = isoDe(0);
-const antesDeEmpezar = () => HOY_F < INICIO_PLAN;
+/* Comparar por DÍA, no por hora. INICIO_PLAN lleva las 12:00 para esquivar
+   líos de horario de verano, y eso hacía que el lunes 31 por la mañana la app
+   siguiera diciendo «el plan no ha empezado»: a las 9:00 aún era «antes». */
+const INICIO_ISO = isoLocal(INICIO_PLAN);
+const antesDeEmpezar = () => isoDe(0) < INICIO_ISO;
 const baseSemana = () => antesDeEmpezar() ? INICIO_PLAN : HOY_F;
 /* La semana empieza en lunes. Todo lo que rotula «semana» sale de aquí. */
 function lunesDe(f){ const x=new Date(f); const d=(x.getDay()+6)%7; x.setDate(x.getDate()-d); return x; }
@@ -487,7 +492,7 @@ const DIAS_ATRAS=[0,-1,-2].map(o=>{const f=fechaDe(o);
 
 /* Saber qué versión corre en cada móvil deja de ser adivinar. Cuando algo
    «no se actualiza», este número lo dice en un vistazo. */
-const VERSION_APP = 'v13 · 24 ago 2026';
+const VERSION_APP = 'v15 · 31 ago 2026';
 const TYC_CONECTADO = () => typeof TYC !== 'undefined' && !!TYC.db && !TYC.demo;
 
 /* Descarta el service worker y las cachés y recarga: la salida de emergencia
@@ -632,7 +637,17 @@ function sheetFuera(i){
       ? 'Con la glucosa en ayunas en 127, medio litro de bebida azucarada es de las pocas cosas que la mueven de golpe. No es prohibirla: es que la versión zero cuesta lo mismo.'
       : 'La cerveza no se prohíbe, se cuenta. Es lo que hace visible el objetivo de retirarla.'}</div>`);
 }
-function marcar(i,estado,alt){const m=HOY[P][i]; m.estado=estado; if(alt)m.r=alt; closeSheet(); pintarQuick(); pintarHero()}
+/* La sesión hecha, desde la pantalla de Hoy sin tener que entrar en ella. */
+function marcarSesion(){
+  ACC.sesion = ACC.sesion ? null : 'hecho';
+  if(GUARDAR_ENTRENO) GUARDAR_ENTRENO(ACC.sesion ? 'hecha' : null);
+  pintarQuick(); pintarEntreno();
+}
+function marcar(i,estado,alt){
+  const m=HOY[P][i]; m.estado=estado; if(alt)m.r=alt;
+  if(GUARDAR_COMIDA) GUARDAR_COMIDA(m.k, estado, alt||m.r);
+  closeSheet(); pintarQuick(); pintarHero();
+}
 
 /* vídeos propios: un clip de 10 s hecho en el gimnasio vale más que
    cualquier dibujo, porque es TU técnica con TU material. */
@@ -695,6 +710,9 @@ function sheetCardio(){
 }
 function elegirCardio(i){
   CARDIO_HECHO[P]={i, estado:'elegida', real:null};
+  /* Elegir ya deja rastro: si solo se guardara al hacerla, «lo elegí y no fui»
+     sería indistinguible de «no me lo planteé». */
+  if(GUARDAR_CHECK) GUARDAR_CHECK('cardio_elegido', CARDIO_FORUS[i].n);
   closeSheet(); pintarQuick(); pintarEntreno();
 }
 function sheetCardioHecho(){
@@ -712,6 +730,8 @@ function sheetCardioHecho(){
 function marcarCardio(){
   const i=document.getElementById('cardio-real');
   CARDIO_HECHO[P].estado='hecha'; CARDIO_HECHO[P].real=(i&&i.value)||null;
+  const x=CARDIO_FORUS[CARDIO_HECHO[P].i];
+  if(GUARDAR_CARDIO) GUARDAR_CARDIO(x.n, x.min||30, true);
   closeSheet(); pintarQuick(); pintarEntreno();
 }
 function sheetSesion(ex){
@@ -850,7 +870,9 @@ function sheetTanda(sem){
     <button class="cta" style="margin-top:8px" onclick="tandaHecha('${sem}')">✓ Tanda hecha</button>`);
 }
 const TANDA_ESTADO={s1:null, s2:null};
-function tandaHecha(sem){ TANDA_ESTADO[sem]='hecha'; closeSheet(); pintarMenu(); pintarQuick(); }
+function tandaHecha(sem){ TANDA_ESTADO[sem]='hecha';
+  if(GUARDAR_CHECK) GUARDAR_CHECK('tanda_'+sem, 'hecho');
+  closeSheet(); pintarMenu(); pintarQuick(); }
 function tandaMovida(sem){ TANDA_ESTADO[sem]='movida'; closeSheet(); pintarMenu();
   openSheet(`<h3>Tanda movida al lunes</h3>
     <div class="meta" style="margin-bottom:14px">Las comidas de lunes siguen siendo del día anterior</div>
@@ -862,8 +884,18 @@ function tandaMovida(sem){ TANDA_ESTADO[sem]='movida'; closeSheet(); pintarMenu(
     <button class="cta" style="margin-top:8px" onclick="closeSheet()">Dejarlo así</button>`);
 }
 const ESTADO_ACC={hecho:'Hecho',usado:'Usado a tiempo',congelado:'Al congelador',tirado:'Tirado · anotado en desperdicio',pospuesto:'Lo miro mañana'};
-function accCheck(id){ACC[id]=ACC[id]?null:'hecho'; pintarQuick()}
-function accSet(id,v){ACC[id]=v; closeSheet(); pintarQuick()}
+/* Los checks del día son de la casa: los ve y los marca cualquiera de los dos.
+   Antes vivían solo en esta pantalla. */
+function accCheck(id){
+  ACC[id]=ACC[id]?null:'hecho';
+  if(GUARDAR_CHECK) GUARDAR_CHECK(id, ACC[id]);
+  pintarQuick();
+}
+function accSet(id,v){
+  ACC[id]=v;
+  if(GUARDAR_CHECK) GUARDAR_CHECK(id, v);
+  closeSheet(); pintarQuick();
+}
 function sheetCaducidad(id,n,g){
   const precio=PRECIO[n]?g*PRECIO[n]/1000:0;
   openSheet(`<h3>${n}</h3>
@@ -874,7 +906,11 @@ function sheetCaducidad(id,n,g){
     <button class="opt" onclick="accSet('${id}','pospuesto')">⏰ <span class="grow">Aguanta un día más<small>Vuelve a avisar mañana</small></span></button>
     `);
 }
-function cerrarTodo(){HOY[P].forEach(m=>{if(!m.estado)m.estado='hecho'}); closeSheet(); render()}
+function cerrarTodo(){
+  HOY[P].forEach(m=>{ if(!m.estado){ m.estado='hecho';
+    if(GUARDAR_COMIDA) GUARDAR_COMIDA(m.k,'hecho',m.r); } });
+  closeSheet(); render();
+}
 function puntuar(k,v){PUNT[k]=v; pintarQuick(); pintarMenu()}
 function sheetExtra(){
   openSheet(`<h3>Fuera del plan</h3>
@@ -917,30 +953,77 @@ function guardarOtroExtra(kcal){
   closeSheet(); pintarQuick(); pintarHero();
 }
 function quitarExtra(i){EXTRA_LOG[P].splice(i,1); pintarQuick(); pintarHero()}
+/* EL CIERRE DEL DÍA.
+   Era una maqueta: los chips no se podían seleccionar, el número de pasos no
+   se leía y el botón cerraba la hoja sin guardar nada. Ahora es el registro
+   que alimenta la señal de abandono —hambre, energía y sueño—, los pasos, el
+   alcohol y la nota. Todo en una fila por día. */
+let BORRADOR_CIERRE = null;
+
 function sheetCierre(){
-  const chips=(l)=>`<div class="seg" style="flex-wrap:wrap">${l.map((x,i)=>`<span class="chip${i===1?' on':''}">${x}</span>`).join('')}</div>`;
+  BORRADOR_CIERRE = BORRADOR_CIERRE || {
+    hambre: CIERRE_HOY?.hambre ?? 2, energia: CIERRE_HOY?.energia ?? 2,
+    sueno:  CIERRE_HOY?.sueno  ?? 2, alcohol: CIERRE_HOY?.alcohol ?? 0,
+    pasos:  CIERRE_HOY?.pasos  ?? (PASOS[P] || 0),
+    nota:   CIERRE_HOY?.nota   ?? NOTA
+  };
+  const B = BORRADOR_CIERRE;
+  const chips = (campo, etiquetas) => `<div class="seg" style="flex-wrap:wrap">${
+    etiquetas.map((x, i) => `<span class="chip${B[campo]===i+1?' on':''}"
+      onclick="cierreSet('${campo}',${i+1})">${x}</span>`).join('')}</div>`;
+
   openSheet(`<h3>¿Cómo ha ido hoy?</h3>
-    <div class="meta" style="margin-bottom:18px">Tres toques. Es la señal que mejor predice si un plan se va a abandonar — mucho mejor que el peso.</div>
+    <div class="meta" style="margin-bottom:18px">Tres toques. Es la señal que mejor predice si un plan
+      se va a abandonar — mucho mejor que el peso.</div>
     <div class="f" style="border-top:0; align-items:flex-start"><label>¿Has pasado hambre?</label></div>
-    ${chips(['Nada','Algo','Bastante'])}
+    ${chips('hambre', ['Nada','Algo','Bastante'])}
     <div class="f" style="align-items:flex-start; margin-top:8px"><label>Energía durante el día</label></div>
-    ${chips(['Baja','Normal','Alta'])}
+    ${chips('energia', ['Baja','Normal','Alta'])}
     <div class="f" style="align-items:flex-start; margin-top:8px"><label>¿Cómo dormiste?</label></div>
-    ${chips(['Mal','Regular','Bien'])}
+    ${chips('sueno', ['Mal','Regular','Bien'])}
     <div class="f" style="align-items:flex-start; margin-top:8px"><label>Pasos de hoy
       <div class="note" style="margin-top:2px">El número que marca ${PULSERA[P]}</div></label>
-      <input value="${PASOS[P]}" style="width:86px"></div>
+      <input id="cierre-pasos" type="number" inputmode="numeric" value="${B.pasos||''}" style="width:96px"></div>
     <div class="f" style="align-items:flex-start"><label>¿Alcohol hoy?
       <div class="note" style="margin-top:2px">Por si se te olvidó registrarlo en el momento</div></label></div>
-    <div class="seg"><span class="chip on">No</span><span class="chip">1</span><span class="chip">2</span><span class="chip">3 o más</span></div>
-    
+    <div class="seg">${['No','1','2','3 o más'].map((x,i)=>`<span class="chip${B.alcohol===i?' on':''}"
+      onclick="cierreSet('alcohol',${i})">${x}</span>`).join('')}</div>
     <div class="f" style="align-items:flex-start; margin-top:8px"><label>Nota del día
       <div class="note" style="margin-top:2px">El contexto que los números no cuentan</div></label></div>
-    <textarea class="search" rows="2" placeholder="Cena de empresa improvisada, me encontré fatal…"
-      style="resize:none; font-family:inherit">${NOTA}</textarea>
+    <textarea id="cierre-nota" class="search" rows="2" placeholder="Cena de empresa improvisada, me encontré fatal…"
+      style="resize:none; font-family:inherit">${B.nota||''}</textarea>
     ${HOY[P].some(m=>!m.estado)?`<button class="act primary" style="width:100%; margin-bottom:8px" onclick="cerrarTodo()">
       ✓ Todo según el plan · marcar las ${HOY[P].filter(m=>!m.estado).length} que faltan</button>`:''}
-    <button class="cta" onclick="closeSheet()">Cerrar el día</button>`);
+    ${GUARDAR_CIERRE?'':`<div class="banner" style="margin:8px 0"><b class="t">⚠ Sin conexión con la base</b>
+      Esto se ve ahora pero no se guarda.</div>`}
+    <button class="cta" onclick="cerrarDia()">Cerrar el día</button>`);
+}
+/* Cada toque se recuerda, pero no se envía: el cierre se guarda entero al
+   darle al botón. Así se puede cambiar de opinión sin dejar diez versiones. */
+function cierreSet(campo, valor){
+  leerCamposCierre();
+  BORRADOR_CIERRE[campo] = valor;
+  sheetCierre();
+}
+function leerCamposCierre(){
+  const p = document.getElementById('cierre-pasos');
+  const n = document.getElementById('cierre-nota');
+  if (p) BORRADOR_CIERRE.pasos = p.value === '' ? null : +p.value;
+  if (n) BORRADOR_CIERRE.nota  = n.value;
+}
+function cerrarDia(){
+  leerCamposCierre();
+  const B = BORRADOR_CIERRE;
+  if (B.pasos != null) PASOS[P] = B.pasos;
+  NOTA = B.nota || '';
+  /* La gráfica de bienestar es SEMANAL: mete un punto por semana, no por día.
+     Empujar aquí el valor de hoy la llenaría de puntos que no son semanas.
+     Se alimenta al leer los cierres, no al escribirlos. */
+  CIERRE_HOY = {...B};
+  ACC.cierre = 'hecho';
+  if (GUARDAR_CIERRE) GUARDAR_CIERRE(B);
+  BORRADOR_CIERRE = null;
+  closeSheet(); pintarQuick(); pintarSalud();
 }
 function sheetExcepciones(sem){
   sem = sem || TABM;
@@ -1123,28 +1206,25 @@ function sheetMedicacion(){
       <button class="act primary" onclick="todasMed()">✓ Marcar todas</button></div>
     `);
 }
-function toggleMedFila(i){MED[P][i]=!MED[P][i]; pintarQuick()}
-function toggleMed(i){MED[P][i]=!MED[P][i]; sheetMedicacion(); pintarQuick()}
+function toggleMedFila(i){MED[P][i]=!MED[P][i]; if(GUARDAR_MED) GUARDAR_MED(i,MED[P][i]); pintarQuick()}
+function toggleMed(i){MED[P][i]=!MED[P][i]; if(GUARDAR_MED) GUARDAR_MED(i,MED[P][i]); sheetMedicacion(); pintarQuick()}
 function todasMed(){MED[P]=MED[P].map(()=>true); closeSheet(); pintarQuick()}
 function sheetCintura(){
   openSheet(`<h3>Medir cintura</h3>
     <div class="meta" style="margin-bottom:16px">Una vez al mes, en ayunas, a la altura del ombligo y sin apretar</div>
-    <div class="row" style="justify-content:center; gap:18px; margin-bottom:18px">
-      <button class="icon-btn" style="width:44px;height:44px;font-size:20px">−</button>
-      <div style="font-size:40px; font-weight:700; letter-spacing:-.03em; font-variant-numeric:tabular-nums">
-        112 <span style="font-size:16px; color:var(--muted); font-weight:500">cm</span></div>
-      <button class="icon-btn" style="width:44px;height:44px;font-size:20px">+</button></div>
-    
-    <button class="cta" style="margin-top:14px" onclick="ACC.cintura=true; closeSheet(); pintarQuick()">Guardar</button>`);
+    ${contador(CINTURA[P].length?CINTURA[P][CINTURA[P].length-1]:(P==='c'?110:90), 0.5, 1, 'cm')}
+    <button class="cta" style="margin-top:14px" onclick="guardarCintura()">Guardar</button>`);
+}
+function guardarCintura(){
+  const cm = CONTADOR.valor;
+  ACC.cintura = true;
+  if(GUARDAR_CINTURA) GUARDAR_CINTURA(cm); else CINTURA[P].push(cm);
+  closeSheet(); pintarQuick(); pintarSalud();
 }
 function sheetPasos(){
   openSheet(`<h3>Pasos de hoy</h3>
     <div class="meta" style="margin-bottom:18px">Copia el número de ${PULSERA[P]}. Cinco segundos.</div>
-    <div class="row" style="justify-content:center; gap:18px; margin-bottom:18px">
-      <button class="icon-btn" style="width:44px;height:44px;font-size:20px">−</button>
-      <div style="font-size:38px; font-weight:700; letter-spacing:-.03em; font-variant-numeric:tabular-nums">
-        ${PASOS[P].toLocaleString('es')}</div>
-      <button class="icon-btn" style="width:44px;height:44px;font-size:20px">+</button></div>
+    ${contador(PASOS[P]||0, 500, 0, 'pasos')}
     <div class="bar"><i style="width:${Math.min(100,100*PASOS[P]/PASOS_OBJ[P])}%"></i></div>
     <div class="note">Objetivo ${PASOS_OBJ[P].toLocaleString('es')} · media de la semana 7.140</div>
     <div class="banner" style="margin-top:14px"><b class="t">Por qué a mano y no automático</b>
@@ -1152,21 +1232,52 @@ function sheetPasos(){
       Android — no una web instalada como esta. Google Fit, que sí tenía API web, cierra a finales de 2026
       y no admite altas nuevas desde 2024. Si con el tiempo molesta, la solución es una app Android pequeña
       que haga de puente.</div>
-    <button class="cta" style="margin-top:14px" onclick="closeSheet()">Guardar</button>`);
+    <button class="cta" style="margin-top:14px" onclick="guardarPasos()">Guardar</button>`);
+}
+function guardarPasos(){
+  PASOS[P]=Math.round(CONTADOR.valor);
+  /* Los pasos van en el cierre del día: es una fila por día, no un registro
+     suelto, así que se guarda el cierre con lo que haya y los pasos nuevos. */
+  if(GUARDAR_CIERRE) GUARDAR_CIERRE({...(CIERRE_HOY||{}), pasos:PASOS[P]});
+  closeSheet(); pintarQuick(); pintarEntreno();
+}
+/* Los botones + y − de peso, cintura y pasos no hacían nada: eran maqueta.
+   Un contador de verdad, con un valor vivo y un paso configurable. */
+const CONTADOR={valor:0, paso:0.1, dec:1};
+function contador(valor, paso, dec, unidad){
+  CONTADOR.valor=valor; CONTADOR.paso=paso; CONTADOR.dec=dec;
+  return `<div class="row" style="justify-content:center; gap:18px; margin-bottom:18px">
+      <button class="icon-btn" style="width:44px;height:44px;font-size:20px"
+        onclick="ajustaContador(-1)">−</button>
+      <div id="cont-val" style="font-size:40px; font-weight:700; letter-spacing:-.03em; font-variant-numeric:tabular-nums">
+        ${fmtCont(valor)} <span style="font-size:16px; color:var(--muted); font-weight:500">${unidad}</span></div>
+      <button class="icon-btn" style="width:44px;height:44px;font-size:20px"
+        onclick="ajustaContador(1)">+</button></div>`;
+}
+const fmtCont = v => CONTADOR.dec ? v.toFixed(CONTADOR.dec).replace('.',',') : Math.round(v).toLocaleString('es');
+function ajustaContador(signo){
+  CONTADOR.valor = Math.max(0, +(CONTADOR.valor + signo*CONTADOR.paso).toFixed(CONTADOR.dec+1));
+  const el=document.getElementById('cont-val');
+  if(el) el.firstChild.textContent = fmtCont(CONTADOR.valor)+' ';
 }
 function sheetPeso(){
   openSheet(`<h3>Registrar peso</h3>
     <div class="meta" style="margin-bottom:18px">Solo miércoles y sábados, al levantarte. Cinco segundos.</div>
-    <div class="row" style="justify-content:center; gap:18px; margin-bottom:18px">
-      <button class="icon-btn" style="width:44px;height:44px;font-size:20px">−</button>
-      <div style="font-size:40px; font-weight:700; letter-spacing:-.03em; font-variant-numeric:tabular-nums">
-        ${PERFILES[P].peso} <span style="font-size:16px; color:var(--muted); font-weight:500">kg</span></div>
-      <button class="icon-btn" style="width:44px;height:44px;font-size:20px">+</button></div>
-    <div class="note">Se guarda la media de 7 días, no el dato del día.</div>
-    <button class="cta" style="margin-top:14px" onclick="guardarPeso(${PERFILES[P].peso.replace(',','.')})">Guardar</button>`);
+    ${contador(ultimoPeso(), 0.1, 1, 'kg')}
+    <div class="note">La tendencia se calcula con la media de 7 días, no con el dato suelto de hoy.</div>
+    <button class="cta" style="margin-top:14px" onclick="guardarPeso()">Guardar</button>`);
 }
-function guardarPeso(kg){
-  ACC.peso=kg; closeSheet(); pintarQuick(); pintarSalud();
+/* De dónde parte el contador: el último peso registrado, y si no hay ninguno,
+   el del perfil. Empezar siempre en el mismo número obliga a subir 20 veces. */
+function ultimoPeso(){
+  const s = P==='c'?PESO_C:PESO_T;
+  return s.length ? s[s.length-1] : parseFloat(PERFILES[P].peso.replace(',','.'));
+}
+function guardarPeso(){
+  const kg = CONTADOR.valor;
+  ACC.peso = kg;
+  if(GUARDAR_PESO) GUARDAR_PESO(kg); else (P==='c'?PESO_C:PESO_T).push(kg);
+  closeSheet(); pintarQuick(); pintarSalud(); pintarPeso();
 }
 function sheetAjustes(){
   openSheet(`<h3>Ajustes</h3>
@@ -1776,8 +1887,12 @@ function pintarQuick(){
      programa ninguna sesión, igual que no se programa comida. Y el título de la
      sesión sale del plan del día, no del perfil: por eso ponía «Entrena al
      equipo» encima de una sesión de fuerza. */
-  const esSesion = !HOY_SIN_PLAN && hoyPlan && hoyPlan[3]==='gym';
-  const htmlDeporte = HOY_SIN_PLAN ? `
+  /* El entrenamiento arranca por CALENDARIO, no porque haya menú: usar
+     HOY_SIN_PLAN aquí hacía que un fallo al cargar el menú escondiera también
+     la sesión de fuerza del día. Son dos cosas distintas. */
+  const sinEntreno = antesDeEmpezar();
+  const esSesion = !sinEntreno && hoyPlan && hoyPlan[3]==='gym';
+  const htmlDeporte = sinEntreno ? `
     <div class="qr" style="border-top:0">
       <div class="thumb sm t-off" style="color:var(--muted)">📅</div>
       <div class="tx"><div class="when">El plan de entrenamiento no ha empezado</div>
@@ -1805,8 +1920,11 @@ function pintarQuick(){
       ? `<div class="qr" style="border-top:0" onclick="sheetSesion(0)">
           <div class="thumb sm t-gym">🏋</div>
           <div class="tx"><div class="when">Sesión de hoy</div><b>${hoyPlan[2]}</b></div>
-          <div class="kc">${e.meta.split('·').pop().trim()}</div>
-          <div class="check" style="${ACC.sesion?'background:var(--good);border-color:var(--good);color:#fff':''}">${ACC.sesion?'✓':''}</div></div>`
+          <div class="kc">${/* Ponía «actividad profesional» encima de una sesión
+             de fuerza: esa etiqueta es de los entrenos que imparte Tama, no de
+             la suya. */ ''}${e.tipo==='profesional'?'45 min':e.meta.split('·').pop().trim()}</div>
+          <div class="check" style="${ACC.sesion?'background:var(--good);border-color:var(--good);color:#fff':''}"
+        onclick="event.stopPropagation(); marcarSesion()">${ACC.sesion?'✓':''}</div></div>`
       : `${hoyPlan && hoyPlan[3]==='work'
           ? `<div class="qr" style="border-top:0"><div class="thumb sm t-off" style="color:var(--muted)">🚫</div>
               <div class="tx"><div class="when">Agenda · no es entrenamiento tuyo</div>

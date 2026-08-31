@@ -44,6 +44,7 @@ async function hidratarCatalogo(){
         ? 'nevera' : 'armario';
   }
   for (const r of recs){
+    REC_ID[r.clave] = r.id;
     R[r.clave] = {
       n:r.nombre, e:r.emoji || '🍽', t:r.tipo || 't-verdura',
       mom:(r.momentos && r.momentos[0]) || 'comida',
@@ -304,13 +305,14 @@ async function guardarOficina(fecha, esOficina, llevaDesayuno){
 const ORDEN_MOM = {ayunas:0, desayuno:1, comida:2, merienda:3, cena:4, noche:5};
 async function hidratarMedicacion(){
   const {data, error} = await TYC.db.from('medications')
-    .select('nombre, dosis, momentos, con_comida, notas_admin').eq('activa', true);
+    .select('id, nombre, dosis, momentos, con_comida, notas_admin').eq('activa', true);
   if (error) throw error;
   const yo = SESION.perfil;
   MEDICACION[yo] = [];
   for (const m of (data || []))
     for (const mom of (m.momentos || []))
       MEDICACION[yo].push({
+        id: m.id, mom: mom,          // hacen falta para poder marcarla
         n: m.nombre + (m.dosis ? ' ' + m.dosis : ''),
         cuando: mom.charAt(0).toUpperCase() + mom.slice(1),
         comida: m.con_comida, e: '💊',
@@ -495,6 +497,218 @@ function limpiarEjemplo(){
   SIN_EJEMPLO = true;
 }
 
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LO QUE SE REGISTRA
+   Hasta aquí la app leía de la base y escribía solo la lista de la compra y
+   los días de oficina. Todo lo demás —marcar una comida, la medicación, el
+   peso, el cierre del día— cambiaba una variable en memoria y se perdía al
+   recargar. Esto es lo que lo hace real.
+
+   Dos reglas que valen para todo lo de abajo:
+
+   1. NADA SE PIERDE SIN COBERTURA. En la cocina de casa hay wifi; en el súper
+      o en el gimnasio, a veces no. Cada escritura pasa por una cola local: si
+      no sale, se guarda en el móvil y se reintenta al volver la conexión.
+
+   2. LO PERSONAL ES PERSONAL. Comidas, medicación, peso y cierre llevan
+      profile_id y las políticas de la base solo dejan escribir en el propio.
+      Lo de la casa —descongelar algo, preparar los túper, la tanda— va a
+      shared_checks y lo ve el otro al momento.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const COLA = 'tyc_cola_v1';
+const leerCola  = () => { try { return JSON.parse(localStorage.getItem(COLA) || '[]'); }
+                          catch { return []; } };
+const guardarCola = c => { try { localStorage.setItem(COLA, JSON.stringify(c.slice(-200))); } catch {} };
+
+/* La operación se describe con datos, no con una función: así se puede guardar
+   en el móvil y repetirla tal cual cuando vuelva la conexión. */
+async function escribir(op){
+  if (!TYC.db) return {error:'sin base'};
+  if (!navigator.onLine){ encolar(op); return {encolada:true}; }
+  const r = await ejecutar(op);
+  if (r.error){ encolar(op); avisoCola(); }
+  return r;
+}
+
+async function ejecutar(op){
+  const t = TYC.db.from(op.tabla);
+  if (op.tipo === 'borrar'){
+    let q = t.delete();
+    for (const [k, v] of Object.entries(op.donde)) q = q.eq(k, v);
+    return await q;
+  }
+  return await t.upsert(op.fila, op.conflicto ? {onConflict: op.conflicto} : undefined);
+}
+
+function encolar(op){ const c = leerCola(); c.push({...op, t: Date.now()}); guardarCola(c); pintarCola(); }
+
+async function vaciarCola(){
+  const cola = leerCola();
+  if (!cola.length || !navigator.onLine || !TYC.db) return 0;
+  const quedan = [];
+  for (const op of cola){ const r = await ejecutar(op); if (r.error) quedan.push(op); }
+  guardarCola(quedan);
+  pintarCola();
+  return cola.length - quedan.length;
+}
+window.addEventListener('online', () => vaciarCola().then(n => { if (n) recargarDia(); }));
+
+/* Que se vea cuántas cosas están esperando: una cola invisible es una cola en
+   la que nadie confía. */
+function pintarCola(){
+  const n = leerCola().length;
+  const el = document.getElementById('aviso-cola');
+  if (!el) return;
+  el.innerHTML = n ? `<div class="banner" style="margin-bottom:11px"><b class="t">${n} ${
+    n===1?'cosa sin enviar':'cosas sin enviar'}</b>
+    Se han guardado en este móvil y se envían solas cuando vuelva la conexión.</div>` : '';
+}
+const avisoCola = pintarCola;
+
+const hoyISO = () => isoDe(0);
+
+/* ── comidas ───────────────────────────────────────────────────────────────
+   El momento es la clave: una comida por momento y día. Volver a marcarla
+   pisa la anterior en vez de duplicarla. */
+async function guardarComida(momApp, estado, claveAlt){
+  const fila = {
+    profile_id: SESION.id, fecha: hoyISO(),
+    momento: MOM_BD[momApp] || momApp,
+    estado: ESTADO_BD[estado] || 'hecho'
+  };
+  if (claveAlt && REC_ID[claveAlt]) fila.recipe_alt_id = REC_ID[claveAlt];
+  return await escribir({tabla:'meal_logs', fila, conflicto:'profile_id,fecha,momento'});
+}
+const ESTADO_BD = {hecho:'hecho', cambiado:'cambiado', fuera:'fuera', saltado:'saltado'};
+const REC_ID = {};        // clave de receta → id, lo rellena el catálogo
+
+/* ── medicación ────────────────────────────────────────────────────────────
+   Se guarda también cuando se DESMARCA (tomada = false): que no haya fila es
+   «no lo sé», y que la haya en false es «no la tomé». No es lo mismo. */
+async function guardarMed(i, tomada){
+  const m = MEDICACION[P][i];
+  if (!m || !m.id) return {error:'medicación sin id'};
+  return await escribir({tabla:'medication_logs', conflicto:'medication_id,fecha,momento',
+    fila:{medication_id:m.id, fecha:hoyISO(), momento:m.mom || 'desayuno', tomada:!!tomada}});
+}
+
+/* ── peso y cintura ────────────────────────────────────────────────────────── */
+async function guardarPesoBD(kg){
+  const r = await escribir({tabla:'weight_logs', conflicto:'profile_id,fecha',
+    fila:{profile_id:SESION.id, fecha:hoyISO(), peso_kg:kg}});
+  const serie = SESION.perfil === 'c' ? PESO_C : PESO_T;
+  serie.push(+kg);
+  return r;
+}
+async function guardarCinturaBD(cm){
+  const r = await escribir({tabla:'measurements', conflicto:'profile_id,fecha',
+    fila:{profile_id:SESION.id, fecha:hoyISO(), cintura_cm:cm}});
+  CINTURA[SESION.perfil].push(+cm);
+  CINTURA_ULT_F = hoyISO();
+  return r;
+}
+
+/* ── cierre del día ───────────────────────────────────────────────────────── */
+async function guardarCierre(d){
+  const r = await escribir({tabla:'daily_close', conflicto:'profile_id,fecha',
+    fila:{profile_id:SESION.id, fecha:hoyISO(),
+          hambre:d.hambre, energia:d.energia, sueno:d.sueno,
+          pasos:d.pasos ?? null, alcohol:d.alcohol ?? null, nota:d.nota || null}});
+  if (d.pasos != null) PASOS[SESION.perfil] = d.pasos;
+  return r;
+}
+
+/* ── lo de la casa ─────────────────────────────────────────────────────────
+   Descongelar algo, preparar los túper, la tanda del domingo. Lleva quién lo
+   marcó porque «¿lo has sacado tú?» debería ser un dato y no una conversación. */
+async function guardarCheck(clave, estado){
+  if (estado === null){
+    return await escribir({tabla:'shared_checks', tipo:'borrar',
+      donde:{household_id:SESION.household, fecha:hoyISO(), clave}});
+  }
+  return await escribir({tabla:'shared_checks', conflicto:'household_id,fecha,clave',
+    fila:{household_id:SESION.household, fecha:hoyISO(), clave, estado,
+          marcado_por:SESION.id, marcado_at:new Date().toISOString()}});
+}
+
+/* ── entrenamiento ─────────────────────────────────────────────────────────
+   La sesión hecha, y las series con sus repeticiones y kilos: sin las series
+   no hay progresión de cargas, que es lo único que dice si el bloque funciona. */
+async function guardarEntreno(estado, series){
+  const fila = {profile_id:SESION.id, fecha:hoyISO(), estado};
+  const {data, error} = await TYC.db.from('workout_logs')
+    .upsert(fila).select('id').maybeSingle();
+  if (error){ encolar({tabla:'workout_logs', fila}); avisoCola(); return {error}; }
+  if (data && series && series.length){
+    await TYC.db.from('set_logs').delete().eq('workout_log_id', data.id);
+    await TYC.db.from('set_logs').insert(series.map((s, i) => ({
+      workout_log_id:data.id, serie_num:i+1,
+      reps:s.reps ?? null, peso_kg:s.kg ?? null, completada:true})));
+  }
+  return {data};
+}
+
+async function guardarCardioBD(nombre, minutos, hecha){
+  return await escribir({tabla:'unplanned_activities',
+    fila:{profile_id:SESION.id, fecha:hoyISO(), tipo:nombre,
+          duracion_min:minutos || 30, intensidad:'normal',
+          es_actividad_profesional:false,
+          notas: hecha ? 'hecha' : 'elegida'}});
+}
+
+/* ── leer lo que ya está registrado hoy ─────────────────────────────────────
+   Sin esto, abrir la app por la tarde enseñaría el día en blanco aunque el
+   desayuno estuviera marcado desde las ocho. */
+async function hidratarDia(){
+  const f = hoyISO();
+  const [comidas, medic, checks, cierre, entreno] = await Promise.all([
+    TYC.db.from('meal_logs').select('momento, estado').eq('fecha', f),
+    TYC.db.from('medication_logs').select('medication_id, momento, tomada').eq('fecha', f),
+    TYC.db.from('shared_checks').select('clave, estado, profiles(nombre)').eq('fecha', f),
+    TYC.db.from('daily_close').select('*').eq('fecha', f).maybeSingle(),
+    TYC.db.from('workout_logs').select('estado').eq('fecha', f).maybeSingle()
+  ]);
+
+  for (const c of (comidas.data || [])){
+    const m = MOM_APP[c.momento] || c.momento;
+    const fila = HOY[P].find(x => x.k === m);
+    if (fila) fila.estado = c.estado === 'sin_registrar' ? null : c.estado;
+  }
+
+  MED[P] = MEDICACION[P].map(m =>
+    (medic.data || []).some(x => x.medication_id === m.id && x.momento === m.mom && x.tomada));
+
+  for (const ch of (checks.data || [])) ACC[ch.clave] = ch.estado;
+
+  if (cierre.data){
+    const c = cierre.data;
+    if (c.pasos != null) PASOS[SESION.perfil] = c.pasos;
+    if (c.nota) NOTA = c.nota;
+    CIERRE_HOY = {hambre:c.hambre, energia:c.energia, sueno:c.sueno,
+                  pasos:c.pasos, alcohol:c.alcohol, nota:c.nota};
+    ACC.cierre = 'hecho';
+  }
+  if (entreno.data && entreno.data.estado === 'hecha') ACC.sesion = 'hecho';
+
+  return (comidas.data || []).length;
+}
+
+/* Cuando vuelve la conexión y se vacía la cola, lo que se ve tiene que
+   coincidir con lo que hay guardado. */
+async function recargarDia(){
+  try { await hidratarDia(); render(); } catch {}
+}
+
+/* Y lo de la casa, en cuanto lo marca el otro. */
+function escucharCasa(){
+  TYC.db.channel('casa')
+    .on('postgres_changes', {event:'*', schema:'public', table:'shared_checks'},
+        async () => { await hidratarDia(); render(); })
+    .subscribe();
+}
+
 /* ── arranque ───────────────────────────────────────────────────────────── */
 async function arrancarApp(){
   if (typeof supabase === 'undefined'){ return caerADemo('no se ha podido cargar la librería'); }
@@ -524,9 +738,27 @@ async function arrancarApp(){
       catch(err){ fallos.push(nombre); console.error('T&C · falla '+nombre+':', err.message||err); }
     }
     if (fallos.length) avisoParcial(fallos);
+    /* Los ganchos de registro. A partir de aquí, lo que se marca se guarda. */
+    GUARDAR_COMIDA  = guardarComida;
+    GUARDAR_MED     = guardarMed;
+    GUARDAR_PESO    = guardarPesoBD;
+    GUARDAR_CINTURA = guardarCinturaBD;
+    GUARDAR_CIERRE  = guardarCierre;
+    GUARDAR_CHECK   = guardarCheck;
+    GUARDAR_ENTRENO = guardarEntreno;
+    GUARDAR_CARDIO  = guardarCardioBD;
+    escucharCasa();
+    vaciarCola();
+
     P = yo; DISPOSITIVO = yo;
     console.log(`T&C · ${cat.ing} ingredientes · ${cat.rec} recetas · ${nd} en despensa · ${SESION.nombre}`);
-    ocultarAcceso(); sembrarDia(HORA); render();
+    ocultarAcceso();
+    sembrarDia(HORA);
+    /* Lo registrado hoy va DESPUÉS de sembrar el día y de saber quién eres:
+       necesita el menú cargado para saber a qué comida corresponde cada marca,
+       y el perfil para no leer las del otro. */
+    try { await hidratarDia(); } catch(err){ console.error('T&C · falla lo de hoy:', err.message||err); }
+    render();
   } catch (e) {
     caerADemo(e.message || e);
   }

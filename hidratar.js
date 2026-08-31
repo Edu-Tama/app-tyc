@@ -185,6 +185,7 @@ async function hidratarCompra(){
   await leerMarcas();
   GUARDAR_MARCA = guardarMarca;
   CERRAR_LISTA  = cerrarListaBD;
+  REABRIR_LISTA = reabrirListaBD;
   escucharLista();
   return Object.values(LISTA_ID).filter(Boolean).length;
 }
@@ -276,6 +277,39 @@ async function cerrarListaBD(tipo){
     .update({estado:'cerrada', cerrada:true, cerrada_at:new Date().toISOString(),
              cerrada_por:SESION.id}).eq('id', id);
   LISTA_ID[tipo] = null;
+}
+
+/* REABRIR UNA COMPRA.
+   Una compra no siempre se hace de una vez: se cierra la lista, faltan cuatro
+   cosas y se vuelve al súper el jueves. Sin esto, la lista cerrada quedaba
+   muerta y la nueva empezaba de cero, pidiendo otra vez lo que ya estaba en el
+   carro. Reabrir devuelve la lista tal y como se cerró, con sus marcas. */
+async function reabrirListaBD(tipo){
+  /* Si hay una lista abierta de ese tipo, estorba: el índice único no admite
+     dos. Se descarta solo si está intacta —nadie ha marcado nada en ella—;
+     si tiene marcas, es una compra en curso y no se toca. */
+  if (LISTA_ID[tipo]){
+    const {data: marcada} = await TYC.db.from('shopping_items')
+      .select('id').eq('shopping_list_id', LISTA_ID[tipo]).or('cogido.eq.true,no_habia.eq.true').limit(1);
+    if (marcada && marcada.length) return {error:'hay una compra en curso sin cerrar'};
+    await TYC.db.from('shopping_items').delete().eq('shopping_list_id', LISTA_ID[tipo]);
+    await TYC.db.from('shopping_lists').delete().eq('id', LISTA_ID[tipo]);
+    LISTA_ID[tipo] = null;
+  }
+
+  const {data: ultima} = await TYC.db.from('shopping_lists')
+    .select('id, abierta_at').eq('tipo', tipo).eq('estado', 'cerrada')
+    .order('cerrada_at', {ascending:false}).limit(1).maybeSingle();
+  if (!ultima) return {error:'no hay ninguna compra cerrada que reabrir'};
+
+  await TYC.db.from('shopping_lists')
+    .update({estado:'abierta', cerrada:false, cerrada_at:null, cerrada_por:null})
+    .eq('id', ultima.id);
+  LISTA_ID[tipo] = ultima.id;
+  LISTAS[tipo].estado = 'abierta';
+  LISTAS[tipo].abierta = fechaCorta(ultima.abierta_at);
+  await leerMarcas();
+  return {ok:true};
 }
 
 /* Y lo que marca uno tiene que aparecerle al otro mientras compra. */
@@ -607,10 +641,98 @@ async function guardarComida(momApp, estado, claveAlt){
     estado: ESTADO_BD[estado] || 'hecho'
   };
   if (claveAlt && REC_ID[claveAlt]) fila.recipe_alt_id = REC_ID[claveAlt];
-  return await escribir({tabla:'meal_logs', fila, conflicto:'profile_id,fecha,momento'});
+
+  if (!navigator.onLine || !TYC.db)
+    return await escribir({tabla:'meal_logs', fila, conflicto:'profile_id,fecha,momento'});
+
+  const {data, error} = await TYC.db.from('meal_logs')
+    .upsert(fila, {onConflict:'profile_id,fecha,momento'}).select('id').maybeSingle();
+  if (error){ encolar({tabla:'meal_logs', fila, conflicto:'profile_id,fecha,momento'});
+              avisoCola(); return {error}; }
+
+  /* Comer gasta despensa. Saltarse una comida o comer fuera, no. */
+  if (data){
+    if (estado === 'hecho' || estado === 'cambiado') await descontarComida(data.id, claveAlt);
+    else await devolverComida(data.id);
+  }
+  return {data};
 }
 const ESTADO_BD = {hecho:'hecho', cambiado:'cambiado', fuera:'fuera', saltado:'saltado'};
 const REC_ID = {};        // clave de receta → id, lo rellena el catálogo
+
+/* ── LA DESPENSA SE GASTA ──────────────────────────────────────────────────
+   Comprar sumaba a la despensa, pero comer no restaba: en unos días la
+   despensa decía que había el doble de lo que hay de verdad, y la lista de la
+   compra se calculaba sobre eso. Marcar una comida descuenta sus ingredientes,
+   escalados a la ración de quien la marca —si comen los dos, se descuenta dos
+   veces, que es lo que pasa en la sartén—.
+
+   Cada descuento deja su rastro en pantry_movements apuntando al registro de
+   la comida. Eso da dos cosas: no se descuenta dos veces si se vuelve a
+   marcar, y se puede DESHACER si la comida se desmarca. */
+async function descontarComida(mealLogId, clave){
+  if (!mealLogId || !clave || !R[clave]) return;
+
+  /* ¿Ya se descontó esta comida? Marcar dos veces no puede vaciar la nevera. */
+  const {data: ya} = await TYC.db.from('pantry_movements')
+    .select('id').eq('referencia_id', mealLogId).limit(1);
+  if (ya && ya.length) return;
+
+  const necesita = {};
+  for (const [n, c, u] of R[clave].ing){
+    const g = gramos(n, escala(n, c, u, P), u);
+    necesita[n] = (necesita[n] || 0) + g;
+  }
+
+  const nombres = Object.keys(necesita);
+  const {data: ings} = await TYC.db.from('ingredients').select('id, nombre').in('nombre', nombres);
+  const idDe = Object.fromEntries((ings || []).map(i => [i.nombre, i.id]));
+  const {data: hay} = await TYC.db.from('pantry')
+    .select('id, ingredient_id, cantidad').in('ingredient_id', Object.values(idDe));
+  const enCasa = Object.fromEntries((hay || []).map(p => [p.ingredient_id, p]));
+
+  const movs = [];
+  for (const n of nombres){
+    const ing = idDe[n]; if (!ing) continue;
+    const fila = enCasa[ing];
+    /* Lo que no está en la despensa no se descuenta ni se pone en negativo:
+       significa que se cocinó con algo que la app no sabía que había. Se anota
+       el movimiento igual, para que el ajuste mensual lo vea. */
+    const gasto = Math.min(necesita[n], fila ? +fila.cantidad : 0);
+    if (fila){
+      const resto = +fila.cantidad - gasto;
+      if (resto <= 0) await TYC.db.from('pantry').delete().eq('id', fila.id);
+      else await TYC.db.from('pantry').update({cantidad: resto,
+        actualizado_at: new Date().toISOString()}).eq('id', fila.id);
+    }
+    movs.push({household_id: SESION.household, ingredient_id: ing,
+      cantidad: -necesita[n], origen: 'comida', motivo: 'comida',
+      referencia_id: mealLogId});
+  }
+  if (movs.length) await TYC.db.from('pantry_movements').insert(movs);
+  await hidratarDespensa();
+}
+
+/* Y al revés: si la comida se desmarca, lo descontado vuelve. */
+async function devolverComida(mealLogId){
+  if (!mealLogId) return;
+  const {data: movs} = await TYC.db.from('pantry_movements')
+    .select('id, ingredient_id, cantidad').eq('referencia_id', mealLogId);
+  if (!movs || !movs.length) return;
+  const {data: hay} = await TYC.db.from('pantry')
+    .select('id, ingredient_id, cantidad').in('ingredient_id', movs.map(m => m.ingredient_id));
+  const enCasa = Object.fromEntries((hay || []).map(p => [p.ingredient_id, p]));
+  for (const m of movs){
+    const vuelve = Math.abs(+m.cantidad);
+    const fila = enCasa[m.ingredient_id];
+    if (fila) await TYC.db.from('pantry').update({cantidad: +fila.cantidad + vuelve,
+      actualizado_at: new Date().toISOString()}).eq('id', fila.id);
+    else await TYC.db.from('pantry').insert({household_id: SESION.household,
+      ingredient_id: m.ingredient_id, cantidad: vuelve, unidad: 'g', origen: 'ajuste'});
+  }
+  await TYC.db.from('pantry_movements').delete().eq('referencia_id', mealLogId);
+  await hidratarDespensa();
+}
 
 /* ── medicación ────────────────────────────────────────────────────────────
    Se guarda también cuando se DESMARCA (tomada = false): que no haya fila es
@@ -788,7 +910,7 @@ async function cerrarCompraBD(datos){
 async function hidratarDia(){
   const f = hoyISO();
   const [comidas, medic, checks, cierre, entreno] = await Promise.all([
-    TYC.db.from('meal_logs').select('momento, estado').eq('fecha', f),
+    TYC.db.from('meal_logs').select('id, momento, estado').eq('fecha', f),
     TYC.db.from('medication_logs').select('medication_id, momento, tomada').eq('fecha', f),
     TYC.db.from('shared_checks').select('clave, estado, profiles(nombre)').eq('fecha', f),
     TYC.db.from('daily_close').select('*').eq('fecha', f).maybeSingle(),
@@ -815,6 +937,16 @@ async function hidratarDia(){
     ACC.cierre = 'hecho';
   }
   if (entreno.data && entreno.data.estado === 'hecha') ACC.sesion = 'hecho';
+
+  /* Las comidas marcadas ANTES de que existiera el descuento no gastaron nada
+     de la despensa. Al abrir la app se ponen al día: el descuento comprueba si
+     ya se hizo, así que esto no descuenta dos veces. */
+  for (const c of (comidas.data || [])){
+    if (c.estado !== 'hecho' && c.estado !== 'cambiado') continue;
+    const m = MOM_APP[c.momento] || c.momento;
+    const fila = HOY[P].find(x => x.k === m);
+    if (fila && fila.r) await descontarComida(c.id, fila.r);
+  }
 
   return (comidas.data || []).length;
 }

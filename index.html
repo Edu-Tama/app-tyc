@@ -492,7 +492,7 @@ const DIAS_ATRAS=[0,-1,-2].map(o=>{const f=fechaDe(o);
 
 /* Saber qué versión corre en cada móvil deja de ser adivinar. Cuando algo
    «no se actualiza», este número lo dice en un vistazo. */
-const VERSION_APP = 'v21 · 31 ago 2026';
+const VERSION_APP = 'v23 · 31 ago 2026';
 const TYC_CONECTADO = () => typeof TYC !== 'undefined' && !!TYC.db && !TYC.demo;
 
 /* Descarta el service worker y las cachés y recarga: la salida de emergencia
@@ -648,7 +648,9 @@ function marcar(i,estado,alt){
   if(GUARDAR_COMIDA) GUARDAR_COMIDA(m.k, estado, alt||m.r);
   /* «Ahora toca» es otra zona de la misma pantalla y también cambia al marcar:
      sin esto se quedaba con la comida ya hecha hasta cerrar y abrir la app. */
+  /* Comer gasta despensa, así que la pantalla de Compra también cambia. */
   closeSheet(); pintarQuick(); pintarHero(); pintarAhora();
+  if(TAB==='despensa') pintarCompra();
 }
 
 /* vídeos propios: un clip de 10 s hecho en el gimnasio vale más que
@@ -1534,6 +1536,32 @@ function puerta(id){
 
 /* C · cerrar la lista. El ticket no es una importación suelta: es lo que cuadra
    lo comprado con lo previsto. */
+/* Volver al súper a por lo que faltó no es un caso raro: es la mitad de las
+   compras. Reabrir devuelve la lista como estaba, con lo ya marcado. */
+function sheetReabrir(k){
+  const L=LISTAS[k];
+  openSheet(`<h3>Reabrir la compra · ${L.n}</h3>
+    <div class="meta" style="margin-bottom:16px">Cerrada el ${L.cerrada||'—'}</div>
+    <div class="banner info"><b class="t">Para cuando faltó algo y vuelves al súper</b>
+      La lista vuelve tal y como se cerró: lo que ya cogiste sigue marcado y solo queda
+      lo que falta. Al volver a cerrarla se registra como una compra más —con su súper y su
+      total— y todo lo marcado entra en la despensa.</div>
+    <div class="note" style="margin-top:10px">Si mientras tanto se ha abierto una lista nueva y no has
+      marcado nada en ella, se descarta. Si ya habías empezado a marcar en la nueva, esa es la que vale
+      y esta no se puede reabrir.</div>
+    <button class="cta" style="margin-top:14px" onclick="reabrirLista('${k}')">↺ Reabrir</button>`);
+}
+function reabrirLista(k){
+  if(!REABRIR_LISTA){ LISTAS[k].estado='abierta'; closeSheet(); pintarCompra(); return; }
+  REABRIR_LISTA(k).then(r=>{
+    closeSheet();
+    if(r && r.error){
+      openSheet(`<h3>No se ha podido reabrir</h3>
+        <div class="meta" style="margin-bottom:16px">${r.error}</div>
+        <button class="cta" onclick="closeSheet()">Entendido</button>`);
+    } else { pintarCompra(); }
+  });
+}
 function sheetCerrar(k){
   const L=LISTAS[k], lista=listaVista();
   const n=L.secciones.flatMap(x=>lista[x]||[]).length;
@@ -2673,7 +2701,8 @@ function pintarCompra(){
             : `Cerrada el ${L.cerrada}`}</span>
           ${L.estado==='abierta'
             ? `<span class="chip" onclick="sheetCerrar('${k}')" style="cursor:pointer; background:var(--acc); color:#fff">✓ Cerrar</span>`
-            : '<span class="chip good">✓ cerrada</span>'}</div>
+            : `<span class="chip good">✓ cerrada</span>
+               <span class="chip" onclick="sheetReabrir('${k}')" style="cursor:pointer; margin-left:6px">↺ Reabrir</span>`}</div>
         ${L.estado==='abierta'?`<div class="bar" style="margin-bottom:10px"><i style="width:${Math.min(100,Math.round(100*L.cogidos/n))}%"></i></div>`:''}
         ${(()=>{const dentro={}; secs.forEach(x=>{if(lista[x]) dentro[x]=lista[x]});
           return `<div class="note" style="margin:0 0 6px; color:var(--muted)">

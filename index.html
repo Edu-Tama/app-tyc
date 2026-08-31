@@ -492,7 +492,7 @@ const DIAS_ATRAS=[0,-1,-2].map(o=>{const f=fechaDe(o);
 
 /* Saber qué versión corre en cada móvil deja de ser adivinar. Cuando algo
    «no se actualiza», este número lo dice en un vistazo. */
-const VERSION_APP = 'v25 · 31 ago 2026';
+const VERSION_APP = 'v29 · 31 ago 2026';
 const TYC_CONECTADO = () => typeof TYC !== 'undefined' && !!TYC.db && !TYC.demo;
 
 /* Descarta el service worker y las cachés y recarga: la salida de emergencia
@@ -629,14 +629,49 @@ function sheetFuera(i){
       .map(([e,l,d])=>`<button class="opt" onclick="marcar(${i},'fuera')">${e}<span class="grow">${l}<small>${d}</small></span></button>`).join('')}
     <div class="sec-h">Bebida</div>
     ${P==='t'
-      ? `<button class="opt">🍺 <span class="grow">Cerveza<small>142 kcal el tercio · cuenta para el objetivo de días sin alcohol</small></span></button>
-         <button class="opt">💧 <span class="grow">Sin alcohol<small>Suma un día al contador</small></span></button>`
-      : `<button class="opt">🥤 <span class="grow">Aquarius de limón<small>120 kcal y 29 g de azúcar el medio litro</small></span></button>
-         <button class="opt">💧 <span class="grow">Agua o refresco sin azúcar<small>La versión zero tiene el mismo sabor y 0 g</small></span></button>`}
+      ? `<button class="opt" onclick="registrarBebida('Cerveza',142,true)">🍺 <span class="grow">Cerveza<small>142 kcal el tercio · cuenta para el objetivo de días sin alcohol</small></span></button>
+         <button class="opt" onclick="registrarBebida('Sin alcohol',0,false)">💧 <span class="grow">Sin alcohol<small>Suma un día al contador</small></span></button>`
+      : `<button class="opt" onclick="registrarBebida('Aquarius de limón',120,false)">🥤 <span class="grow">Aquarius de limón<small>120 kcal y 29 g de azúcar el medio litro</small></span></button>
+         <button class="opt" onclick="registrarBebida('Refresco sin azúcar',0,false)">💧 <span class="grow">Agua o refresco sin azúcar<small>La versión zero tiene el mismo sabor y 0 g</small></span></button>`}
     <div class="note">${P==='c'
       ? 'Con la glucosa en ayunas en 127, medio litro de bebida azucarada es de las pocas cosas que la mueven de golpe. No es prohibirla: es que la versión zero cuesta lo mismo.'
       : 'La cerveza no se prohíbe, se cuenta. Es lo que hace visible el objetivo de retirarla.'}</div>`);
 }
+/* La alerta de hambre alta proponía subir el rango con dos botones que no
+   hacían nada. Subirlo es una decisión con consecuencias —cambia las raciones
+   de todas las recetas—, así que se aplica de verdad y se deja constancia. */
+function subirRango(){
+  const d=PERFILES[P];
+  d.kcalMin+=100; d.kcalMax+=100;
+  OBJ[P]={min:d.kcalMin, max:d.kcalMax, prot:d.protMin};
+  FACTOR[P]=+(((d.kcalMin+d.kcalMax)/2)/1800).toFixed(2);
+  d.calib.push(['Subido por hambre alta', `${d.kcalMin.toLocaleString('es')} – ${d.kcalMax.toLocaleString('es')}`,
+    'tres semanas seguidas con hambre alta en el cierre del día']);
+  if(GUARDAR_RANGO) GUARDAR_RANGO(d.kcalMin, d.kcalMax);
+  AVISO_DESCARTADO=true;
+  pintarSalud(); pintarHero(); pintarMenu();
+  openSheet(`<h3>Rango subido</h3>
+    <div class="meta" style="margin-bottom:16px">${d.kcalMin.toLocaleString('es')} – ${d.kcalMax.toLocaleString('es')} kcal</div>
+    <div class="banner info"><b class="t">Las raciones se recalculan solas</b>
+      El factor de ración pasa a ×${FACTOR[P].toFixed(2).replace('.',',')}. El menú de la semana ya está
+      ajustado; no hay que cambiar ningún plato.</div>
+    <div class="note" style="margin-top:10px">Queda anotado en la calibración del objetivo, con el motivo.
+      Si en dos semanas el hambre baja y el peso sigue bajando, era esto.</div>
+    <button class="cta" style="margin-top:14px" onclick="closeSheet()">Hecho</button>`);
+}
+let AVISO_DESCARTADO=false;
+function descartarAviso(){ AVISO_DESCARTADO=true; pintarSalud(); }
+
+/* Las bebidas eran cuatro botones que no hacían nada. Registrar «me he tomado
+   una cerveza» es justo lo que alimenta el objetivo de retirarla, y lo que
+   explica un día que se sale de rango sin motivo aparente. */
+function registrarBebida(nombre, kcal, alcohol){
+  const ya=EXTRA_LOG[P].find(y=>y.n===nombre);
+  if(ya) ya.n2++; else EXTRA_LOG[P].push({n:nombre, e:alcohol?'🍺':'💧', kcal, n2:1, alc:alcohol});
+  if(GUARDAR_EXTRA) GUARDAR_EXTRA({n:nombre, kcal, n2:1, alc:alcohol});
+  closeSheet(); pintarQuick(); pintarHero();
+}
+
 /* La sesión hecha, desde la pantalla de Hoy sin tener que entrar en ella. */
 function marcarSesion(){
   ACC.sesion = ACC.sesion ? null : 'hecho';
@@ -674,7 +709,34 @@ function sheetMiVideo(n){
         el vídeo para corregirlo. Y sirve para enseñárselo a un monitor de Forus sin tener que repetirlo delante.</div>
       <button class="cta" onclick="closeSheet()">🎥 Grabar ahora</button>`}`);
 }
+/* Lo que de verdad se ha levantado hoy, ejercicio por ejercicio y serie por
+   serie. Sin esto, la pantalla de la sesión era un cronómetro bonito: los
+   números que tecleabas se perdían al pasar al siguiente ejercicio, y la
+   progresión de cargas —que es lo único que dice si el bloque funciona— no
+   podía calcularse nunca. */
+/* La rutina diaria de espalda es lo que más veces se marca en la semana —todos
+   los días— y era lo único de Entreno que no dejaba rastro. Va como check de
+   la casa con la franja elegida, para poder ver si se hace de verdad. */
+function rutinaHecha(){
+  ACC.rutina='hecho';
+  if(GUARDAR_CHECK) GUARDAR_CHECK('rutina_'+P, ACC.franja || 'hecho');
+  closeSheet(); pintarQuick(); pintarEntreno();
+}
 let SES={ex:0, serie:0, casa:false, desc:0, timer:null};
+let SERIES_HOY = {};      // 'nombre del ejercicio' → [{reps, kg, hecha}]
+
+function leerSeries(nombre, sets){
+  const filas = document.querySelectorAll('#sheet-body .set');
+  const out = SERIES_HOY[nombre] || sets.map(sv => ({reps:sv[0], kg:sv[1]||null, hecha:false}));
+  filas.forEach((f, i) => {
+    const inp = f.querySelectorAll('input');
+    if (!out[i]) out[i] = {reps:null, kg:null, hecha:false};
+    if (inp[0]) out[i].reps = +inp[0].value || out[i].reps;
+    if (inp[1]) out[i].kg   = +inp[1].value || out[i].kg;
+  });
+  SERIES_HOY[nombre] = out;
+  return out;
+}
 function sheetRutina(){
   const r=RUTINA_DIARIA[P]; if(!r) return;
   openSheet(`<h3>${r.n}</h3>
@@ -693,7 +755,7 @@ function sheetRutina(){
       <span class="grow" style="padding-left:8px">${n}${i<6?'':'<small style="display:block; color:var(--muted); font-size:11.5px">si vas justo de tiempo, este puede caer</small>'}</span>
       <span style="color:var(--muted); font-size:12.5px">${d}</span></div>`).join('')}
     <div class="note">${r.nota}</div>
-    <button class="cta" style="margin-top:14px" onclick="ACC.rutina=true; closeSheet(); pintarQuick(); pintarEntreno()">✓ Hecha</button>`);
+    <button class="cta" style="margin-top:14px" onclick="rutinaHecha()">✓ Hecha</button>`);
 }
 /* Elegir una actividad tiene que dejar rastro: si marcas «remo» y la app se
    olvida, no es una elección, es un folleto. Se guarda qué elegiste y después
@@ -764,41 +826,98 @@ function sheetSesion(ex){
       <div class="sec-h" style="margin-top:0">Calentamiento · 5 min</div>
       ${CALENTAMIENTO.map(([n,t])=>`<div class="ing" style="font-size:13px"><span class="grow">${n}</span>
         <span style="color:var(--muted)">${t}</span></div>`).join('')}</div>`:''}
-    ${e.sets.map((sv,i)=>`<div class="set" style="${i<hechas?'opacity:.5':''}">
+    ${e.sets.map((sv,i)=>{
+      /* Lo que ya has tecleado manda sobre lo prescrito. Antes cada repintado
+         de la hoja —al marcar una serie, al cambiar de ejercicio— devolvía los
+         inputs al valor prescrito, y al releerlos se perdía lo tuyo: apuntabas
+         8 repeticiones a 90 kg y se guardaban las 6 a 85 del plan. */
+      const hecho = (SERIES_HOY[e.n]||[])[i] || {};
+      const reps = hecho.reps != null ? hecho.reps : sv[0];
+      const kilos = hecho.kg != null ? hecho.kg : sv[1];
+      const cambiada = hecho.reps != null && (hecho.reps !== sv[0] || (sv[1] && hecho.kg !== sv[1]));
+      return `<div class="set" style="${i<hechas?'opacity:.5':''}">
       <span class="n">${i+1}</span>
-      <input value="${sv[0]}"><span class="x">${e.t?'seg':'reps'}</span>
-      ${e.t||!sv[1]?'':`<input value="${sv[1]}"><span class="x">kg</span>`}
-      <span class="grow"></span>
-      <span class="box ${i<hechas?'on':''}" onclick="serieHecha(${i})"></span></div>`).join('')}
+      <input value="${reps}" inputmode="numeric"><span class="x">${e.t?'seg':'reps'}</span>
+      ${e.t||!sv[1]?'':`<input value="${kilos||''}" inputmode="decimal"><span class="x">kg</span>`}
+      <span class="grow">${cambiada?`<small style="color:var(--acc-txt); font-size:11px">
+        prescrito ${sv[0]}${sv[1]?' × '+sv[1]+' kg':''}</small>`:''}</span>
+      <span class="box ${i<hechas?'on':''}" onclick="serieHecha(${i})"></span></div>`}).join('')}
     ${SES.desc>0?`<div class="card" style="box-shadow:none; background:color-mix(in srgb, var(--acc) 12%, transparent); text-align:center; margin-top:14px">
       <div style="font-size:32px; font-weight:700; letter-spacing:-.03em; font-variant-numeric:tabular-nums">${SES.desc}s</div>
       <div class="meta">Descanso · siguiente serie</div></div>`:''}
     <div class="row" style="gap:8px; margin-top:16px">
-      <button class="act" onclick="sheetSesion(${SES.ex-1})" ${SES.ex?'':'disabled style="opacity:.4"'}>‹ Anterior</button>
+      <button class="act" onclick="guardaYSigue(${SES.ex-1})" ${SES.ex?'':'disabled style="opacity:.4"'}>‹ Anterior</button>
       ${SES.ex<lista.length-1
-        ? `<button class="act primary" onclick="SES.serie=0; sheetSesion(${SES.ex+1})">Siguiente ›</button>`
+        ? `<button class="act primary" onclick="guardaYSigue(${SES.ex+1})">Siguiente ›</button>`
         : `<button class="act primary" onclick="finSesion()">✓ Terminar sesión</button>`}</div>
     ${SES.ex<lista.length-1?`<div class="note">Siguiente: ${lista[SES.ex+1].n}</div>`:''}`);
 }
 function serieHecha(i){
+  /* Antes de repintar hay que leer lo tecleado: si no, se pierde. */
+  const d=PERFILES[P], lista=SES.casa?EN_CASA[P]:d.ejercicios;
+  const e=lista[SES.ex];
+  if(e){ const ss=leerSeries(e.n, e.sets||d.ejercicios[SES.ex].sets);
+         if(ss[i]) ss[i].hecha=true; }
   SES.serie=i+1; SES.desc=90;
   clearInterval(SES.timer);
   SES.timer=setInterval(()=>{SES.desc--; if(SES.desc<=0){clearInterval(SES.timer); SES.desc=0}
     if($('#sheet').classList.contains('on')) sheetSesion(SES.ex);},1000);
   sheetSesion(SES.ex);
 }
+/* Cambiar de ejercicio guardando lo tecleado, no perdiéndolo. */
+function guardaYSigue(i){
+  const d=PERFILES[P], lista=SES.casa?EN_CASA[P]:d.ejercicios;
+  const e=lista[SES.ex];
+  if(e) leerSeries(e.n, e.sets||d.ejercicios[SES.ex].sets);
+  SES.serie=0; sheetSesion(i);
+}
+
+/* El final de la sesión: esfuerzo y molestias eran chips que no se podían
+   pulsar y un botón que cerraba sin guardar. */
+let FIN_SESION={rpe:6, molestia:'Ninguna'};
 function finSesion(){
-  clearInterval(SES.timer); SES.desc=0; ACC.sesion=true; SES.serie=0; SES.ex=0;
+  clearInterval(SES.timer); SES.desc=0; SES.serie=0;
+  const d=PERFILES[P], lista=SES.casa?EN_CASA[P]:d.ejercicios;
+  const e=lista[SES.ex]; if(e) leerSeries(e.n, e.sets||d.ejercicios[SES.ex].sets);
+  SES.ex=0;
   closeSheet(); pintarQuick();
+  sheetFinSesion();
+}
+function sheetFinSesion(){
+  const F=FIN_SESION;
   openSheet(`<h3>Sesión completada</h3>
     <div class="meta" style="margin-bottom:16px">${PERFILES[P].entreno.titulo} · ${SES.casa?'en casa':'Forus'}</div>
-    <div class="f" style="border-top:0; align-items:flex-start"><label>¿Cómo ha ido el esfuerzo?</label></div>
-    <div class="seg">${[2,4,6,8,10].map(n=>`<span class="chip${n===6?' on':''}">${n}</span>`).join('')}</div>
+    <div class="f" style="border-top:0; align-items:flex-start"><label>¿Cómo ha ido el esfuerzo?
+      <div class="note" style="margin-top:2px">1 es un paseo, 10 es no poder con una más</div></label></div>
+    <div class="seg">${[2,4,6,8,10].map(n=>`<span class="chip${n===F.rpe?' on':''}"
+      onclick="FIN_SESION.rpe=${n}; sheetFinSesion()">${n}</span>`).join('')}</div>
     <div class="f" style="align-items:flex-start; margin-top:10px"><label>¿Alguna molestia?
-      <div class="note" style="margin-top:2px">Si marcas una, la próxima sesión sustituye los ejercicios que la cargan</div></label></div>
-    <div class="seg" style="flex-wrap:wrap">${['Ninguna','Hombro','Rodilla','Lumbar','Otra'].map((x,i)=>
-      `<span class="chip${i?'':' on'}">${x}</span>`).join('')}</div>
-    <button class="cta" style="margin-top:16px" onclick="closeSheet()">Guardar</button>`);
+      <div class="note" style="margin-top:2px">Queda anotada con la sesión, para poder mirarla en frío</div></label></div>
+    <div class="seg" style="flex-wrap:wrap">${['Ninguna','Hombro','Rodilla','Lumbar','Otra'].map(x=>
+      `<span class="chip${x===F.molestia?' on':''}" onclick="FIN_SESION.molestia='${x}'; sheetFinSesion()">${x}</span>`).join('')}</div>
+    <div class="card" style="box-shadow:none; background:var(--surface-2); margin-top:14px">
+      <div class="sec-h" style="margin-top:0">Lo que se guarda</div>
+      ${Object.entries(SERIES_HOY).map(([n,ss])=>`<div class="ing" style="font-size:13px">
+        <span class="grow">${n}</span><span style="font-weight:650">${
+          ss.filter(x=>x.hecha).length||ss.length} × ${ss[0].reps||'—'}${ss[0].kg?' @ '+ss[0].kg+' kg':''}</span></div>`).join('')
+        || '<div class="note">No has apuntado series. Se guarda la sesión como hecha.</div>'}
+    </div>
+    <button class="cta" style="margin-top:16px" onclick="guardarSesionEntera()">Guardar</button>`);
+}
+function guardarSesionEntera(){
+  ACC.sesion='hecho';
+  const series=[];
+  for(const [n,ss] of Object.entries(SERIES_HOY))
+    ss.forEach(x=>series.push({ejercicio:n, reps:x.reps, kg:x.kg}));
+  /* Las cargas del día alimentan la progresión: el último valor de cada
+     ejercicio es el que se compara con la próxima sesión. */
+  for(const [n,ss] of Object.entries(SERIES_HOY)){
+    const kg=ss.map(x=>x.kg).filter(Boolean).sort((a,b)=>b-a)[0];
+    if(kg && CARGAS[P][n]) CARGAS[P][n].push(kg);
+  }
+  if(GUARDAR_ENTRENO) GUARDAR_ENTRENO('hecha', series, FIN_SESION);
+  SERIES_HOY={}; FIN_SESION={rpe:6, molestia:'Ninguna'};
+  closeSheet(); pintarQuick(); pintarEntreno();
 }
 function sheetActividad(q=''){
   const l=DEPORTES.filter(d=>d.n.toLowerCase().includes(q.toLowerCase()));
@@ -808,18 +927,48 @@ function sheetActividad(q=''){
     <div class="sports">${l.map(d=>`<button class="sport" onclick="sheetActividadForm('${d.id}')">
       <span class="e">${d.e}</span><span class="l">${d.n}</span></button>`).join('')}</div>`);
 }
+let ACT={id:null, rpe:6, imparte:false};
 function sheetActividadForm(id){
   const d=DEPORTES.find(x=>x.id===id);
+  if(ACT.id!==id) ACT={id, rpe:6, imparte:false};
   openSheet(`<div class="row" style="margin-bottom:16px"><div class="thumb t-gym">${d.e}</div>
     <div class="grow"><h3 style="font-size:18px">${d.n}</h3><div class="meta">${capi(largo(HOY_F))}</div></div>
     <button class="icon-btn" onclick="sheetActividad()">↺</button></div>
-    ${d.m.map(k=>`<div class="f"><label>${CAMPO[k][0]}</label><input placeholder="—"><span class="meta" style="width:38px">${CAMPO[k][1]}</span></div>`).join('')}
-    <div class="f"><label>Esfuerzo percibido</label><div class="seg">${[2,4,6,8,10].map(n=>`<span class="chip${n===6?' on':''}">${n}</span>`).join('')}</div></div>
+    ${d.m.map(k=>`<div class="f"><label>${CAMPO[k][0]}</label>
+      <input id="act-${k}" type="number" inputmode="numeric" placeholder="—">
+      <span class="meta" style="width:38px">${CAMPO[k][1]}</span></div>`).join('')}
+    <div class="f"><label>Esfuerzo percibido</label><div class="seg">${[2,4,6,8,10].map(n=>
+      `<span class="chip${n===ACT.rpe?' on':''}" onclick="guardaCamposAct(); ACT.rpe=${n}; sheetActividadForm('${id}')">${n}</span>`).join('')}</div></div>
     <div class="f" style="align-items:flex-start"><label>¿La impartes tú?
       <div class="note" style="margin-top:2px">Si entrenas a otros, no computa como entrenamiento propio</div></label>
-      <div class="seg"><span class="chip">Sí</span><span class="chip on">No</span></div></div>
-    <button class="cta" style="margin-top:16px" onclick="closeSheet()">Guardar actividad</button>`);
+      <div class="seg">
+        <span class="chip${ACT.imparte?' on':''}" onclick="guardaCamposAct(); ACT.imparte=true; sheetActividadForm('${id}')">Sí</span>
+        <span class="chip${ACT.imparte?'':' on'}" onclick="guardaCamposAct(); ACT.imparte=false; sheetActividadForm('${id}')">No</span></div></div>
+    ${GUARDAR_CARDIO?'':`<div class="banner" style="margin-top:10px"><b class="t">⚠ Sin conexión con la base</b>
+      Esto se ve ahora pero no se guarda.</div>`}
+    <button class="cta" style="margin-top:14px" onclick="guardarActividad('${id}')">Guardar actividad</button>`);
 }
+/* Los campos se recuerdan entre repintados: cada toque en un chip volvía a
+   dibujar la hoja y borraba lo tecleado. */
+function guardaCamposAct(){
+  Object.keys(CAMPO).forEach(k=>{
+    const el=document.getElementById('act-'+k);
+    if(el && el.value!=='') ACT[k]=+el.value;
+  });
+}
+function guardarActividad(id){
+  guardaCamposAct();
+  const d=DEPORTES.find(x=>x.id===id);
+  const min=ACT.tiempo||30;
+  if(GUARDAR_CARDIO) GUARDAR_CARDIO(d.n, min, true, ACT.imparte, ACT.rpe);
+  /* Una actividad que impartes NO es entrenamiento tuyo: se registra como
+     agenda, no suma como sesión propia. Es la misma regla que con los
+     entrenos de fútbol sala. */
+  if(!ACT.imparte) ACC.sesion='hecho';
+  ACT={id:null, rpe:6, imparte:false};
+  closeSheet(); pintarQuick(); pintarEntreno();
+}
+
 /* La tanda es de UNA semana concreta: si se abre desde «Siguiente», lo que
    cambie el plan B tiene que ser el menú de esa semana, no el de esta. */
 /* Qué se cocina ese día NO es una lista fija: sale de las comidas de lunes a
@@ -1139,19 +1288,61 @@ function quitarExcepcion(sem,i){
 function excepcionDe(sem, n, mom){
   return (EXCEPCIONES[sem]||[]).find(x=>x.fecha===n && x.momento===MOMLAB[mom]);
 }
+let LAB_NUEVA={fecha:'', quien:null, val:{}};
 function sheetNuevaAnalitica(){
+  if(!LAB_NUEVA.quien) LAB_NUEVA.quien=P;
+  if(!LAB_NUEVA.fecha) LAB_NUEVA.fecha=isoDe(0);
+  const marcadores = LABS_EVO.length ? LABS_EVO.map(x=>[x[0],x[3],x[4]])
+    : [['Glucosa','74-106','mg/dL'],['HbA1c','4,3-6,1','%'],['Colesterol','<200','mg/dL'],
+       ['ALT (GPT)','10-49','U/L'],['GGT','<38','U/L'],['Vitamina D','30-100','ng/mL'],
+       ['Ferritina','10-291','ng/mL'],['Ácido úrico','3,1-7,8','mg/dL']];
   openSheet(`<h3>Añadir analítica</h3>
-    <div class="meta" style="margin-bottom:16px">Doce marcadores, unos dos minutos. Cuatro veces al año.</div>
-    <div class="f" style="border-top:0"><label>Fecha de la muestra</label><input value="05/09/2026" style="width:110px"></div>
+    <div class="meta" style="margin-bottom:16px">Los que tengas. Lo que dejes en blanco no se guarda.</div>
+    <div class="f" style="border-top:0"><label>Fecha de la muestra</label>
+      <input type="date" id="lab-fecha" value="${LAB_NUEVA.fecha}" style="width:150px"></div>
     <div class="f"><label>¿De quién es?</label>
-      <div class="seg"><span class="chip on">Cristina</span><span class="chip">Tama</span></div></div>
-    ${LABS_EVO.slice(0,6).map(([n,,,ref,u])=>`<div class="f">
+      <div class="seg">
+        <span class="chip${LAB_NUEVA.quien==='c'?' on':''}" onclick="labCampos(); LAB_NUEVA.quien='c'; sheetNuevaAnalitica()">Cristina</span>
+        <span class="chip${LAB_NUEVA.quien==='t'?' on':''}" onclick="labCampos(); LAB_NUEVA.quien='t'; sheetNuevaAnalitica()">Tama</span></div></div>
+    ${marcadores.map(([n,ref,u],i)=>`<div class="f">
       <label>${n} <span class="note" style="margin:0">ref. ${ref}</span></label>
-      <input placeholder="—"><span class="meta" style="width:52px; font-size:11.5px">${u}</span></div>`).join('')}
-    <div class="note" style="margin:10px 0">…y 6 más. Se puede adjuntar el PDF de Echevarne para tenerlo guardado,
+      <input id="lab-${i}" type="number" step="0.01" inputmode="decimal"
+        value="${LAB_NUEVA.val[n]!=null?LAB_NUEVA.val[n]:''}" placeholder="—">
+      <span class="meta" style="width:52px; font-size:11.5px">${u}</span></div>`).join('')}
+    <div class="note" style="margin:10px 0">Se puede adjuntar el PDF de Echevarne para tenerlo guardado,
       pero los valores se teclean: automatizar algo que hacéis cuatro veces al año no compensa.</div>
-    <button class="cta" onclick="closeSheet()">Guardar analítica</button>`);
+    ${GUARDAR_LAB?'':`<div class="banner"><b class="t">⚠ Sin conexión con la base</b>
+      Esto se ve ahora pero no se guarda.</div>`}
+    <button class="cta" onclick="guardarAnalitica()">Guardar analítica</button>`);
 }
+function labCampos(){
+  const f=document.getElementById('lab-fecha'); if(f) LAB_NUEVA.fecha=f.value;
+  document.querySelectorAll('[id^="lab-"]').forEach(el=>{
+    if(el.id==='lab-fecha') return;
+    /* Sin la fila no hay etiqueta de la que sacar el nombre del marcador: pasa
+       cuando la hoja ya se ha cerrado. */
+    const fila=el.closest('.f'); if(!fila) return;
+    const lab=fila.querySelector('label'); if(!lab || !lab.childNodes.length) return;
+    const n=lab.childNodes[0].textContent.trim();
+    if(el.value!=='') LAB_NUEVA.val[n]=+el.value;
+  });
+}
+function guardarAnalitica(){
+  labCampos();
+  const vals=Object.entries(LAB_NUEVA.val);
+  if(!vals.length) return;
+  if(GUARDAR_LAB) GUARDAR_LAB({fecha:LAB_NUEVA.fecha, quien:LAB_NUEVA.quien, valores:LAB_NUEVA.val});
+  const n=vals.length;
+  LAB_NUEVA={fecha:'', quien:null, val:{}};
+  closeSheet();
+  openSheet(`<h3>Analítica guardada</h3>
+    <div class="meta" style="margin-bottom:16px">${n} ${n===1?'marcador':'marcadores'}</div>
+    <div class="banner info"><b class="t">La comparación llega con la segunda</b>
+      Con una sola analítica no hay evolución que enseñar: las flechas y los deltas aparecen cuando haya
+      otra con la que comparar.</div>
+    <button class="cta" style="margin-top:14px" onclick="closeSheet(); pintarSalud()">Hecho</button>`);
+}
+
 function sheetInforme(){
   const esC = P==='c';
   /* El informe va a manos de un médico: cada cifra que salga tiene que venir de
@@ -1503,7 +1694,8 @@ function avisoTicket(){
         <div class="name" style="margin:2px 0 3px">${ENTRANTE.sitio} · ${ENTRANTE.fecha}</div>
         <div class="meta">${eur(ENTRANTE.total)} · ${ENTRANTE.lineas} líneas · ${ENTRANTE.sinIdentificar
           ? `<b style="color:var(--crit)">${ENTRANTE.sinIdentificar} sin identificar</b>` : 'todo reconocido'}</div></div>
-      <button class="act primary" style="flex:0 0 auto; padding:11px 15px">Revisar</button></div></div>`:'';
+      <button class="act primary" style="flex:0 0 auto; padding:11px 15px"
+        onclick="event.stopPropagation(); sheetTicketDigital()">Revisar</button></div></div>`:'';
 }
 function bloqueEstadoCompra(){
   const nueva=null;
@@ -1586,6 +1778,27 @@ function guardarGasto(){
    lo comprado con lo previsto. */
 /* Volver al súper a por lo que faltó no es un caso raro: es la mitad de las
    compras. Reabrir devuelve la lista como estaba, con lo ya marcado. */
+/* COMPRAR ALGO DE UNA LISTA YA CERRADA.
+   Cerrar la compra no puede significar «ya no se puede comprar nada de esto»:
+   la crema de cacahuete que faltaba se compra el jueves suelta, sin volver a
+   abrir la compra grande entera. Dos caminos, y el corto primero. */
+function sheetCompradoDespues(n, g, k){
+  openSheet(`<h3>${n}</h3>
+    <div class="meta" style="margin-bottom:16px">Está en una compra que ya cerraste ·
+      hacían falta ${cant(n, g)}</div>
+    <button class="opt" onclick="compradoSuelto('${n}',${g})">🛒
+      <span class="grow">Lo he comprado ahora<small>Entra en la despensa · la compra sigue cerrada</small></span></button>
+    <button class="opt" onclick="closeSheet(); sheetReabrir('${k}')">↺
+      <span class="grow">Reabrir la compra entera<small>Si vas a completar varias cosas de esta lista</small></span></button>
+    <div class="note" style="margin-top:10px">La primera opción no toca el gasto de aquella compra:
+      si quieres registrar lo que has pagado ahora, hazlo con «Registrar una compra».</div>`);
+}
+function compradoSuelto(n, g){
+  const cad=isoLocal(new Date(Date.now()+7*86400000));
+  DESPENSA[n]=[(DESPENSA[n]?DESPENSA[n][0]:0)+g, DESPENSA[n]?DESPENSA[n][1]:cad];
+  if(GUARDAR_DESPENSA) GUARDAR_DESPENSA({n, g, origen:'otra', cad:DESPENSA[n][1]});
+  closeSheet(); pintarCompra(); pintarQuick();
+}
 function sheetReabrir(k){
   const L=LISTAS[k];
   openSheet(`<h3>Reabrir la compra · ${L.n}</h3>
@@ -1771,8 +1984,13 @@ function cerrarSinTicket(k, est){
      puede evaporarse: pasa a una lista nueva. Antes cerrar la compra solo
      cambiaba el estado de la lista y la despensa se quedaba igual. */
   const lista=listaVista(), items=LISTAS[k].secciones.flatMap(x=>lista[x]||[]);
+  /* Cuánto entra de verdad en casa. Si corregiste la cantidad, esa manda. Si
+     no, entra el ENVASE: un bote de 400 g de garbanzos entra entero aunque el
+     menú pidiera 380. La lista pide lo que falta —que es lo útil en el súper—
+     pero la despensa recibe lo que cabe en la bolsa. */
   const cogidos=items.filter(i=>(MARCAS[i.n]||{}).cogido)
-    .map(i=>({n:i.n, g: MARCAS[i.n].g!=null ? MARCAS[i.n].g : i.g}));
+    .map(i=>({n:i.n, g: MARCAS[i.n].g!=null ? MARCAS[i.n].g
+                       : (i.comprado && i.comprado > i.g ? i.comprado : i.g)}));
   const pendientes=items.filter(i=>{const m=MARCAS[i.n]||{};
     return !m.cogido && (!m.noHabia || m.motivo==='pendiente');})
     .map(i=>({n:i.n, g:i.g, sec:ING[i.n]?ING[i.n][2]:'Despensa', envases:i.envases, formato:i.formato}));
@@ -2303,7 +2521,7 @@ function pintarMenu(){
       ${semanaHTML(MENU2, true, cocinaDe(1), 's2')}
       <div class="row" style="gap:8px; margin:4px 0 10px">
         <button class="act" onclick="regenerar()">↻ Regenerar</button>
-        <button class="act primary">✓ Confirmar semana</button></div>
+        <button class="act primary" onclick="confirmarSemana()">✓ Confirmar semana</button></div>
       <div class="note" id="gen-info"></div>`;
   } else if(TABM==='hist'){
     $('#menu-body').innerHTML=HISTORIAL.map(h=>`
@@ -2689,6 +2907,19 @@ function planB(modo, sem){
     <button class="cta" onclick="sheetTanda('${sem}')">Ver cómo queda la tanda</button>
     <button class="act" style="width:100%; margin-top:8px" onclick="closeSheet()">Cerrar</button>`);
 }
+/* Confirmar la semana siguiente: deja de ser «propuesta» y pasa a ser el plan,
+   con lo que eso arrastra —la compra se calcula sobre ella—. El botón no hacía
+   nada, así que la semana siguiente vivía en un limbo permanente. */
+function confirmarSemana(){
+  if(GUARDAR_SEMANA2) GUARDAR_SEMANA2(MENU2.map(d=>({desayuno:d.desayuno, media:d.media,
+    comida:d.comida, merienda:d.merienda, cena:d.cena, _c:d._c, _t:d._t})), true);
+  openSheet(`<h3>Semana confirmada</h3>
+    <div class="meta" style="margin-bottom:16px">${rotuloSemana(1)}</div>
+    <div class="banner info"><b class="t">Ya es el plan, no una propuesta</b>
+      La tanda del ${textoTanda(1).toLowerCase()} y la lista de la compra se calculan sobre esta semana.
+      Se puede seguir cambiando platos sueltos.</div>
+    <button class="cta" style="margin-top:14px" onclick="closeSheet()">Hecho</button>`);
+}
 function regenerar(){
   const r=generarSemana();
   if(!r){alert('No se ha encontrado una semana válida. Con la biblioteca actual pasa: hacen falta más recetas.');return}
@@ -2774,7 +3005,8 @@ function pintarCompra(){
         ${lista[sec].map(i=>{const m=MARCAS[i.n]||{};
           const real=m.g!=null?m.g:i.comprado, difiere=m.g!=null && m.g!==i.comprado;
           return `<div class="item" style="${m.noHabia?'opacity:.5':''}">
-          <span class="box ${m.cogido?'on':''}" onclick="marcarItem('${i.n}')">${m.cogido?'✓':''}</span>
+          <span class="box ${m.cogido?'on':''}" onclick="${L.estado==='abierta'
+            ? `marcarItem('${i.n}')` : `sheetCompradoDespues('${i.n}',${Math.round(i.g)},'${k}')`}">${m.cogido?'✓':''}</span>
           <span class="grow" onclick="sheetItem('${i.n}')" style="cursor:pointer">
             ${porUnidades(i.n)?'':i.n+' '}<b style="color:var(--acc-txt)">${cant(i.n, i.g)}</b>
             <span class="note" style="margin:0; display:block">
@@ -2988,7 +3220,8 @@ function pintarEntreno(){
                 <div class="name" style="margin:2px 0 3px">${x.n}</div>
                 <div class="meta">${hecha?(sel.real||x.obj):'Objetivo: '+x.obj}</div></div>
               ${hecha?'<span class="chip good">✓</span>'
-                :'<button class="act primary" style="flex:0 0 auto; padding:11px 15px">Hecha</button>'}
+                :`<button class="act primary" style="flex:0 0 auto; padding:11px 15px"
+                    onclick="event.stopPropagation(); sheetCardioHecho()">Hecha</button>`}
             </div></div>`; })();
     return `<h2 style="margin:18px 0 8px">Cardio</h2>` + cuerpo;
   })();
@@ -3014,13 +3247,13 @@ function pintarSalud(){
   /* alerta de bienestar: dos semanas seguidas de hambre alta */
   const hb=BIENESTAR[P].hambre, alta=hb.slice(-4,-1).filter(x=>x===3).length>=2;
   $('#alerta-bienestar').innerHTML = alta ? `
-    <div class="banner"><b class="t">⚠ Tres semanas con hambre alta</b>
+    <div class="banner" ${AVISO_DESCARTADO?'hidden':''}><b class="t">⚠ Tres semanas con hambre alta</b>
       No es falta de fuerza de voluntad: es la señal de que el rango está demasiado apretado. La app propone
       <b>subir 100 kcal</b> (1.700-1.850) durante dos semanas y volver a mirar. Perder algo más despacio y
       seguir es mejor que ir rápido y abandonar.
       <div class="row" style="gap:8px; margin-top:11px">
-        <button class="act">Ahora no</button>
-        <button class="act primary">Subir el rango</button></div></div>` : '';
+        <button class="act" onclick="descartarAviso()">Ahora no</button>
+        <button class="act primary" onclick="subirRango()">Subir el rango</button></div></div>` : '';
 
   /* cintura */
   const cin=CINTURA[P], W=404,H=110,L=28,R2=44,T=12,B=18;
@@ -3183,7 +3416,7 @@ function pintarSalud(){
     $('#h-lab').textContent='Analítica';
     $('#lab-card').innerHTML=`<div class="name" style="margin-top:0">Sin analítica registrada</div>
       <div class="note">Sube el PDF de Echevarne y los marcadores aparecerán aquí.</div>
-      <button class="act" style="margin-top:12px">📄 Subir analítica</button>`;
+      <button class="act" style="margin-top:12px" onclick="sheetNuevaAnalitica()">📄 Subir analítica</button>`;
   }
 }
 /* gráficos */

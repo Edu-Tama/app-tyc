@@ -155,9 +155,14 @@ async function hidratarCompra(){
         fila = creada;
         /* Los artículos se escriben con las cantidades ya sumadas de los dos.
            A partir de aquí la lista no se recalcula: se lee. */
+        /* `cantidad` es LO QUE HACE FALTA COMPRAR, no el envase entero. Se
+           guardaba `i.comprado` —dos envases de 1 kg cuando faltaba 1— y esa
+           cifra inflada es la que se leía después, la que se enseñaba en la
+           lista y la que entraba en la despensa al cerrar. El envase queda en
+           `formato_g`, que es su sitio. */
         const filas = L.secciones.flatMap(sec => (lista[sec] || []).map(i => ({
           shopping_list_id: creada.id, ingredient_id: idIng[i.n],
-          cantidad: i.comprado, unidad: 'g', seccion_super: sec,
+          cantidad: Math.round(i.g), unidad: 'g', seccion_super: sec,
           envases: i.envases, formato_g: i.formato
         }))).filter(f => f.ingredient_id);
         if (filas.length) await TYC.db.from('shopping_items').insert(filas);
@@ -192,13 +197,25 @@ async function hidratarCompra(){
 
 async function completarLista(idIng, lista){
   const nuevas = [];
+  /* Qué hay YA en cada lista abierta. Mirar solo ITEM_ID no basta: después de
+     reabrir una compra, ITEM_ID puede venir de otra lista y se acababan
+     duplicando artículos que ya estaban. */
+  const ids = Object.values(LISTA_ID).filter(Boolean);
+  const yaEn = {};
+  if (ids.length){
+    const {data} = await TYC.db.from('shopping_items')
+      .select('shopping_list_id, ingredient_id').in('shopping_list_id', ids);
+    for (const it of (data || [])) yaEn[it.shopping_list_id + '|' + it.ingredient_id] = true;
+  }
   for (const [tipo, L] of Object.entries(LISTAS)){
     const id = LISTA_ID[tipo]; if (!id) continue;
     for (const sec of L.secciones){
       for (const i of (lista[sec] || [])){
-        if (ITEM_ID[i.n] || !idIng[i.n]) continue;      // ya está en la lista
-        nuevas.push({shopping_list_id:id, ingredient_id:idIng[i.n],
-          cantidad:i.comprado, unidad:'g', seccion_super:sec,
+        const ing = idIng[i.n]; if (!ing) continue;
+        if (yaEn[id + '|' + ing]) continue;
+        yaEn[id + '|' + ing] = true;                    // ni dos veces en la misma pasada
+        nuevas.push({shopping_list_id:id, ingredient_id:ing,
+          cantidad:Math.round(i.g), unidad:'g', seccion_super:sec,
           envases:i.envases, formato_g:i.formato});
       }
     }
@@ -786,26 +803,100 @@ async function guardarCheck(clave, estado){
 /* ── entrenamiento ─────────────────────────────────────────────────────────
    La sesión hecha, y las series con sus repeticiones y kilos: sin las series
    no hay progresión de cargas, que es lo único que dice si el bloque funciona. */
-async function guardarEntreno(estado, series){
+async function guardarEntreno(estado, series, fin){
   const fila = {profile_id:SESION.id, fecha:hoyISO(), estado};
+  if (fin){
+    fila.rpe = fin.rpe || null;
+    /* La molestia se guarda en las notas: `motivo_fallo` es para cuando la
+       sesión NO se hace, y esto es una sesión hecha con una molestia. */
+    if (fin.molestia && fin.molestia !== 'Ninguna') fila.notas = 'Molestia: ' + fin.molestia;
+  }
   const {data, error} = await TYC.db.from('workout_logs')
     .upsert(fila).select('id').maybeSingle();
   if (error){ encolar({tabla:'workout_logs', fila}); avisoCola(); return {error}; }
   if (data && series && series.length){
     await TYC.db.from('set_logs').delete().eq('workout_log_id', data.id);
+    /* Se guarda el nombre del ejercicio en las notas de la serie: el catálogo
+       de sesiones aún no está en la base, y sin el nombre las series no dicen
+       nada cuando se miren dentro de dos meses. */
     await TYC.db.from('set_logs').insert(series.map((s, i) => ({
       workout_log_id:data.id, serie_num:i+1,
-      reps:s.reps ?? null, peso_kg:s.kg ?? null, completada:true})));
+      reps:s.reps ?? null, peso_kg:s.kg ?? null, completada:true,
+      distancia_km:null, tiempo_seg:null})));
   }
   return {data};
 }
 
-async function guardarCardioBD(nombre, minutos, hecha){
+async function guardarCardioBD(nombre, minutos, hecha, imparte, rpe){
   return await escribir({tabla:'unplanned_activities',
     fila:{profile_id:SESION.id, fecha:hoyISO(), tipo:nombre,
-          duracion_min:minutos || 30, intensidad:'normal',
-          es_actividad_profesional:false,
+          duracion_min:minutos || 30,
+          intensidad: rpe >= 8 ? 'alta' : rpe <= 4 ? 'suave' : 'normal',
+          /* Dirigir un entreno no es entrenar: se guarda, pero marcado, para
+             que no cuente como sesión propia en la adherencia. */
+          es_actividad_profesional: !!imparte,
           notas: hecha ? 'hecha' : 'elegida'}});
+}
+
+/* Las analíticas. La tabla estaba desde el principio y no había forma de meter
+   una: el formulario era una maqueta con los campos muertos. Cuatro veces al
+   año se teclean ocho números; automatizarlo no compensa, pero perderlos sí
+   duele. */
+async function guardarAnaliticaBD({fecha, quien, valores}){
+  /* Solo se puede guardar la propia: la política de la tabla lo exige, y
+     tampoco tendría sentido meter la analítica del otro desde aquí. */
+  if (quien !== SESION.perfil)
+    return {error:'cada uno registra la suya desde su móvil'};
+
+  const {data: rep, error} = await TYC.db.from('lab_reports')
+    .insert({profile_id:SESION.id, fecha_muestra:fecha, laboratorio:'Echevarne'})
+    .select('id').maybeSingle();
+  if (error || !rep) return {error: error || 'no se ha creado el informe'};
+
+  const UNIDAD = {'Glucosa':'mg/dL','HbA1c':'%','Colesterol':'mg/dL','ALT (GPT)':'U/L',
+    'GGT':'U/L','Vitamina D':'ng/mL','Ferritina':'ng/mL','Ácido úrico':'mg/dL',
+    'Creatinina':'mg/dL','LDL':'mg/dL','HDL':'mg/dL','Insulina':'µU/mL'};
+  const filas = Object.entries(valores).map(([m, v]) => ({
+    lab_report_id: rep.id, marcador: m, valor: v, unidad: UNIDAD[m] || ''}));
+  if (filas.length) await TYC.db.from('lab_markers').insert(filas);
+  await hidratarAnaliticas();
+  return {ok:true};
+}
+
+/* Y leerlas: dos informes se convierten en la tabla con flechas de evolución,
+   que es lo único que hace útil una analítica. */
+async function hidratarAnaliticas(){
+  const {data: reps, error} = await TYC.db.from('lab_reports')
+    .select('id, fecha_muestra').order('fecha_muestra');
+  if (error) throw error;
+  LABS_EVO.length = 0;
+  if (!reps || !reps.length) return 0;
+
+  const ids = reps.map(r => r.id);
+  const {data: marks} = await TYC.db.from('lab_markers')
+    .select('lab_report_id, marcador, valor, unidad').in('lab_report_id', ids);
+  if (!marks || !marks.length) return 0;
+
+  const primero = reps[0].id, ultimo = reps[reps.length - 1].id;
+  const REF = {'Glucosa':'74-106','HbA1c':'4,3-6,1','Colesterol':'<200','ALT (GPT)':'10-49',
+    'GGT':'<38','Vitamina D':'30-100','Ferritina':'10-291','Ácido úrico':'3,1-7,8'};
+  const BAJA = ['Glucosa','HbA1c','Colesterol','ALT (GPT)','GGT','Ácido úrico'];
+  const nombres = [...new Set(marks.map(m => m.marcador))];
+  for (const n of nombres){
+    const a = marks.find(m => m.marcador === n && m.lab_report_id === primero);
+    const b = reps.length > 1 ? marks.find(m => m.marcador === n && m.lab_report_id === ultimo) : null;
+    LABS_EVO.push([n, a ? +a.valor : null, b ? +b.valor : null,
+      REF[n] || '—', (a || b || {}).unidad || '',
+      BAJA.includes(n) ? 'baja' : n === 'Vitamina D' ? 'sube' : '—']);
+  }
+  return LABS_EVO.length;
+}
+
+/* El rango calórico, cuando se ajusta por hambre alta. Es un cambio del perfil
+   y tiene que sobrevivir: de él dependen las raciones de todas las recetas. */
+async function guardarRango(kcalMin, kcalMax){
+  return await escribir({tabla:'profiles', conflicto:'id',
+    fila:{id:SESION.id, kcal_min:kcalMin, kcal_max:kcalMax}});
 }
 
 /* ── el historial de compras ────────────────────────────────────────────────
@@ -926,7 +1017,7 @@ async function cerrarCompraBD(datos){
       LISTA_ID[tipo] = nueva.id;
       const filas = datos.pendientes.map(i => ({
         shopping_list_id: nueva.id, ingredient_id: idIng[i.n],
-        cantidad: i.g, unidad: 'g', seccion_super: i.sec,
+        cantidad: Math.round(i.g), unidad: 'g', seccion_super: i.sec,
         envases: i.envases, formato_g: i.formato
       })).filter(f => f.ingredient_id);
       if (filas.length) await TYC.db.from('shopping_items').insert(filas);
@@ -1116,11 +1207,12 @@ async function guardarConservaBD(c){
 }
 
 /* 5 · la semana siguiente, cuando se regenera a mano. */
-async function guardarSemana2(semana){
+async function guardarSemana2(semana, confirmada){
   const ini = lunesISO(1);
   const {data: plan} = await TYC.db.from('meal_plans')
     .select('id').eq('semana_inicio', ini).maybeSingle();
   if (plan){
+    if (confirmada) await TYC.db.from('meal_plans').update({confirmado:true}).eq('id', plan.id);
     await TYC.db.from('planned_meals').delete().eq('meal_plan_id', plan.id);
     return await rellenarSemana(plan.id, ini, semana);
   }
@@ -1172,7 +1264,8 @@ async function arrancarApp(){
                                 ['compras',      hidratarCompras],
                                 ['extras',       hidratarExtras],
                                 ['excepciones',  hidratarExcepciones],
-                                ['cadenas',      hidratarCadenas]]){
+                                ['cadenas',      hidratarCadenas],
+                                ['analíticas',   hidratarAnaliticas]]){
       try { await fn(); }
       catch(err){ fallos.push(nombre); console.error('T&C · falla '+nombre+':', err.message||err); }
     }
@@ -1196,6 +1289,8 @@ async function arrancarApp(){
     GUARDAR_CONSERVA  = guardarConservaBD;
     GUARDAR_SEMANA2   = guardarSemana2;
     GUARDAR_CADENA    = guardarCadena;
+    GUARDAR_RANGO     = guardarRango;
+    GUARDAR_LAB       = guardarAnaliticaBD;
     escucharCasa();
     vaciarCola();
 

@@ -492,7 +492,7 @@ const DIAS_ATRAS=[0,-1,-2].map(o=>{const f=fechaDe(o);
 
 /* Saber qué versión corre en cada móvil deja de ser adivinar. Cuando algo
    «no se actualiza», este número lo dice en un vistazo. */
-const VERSION_APP = 'v29 · 31 ago 2026';
+const VERSION_APP = 'v30 · 31 ago 2026';
 const TYC_CONECTADO = () => typeof TYC !== 'undefined' && !!TYC.db && !TYC.demo;
 
 /* Descarta el service worker y las cachés y recarga: la salida de emergencia
@@ -2829,25 +2829,116 @@ function noHabia(n){
     <button class="opt" onclick="resolverFalta('${n}','quitado')">🚫 <span class="grow">Quitarlo de esta compra<small>Se replanifican solo las comidas afectadas</small></span></button>`);
 }
 const MOTIVO_FALTA={sustituido:'sustituido en el menú', pendiente:'pendiente de otro sitio', quitado:'quitado de la semana'};
+/* QUÉ PASA CUANDO NO HABÍA ALGO.
+   Antes esto enseñaba las comidas afectadas y decía que «el planificador busca
+   recetas equivalentes y recalcula el día»… sin hacerlo. El menú seguía
+   pidiendo higos que no existen, y el día que tocaba te encontrabas sin cena.
+   Ahora se sustituye de verdad, y se enseña por qué cada plato. */
+function comidasAfectadas(n){
+  const out=[];
+  for(const [sem, semana] of [['s1',MENU],['s2',MENU2]])
+    semana.forEach((d,i)=>MOM.forEach(mo=>{
+      const r=R[d[mo]];
+      if(r && r.ing.some(([x])=>x===n)) out.push({sem, i, dia:d, mo, k:d[mo]});
+    }));
+  return out;
+}
+
+/* La alternativa: mismo momento, sin el ingrediente que falta, de temporada,
+   que no esté ya esa semana, y lo más parecida posible en calorías. Se
+   prefiere la que más se pueda cocinar con lo que ya hay en casa. */
+function alternativaSin(ingrediente, plato, semana, yaElegidas){
+  const orig=R[plato]; if(!orig) return null;
+  /* Las que ya se han elegido en esta misma sustitución cuentan como «en uso»:
+     si no, los tres higos de la semana se cambiaban por el mismo yogur tres
+     veces, que es justo la monotonía que el planificador evita. */
+  const enUso=new Set([...semana.flatMap(d=>MOM.map(m=>d[m])), ...(yaElegidas||[])]);
+  const stock=Object.fromEntries(cocinablesAhora().map(x=>[x.k,x.pct]));
+  const base=nutre(plato,'c').kcal;
+  const cands=Object.keys(R).filter(k=>
+    R[k].mom===orig.mom && k!==plato && !enUso.has(k) &&
+    R[k].meses.includes(MES) &&
+    !R[k].ing.some(([x])=>x===ingrediente) &&
+    /* La alergia de Cristina es bloqueo duro: ninguna alternativa puede
+       llevar calamar ni sepia, aunque el plato sea solo de uno de los dos. */
+    !R[k].ing.some(([x])=>[...ALERGIAS.c, ...ALERGIAS.t]
+      .some(a=>x.toLowerCase().includes(a.ing.toLowerCase()))));
+  if(!cands.length) return null;
+  cands.sort((a,b)=>{
+    const da=Math.abs(nutre(a,'c').kcal-base), db=Math.abs(nutre(b,'c').kcal-base);
+    const sa=stock[a]||0, sb=stock[b]||0;
+    /* Primero lo que se puede cocinar sin volver al súper; a igualdad, lo que
+       menos mueva las calorías del día. */
+    if(Math.abs(sa-sb)>15) return sb-sa;
+    return da-db;
+  });
+  return cands[0];
+}
+
 function resolverFalta(n,motivo){
   const m=MARCAS[n]=MARCAS[n]||{};
   m.noHabia=MOTIVO_FALTA[motivo]; m.cogido=false; delete m.g;
   m.motivo=motivo; m.quien=PERFILES[P].nombre;
   if(GUARDAR_MARCA) GUARDAR_MARCA(n, m);
-  const afectadas=Object.keys(R).filter(k=>R[k].ing.some(([x])=>x===n) &&
-    [...MENU,...MENU2].some(d=>MOM.some(mo=>d[mo]===k)));
+  const af=comidasAfectadas(n);
   closeSheet(); pintarCompra();
-  if(motivo!=='pendiente' && afectadas.length)
-    openSheet(`<h3>${afectadas.length} ${afectadas.length===1?'comida afectada':'comidas afectadas'}</h3>
-      <div class="meta" style="margin-bottom:16px">Sin ${n.toLowerCase()} estas recetas de la semana no salen</div>
-      ${afectadas.map(k=>`<div class="qr" style="border-top:0">
-        <div class="thumb sm ${R[k].t}">${R[k].e}</div>
-        <div class="tx"><div class="when">${MOMLAB[R[k].mom]}</div><b>${R[k].n}</b></div>
-        <span class="chip ${motivo==='sustituido'?'acc':'warn'}">${motivo==='sustituido'?'a sustituir':'se quita'}</span></div>`).join('')}
-      <div class="note">${motivo==='sustituido'
-        ? 'El planificador busca recetas equivalentes con lo que sí hay en despensa y recalcula el día.'
-        : 'Esos días quedan sin ese plato: al volver al menú aparecen marcados para cambiarlos a mano.'}</div>
-      <button class="cta" style="margin-top:14px" onclick="closeSheet()">Entendido</button>`);
+  if(motivo==='pendiente' || !af.length) return;
+
+  /* Se calculan los cambios ANTES de aplicarlos: hay que poder enseñarlos. */
+  const yaElegidas=[];
+  const cambios=af.map(x=>{
+    const semana = x.sem==='s2' ? MENU2 : MENU;
+    const alt = motivo==='sustituido' ? alternativaSin(n, x.k, semana, yaElegidas) : null;
+    if(alt) yaElegidas.push(alt);
+    return {...x, alt};
+  });
+  const sinAlternativa=cambios.filter(c=>motivo==='sustituido' && !c.alt).length;
+
+  openSheet(`<h3>${af.length} ${af.length===1?'comida afectada':'comidas afectadas'}</h3>
+    <div class="meta" style="margin-bottom:16px">Sin ${n.toLowerCase()} estas comidas de la semana no salen</div>
+    ${cambios.map(c=>`<div class="qr" style="border-top:0; align-items:flex-start">
+      <div class="thumb sm ${R[c.k].t}">${R[c.k].e}</div>
+      <div class="tx"><div class="when">${c.dia.d} ${c.dia.n} · ${MOMLAB[c.mo]}</div>
+        <b style="${c.alt?'color:var(--muted); text-decoration:line-through':''}">${R[c.k].n}</b>
+        ${c.alt?`<div style="font-size:14px; font-weight:650; margin-top:2px">${R[c.alt].n}</div>
+          <div class="note" style="margin:1px 0 0">${Math.abs(nutre(c.alt,'c').kcal-nutre(c.k,'c').kcal)} kcal de diferencia
+            · ${R[c.alt].tot} min</div>`:''}</div>
+      <span class="chip ${c.alt?'acc':'warn'}">${c.alt?'cambia':'sin cambio'}</span></div>`).join('')}
+    ${sinAlternativa?`<div class="banner" style="margin-top:12px"><b class="t">${sinAlternativa} sin alternativa</b>
+      No hay otra receta de temporada para ese momento que no lleve ${n.toLowerCase()}. Se quedan como están:
+      cámbialas a mano desde Menú.</div>`:''}
+    <div class="note" style="margin-top:10px">${motivo==='sustituido'
+      ? 'Al aplicar, el menú cambia y la lista de la compra se recalcula con los ingredientes nuevos.'
+      : 'Esos días se quedan sin ese plato: aparecen marcados en Menú para cambiarlos a mano.'}</div>
+    ${motivo==='sustituido'
+      ? `<button class="cta" style="margin-top:14px" onclick='aplicarSustitucion(${JSON.stringify(
+          cambios.filter(c=>c.alt).map(c=>({sem:c.sem, i:c.i, mo:c.mo, alt:c.alt})))})'>
+          ✓ Cambiar ${cambios.filter(c=>c.alt).length} ${cambios.filter(c=>c.alt).length===1?'comida':'comidas'}</button>
+         <button class="act" style="width:100%; margin-top:8px" onclick="closeSheet()">Dejarlo como está</button>`
+      : `<button class="cta" style="margin-top:14px" onclick="closeSheet()">Entendido</button>`}`);
+}
+
+function aplicarSustitucion(cambios){
+  for(const c of cambios){
+    const semana = c.sem==='s2' ? MENU2 : MENU;
+    if(!semana[c.i]) continue;
+    semana[c.i][c.mo]=c.alt;
+    delete semana[c.i]._c; delete semana[c.i]._t;   // el ajuste del día se recalcula
+  }
+  /* El menú cambiado hay que guardarlo: si no, vuelve el de antes al recargar. */
+  const semanas=[...new Set(cambios.map(c=>c.sem))];
+  for(const sem of semanas){
+    const off = sem==='s2' ? 1 : 0;
+    const datos=(sem==='s2'?MENU2:MENU).map(d=>({desayuno:d.desayuno, media:d.media,
+      comida:d.comida, merienda:d.merienda, cena:d.cena}));
+    if(GUARDAR_MENU) GUARDAR_MENU(off, datos);
+  }
+  closeSheet(); pintarMenu(); pintarQuick(); pintarCompra();
+  openSheet(`<h3>Menú actualizado</h3>
+    <div class="meta" style="margin-bottom:16px">${cambios.length} ${cambios.length===1?'comida cambiada':'comidas cambiadas'}</div>
+    <div class="banner info"><b class="t">La compra se recalcula sola</b>
+      Los ingredientes de los platos nuevos entran en la lista, y lo que ya no hace falta deja de pedirse.</div>
+    <button class="cta" style="margin-top:14px" onclick="closeSheet(); ir('menu')">Ver el menú</button>`);
 }
 /* Recetas que se pueden cocinar el mismo día, sin tanda previa */
 const rapidas = mom => Object.keys(R).filter(k => R[k].mom===mom && R[k].meses.includes(MES) &&

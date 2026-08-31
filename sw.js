@@ -12,7 +12,7 @@
       devolver su propia copia guardada —GitHub Pages manda cabeceras de 10
       minutos— y ni siquiera llega a preguntar al servidor.
    ═══════════════════════════════════════════════════════════════════════════ */
-const VERSION  = 'tyc-v29-2026-08-31';
+const VERSION  = 'tyc-v30-2026-08-31';
 const ARCHIVOS = ['./', './index.html', './datos.js', './hidratar.js', './manifest.json',
                   './icono.svg', './icono-192.png', './icono-512.png', './icono-maskable-512.png'];
 

@@ -1206,7 +1206,36 @@ async function guardarConservaBD(c){
   return {ok:true};
 }
 
-/* 5 · la semana siguiente, cuando se regenera a mano. */
+/* 5 · guardar CUALQUIERA de las dos semanas. Hacía falta para la semana
+   siguiente al regenerarla, y ahora también para la de esta semana cuando se
+   sustituye un plato porque no había un ingrediente en el súper. */
+async function guardarMenuBD(off, semana, confirmada){
+  const ini = lunesISO(off);
+  const {data: plan} = await TYC.db.from('meal_plans')
+    .select('id').eq('semana_inicio', ini).maybeSingle();
+  if (plan){
+    if (confirmada) await TYC.db.from('meal_plans').update({confirmado:true}).eq('id', plan.id);
+    await TYC.db.from('planned_meals').delete().eq('meal_plan_id', plan.id);
+    const r = await rellenarSemana(plan.id, ini, semana);
+    /* La lista de la compra se calcula sobre el menú: si el menú cambia, hay
+       que añadir lo que ahora hace falta. */
+    await refrescarLista();
+    return r;
+  }
+  const r = await guardarSemana(ini, semana);
+  await refrescarLista();
+  return r;
+}
+
+async function refrescarLista(){
+  try {
+    const {data: ings} = await TYC.db.from('ingredients').select('id, nombre');
+    const idIng = Object.fromEntries((ings || []).map(i => [i.nombre, i.id]));
+    await completarLista(idIng, listaCompra());
+    await leerMarcas();
+  } catch(e){ console.warn('[T&C] no se ha podido refrescar la lista:', e.message); }
+}
+
 async function guardarSemana2(semana, confirmada){
   const ini = lunesISO(1);
   const {data: plan} = await TYC.db.from('meal_plans')
@@ -1291,6 +1320,7 @@ async function arrancarApp(){
     GUARDAR_CADENA    = guardarCadena;
     GUARDAR_RANGO     = guardarRango;
     GUARDAR_LAB       = guardarAnaliticaBD;
+    GUARDAR_MENU      = guardarMenuBD;
     escucharCasa();
     vaciarCola();
 

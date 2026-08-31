@@ -492,7 +492,7 @@ const DIAS_ATRAS=[0,-1,-2].map(o=>{const f=fechaDe(o);
 
 /* Saber qué versión corre en cada móvil deja de ser adivinar. Cuando algo
    «no se actualiza», este número lo dice en un vistazo. */
-const VERSION_APP = 'v16 · 31 ago 2026';
+const VERSION_APP = 'v18 · 31 ago 2026';
 const TYC_CONECTADO = () => typeof TYC !== 'undefined' && !!TYC.db && !TYC.demo;
 
 /* Descarta el service worker y las cachés y recarga: la salida de emergencia
@@ -2754,6 +2754,11 @@ function pintarEntreno(){
      enseñar. Una línea de un punto no es una gráfica, es un adorno. */
   const ejs=Object.keys(CARGAS[P]);
   const hayHist=ejs.some(n=>CARGAS[P][n].length>1);
+  /* Aquí había un `return` cuando todavía no hay progresión de cargas —que es
+     justo el estado del primer día—. Y como el bloque de la pestaña «Sesión»
+     se pinta DESPUÉS, la función se iba antes de llegar: en Hoy se veía la
+     sesión pero su pestaña salía vacía. Un return en una función que pinta
+     cinco zonas distintas se lleva por delante las que vengan detrás. */
   if(!hayHist){
     $('#ent-cargas').innerHTML=`<div class="scan" style="margin:0">
       <div style="font-size:30px">📈</div>
@@ -2764,8 +2769,7 @@ function pintarEntreno(){
       ${ejs.length?`<div class="sec-h">Con lo que se empieza</div>
       ${ejs.map(n=>`<div class="ing" style="font-size:13px"><span class="grow">${n}</span>
         <span style="font-weight:650">${String(CARGAS[P][n][0]).replace('.',',')} kg</span></div>`).join('')}`:''}`;
-    return;
-  }
+  } else {
   $('#ent-cargas').innerHTML=ejs.map((n,idx)=>{
     const v=CARGAS[P][n], W=404,H=90,L=6,R2=44,T=10,B=10;
     const mn=Math.min(...v), mx=Math.max(...v);
@@ -2783,6 +2787,7 @@ function pintarEntreno(){
     `<div class="note">Ocho semanas de bloque. ${P==='c'
       ? 'Fuerza subiendo mientras el peso baja: es la prueba de que lo que se pierde es grasa y no músculo.'
       : 'Con el peso estable y las cargas subiendo, la recomposición va por donde debe.'}</div>`;
+  }
 
   /* LA SESIÓN VA PRIMERO. Antes esta pestaña abría con la tarjeta de cardio
      —que para Tama es del sábado— y la sesión de fuerza del día quedaba

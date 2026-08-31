@@ -1266,7 +1266,11 @@ const ADH=[68,74,81,79,88,85,92,86], RANGO=[41,55,62,58,71,64,79,71];
 /* ── Acciones que hay que hacer HOY, vengan del módulo que vengan.
       "Hoy" es el buzón de todos los módulos, no una pantalla de comidas. ── */
 function accionesDeHoy(){
-  const hoy='19', manana='20', acc=[];
+  /* Estaban escritos a mano los días 19 y 20 —de la semana de ejemplo—, así que
+     con el menú del 31 en adelante `MENU.find` no encontraba nada y TODO lo que
+     depende de mañana desaparecía sin decir nada: sacar la merluza del
+     congelador, preparar los túper, dejar la avena hecha. */
+  const hoy = String(HOY_F.getDate()), manana = String(fechaDe(1).getDate()), acc=[];
   const dManana=MENU.find(d=>d.n===manana);
 
   // 1. descongelar lo que pide el menú de mañana
@@ -1297,7 +1301,7 @@ function accionesDeHoy(){
     /* Antes decía siempre «dos raciones distintas». Los días que Tama teletrabaja
        eso es falso: come en casa y no hace falta prepararle nada. Pedir una tarea
        de más 12 veces al mes es lo que enseña a ignorar la app. */
-    const t=tupersDe(FECHA_DE[manana]||'2026-08-20');
+    const t=tupersDe(isoDe(1));
     if(t.length) acc.push({id:'tuper', tipo:'check', e:'🥡', t:'t-legumbre',
       when:'Esta noche · para la oficina',
       txt:t.length===2?'Prepara los túper de mañana':`Prepara el túper de ${t[0].nombre}`,

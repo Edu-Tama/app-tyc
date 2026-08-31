@@ -12,7 +12,7 @@
       devolver su propia copia guardada —GitHub Pages manda cabeceras de 10
       minutos— y ni siquiera llega a preguntar al servidor.
    ═══════════════════════════════════════════════════════════════════════════ */
-const VERSION  = 'tyc-v30-2026-08-31';
+const VERSION  = 'tyc-v32-2026-08-31';
 const ARCHIVOS = ['./', './index.html', './datos.js', './hidratar.js', './manifest.json',
                   './icono.svg', './icono-192.png', './icono-512.png', './icono-maskable-512.png'];
 
@@ -54,3 +54,32 @@ self.addEventListener('fetch', e => {
 
 /* Permite forzar la actualización desde la propia app. */
 self.addEventListener('message', e => { if (e.data === 'actualizar') self.skipWaiting(); });
+
+
+/* Al tocar un aviso, abrir la app en vez de una pestaña nueva: si no, se
+   acumulan cuatro copias de T&C abiertas al final del día. */
+self.addEventListener('notificationclick', ev => {
+  ev.notification.close();
+  ev.waitUntil(clients.matchAll({type:'window', includeUncontrolled:true}).then(lista => {
+    for (const c of lista) if (c.url.includes(self.registration.scope) && 'focus' in c) return c.focus();
+    if (clients.openWindow) return clients.openWindow('./');
+  }));
+});
+
+
+/* Los avisos que llegan con la app cerrada. El servidor manda un JSON con el
+   título y el cuerpo; aquí solo se muestra. */
+self.addEventListener('push', ev => {
+  let d = {titulo:'T&C', cuerpo:'', clave:'tyc'};
+  try { d = {...d, ...ev.data.json()}; } catch { if (ev.data) d.cuerpo = ev.data.text(); }
+  ev.waitUntil(self.registration.showNotification(d.titulo, {
+    body: d.cuerpo,
+    icon: './icono-192.png',
+    badge: './icono-192.png',
+    /* La misma clave sustituye al aviso anterior en vez de apilar cuatro
+       recordatorios del mismo cierre del día. */
+    tag: d.clave || 'tyc',
+    renotify: false,
+    data: {clave: d.clave}
+  }));
+});

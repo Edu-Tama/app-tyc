@@ -892,6 +892,16 @@ async function hidratarAnaliticas(){
   return LABS_EVO.length;
 }
 
+/* La dirección de este móvil para recibir avisos. Se guarda una por teléfono:
+   si Cristina entra desde el suyo y Tama desde el suyo, cada uno recibe los
+   propios. Vuelve a guardarse en cada activación por si el navegador rota la
+   dirección, que lo hace de vez en cuando. */
+async function guardarPush(sub){
+  return await escribir({tabla:'push_subscriptions', conflicto:'endpoint',
+    fila:{profile_id:SESION.id, endpoint:sub.endpoint, p256dh:sub.p256dh,
+          auth:sub.auth, dispositivo:sub.dispositivo, caducada:false}});
+}
+
 /* El rango calórico, cuando se ajusta por hambre alta. Es un cambio del perfil
    y tiene que sobrevivir: de él dependen las raciones de todas las recetas. */
 async function guardarRango(kcalMin, kcalMax){
@@ -1321,6 +1331,7 @@ async function arrancarApp(){
     GUARDAR_RANGO     = guardarRango;
     GUARDAR_LAB       = guardarAnaliticaBD;
     GUARDAR_MENU      = guardarMenuBD;
+    GUARDAR_PUSH      = guardarPush;
     escucharCasa();
     vaciarCola();
 

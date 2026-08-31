@@ -492,7 +492,7 @@ const DIAS_ATRAS=[0,-1,-2].map(o=>{const f=fechaDe(o);
 
 /* Saber qué versión corre en cada móvil deja de ser adivinar. Cuando algo
    «no se actualiza», este número lo dice en un vistazo. */
-const VERSION_APP = 'v30 · 31 ago 2026';
+const VERSION_APP = 'v32 · 31 ago 2026';
 const TYC_CONECTADO = () => typeof TYC !== 'undefined' && !!TYC.db && !TYC.demo;
 
 /* Descarta el service worker y las cachés y recarga: la salida de emergencia
@@ -1647,37 +1647,140 @@ function sheetDatos(){
    «primera semana confirmada» cuando el inventario ya está cargado y la semana
    la genera la app sola. Lo único que seguía vivo —cómo van los precios y los
    nombres del ticket— se ve en Compra, que es donde se usa. */
+/* LAS NOTIFICACIONES, COMO SON DE VERDAD.
+   Esta pantalla listaba siete avisos con sus horas y decía «máximo 4 al día,
+   todas silenciables». No existía ni una línea de código que las enviara: era
+   una maqueta de un plan. Ahora hace lo que se puede hacer sin un servidor
+   detrás, y dice con claridad lo que no.
+
+   Qué se puede y qué no, en una PWA:
+   · Con la app abierta o recién usada → sí se pueden lanzar avisos.
+   · Con el móvil guardado y la app cerrada horas → NO, sin un servidor que
+     empuje la notificación. Eso es un proyecto aparte.
+   Prometer lo segundo y no cumplirlo es peor que no tenerlo. */
+const AVISOS = [
+  ['cierre',  '21:45', 'Cerrar el día',      'Las comidas del día en una pantalla. Miércoles y viernes a las 22:15.'],
+  ['med',     '08:00', 'Medicación',         'Según la pauta de cada uno.'],
+  ['peso',    '07:30', 'Peso · mié y sáb',   'Solo los dos días que toca.'],
+  ['caduca',  '20:00', 'Algo va a caducar',  'Con la receta que lo aprovecha.'],
+];
+const AVISOS_ON = {};
+let PERMISO_AVISOS = (typeof Notification !== 'undefined') ? Notification.permission : 'no-soportado';
+
 function sheetNotif(){
-  const N=[['21:45','Cierra el día','Las comidas del día en una pantalla. Miércoles y viernes a las 22:15, cuando Tama vuelve de entrenar.',1],
-   ['08:00 / 21:00','Medicación','Según la pauta de cada uno. La metformina avisa junto a la comida, no suelta.',1],
-   ['07:30 · mié y sáb','Peso','Solo los dos días que toca.',1],
-   ['Sábado 11:00','Revisa el menú','La semana siguiente está propuesta y espera confirmación.',1],
-   ['Domingo 11:00','Tanda de cocina','Con el guion cronometrado listo para seguir.',1],
-   ['Cuando el otro cierra','Tu pareja ha cerrado el día','Aviso suave, sin comparar ni marcar quién va por detrás.',1],
-   ['2 días antes','Algo va a caducar','Con la receta que lo aprovecha.',0]];
-  openSheet(`<h3>Notificaciones</h3>
-    <div class="meta" style="margin-bottom:16px">Máximo 4 al día. Todas silenciables por separado.</div>
-    ${N.map(([h,t,d,on])=>`<div class="ing" style="align-items:flex-start">
+  const soporta = typeof Notification !== 'undefined';
+  openSheet(`<h3>Avisos</h3>
+    <div class="meta" style="margin-bottom:16px">Lo que la app puede recordaros, y lo que no</div>
+
+    ${!soporta ? `<div class="banner"><b class="t">Este navegador no admite avisos</b>
+        Instala la app desde el navegador (Añadir a pantalla de inicio) y vuelve a mirar.</div>`
+      : PERMISO_AVISOS === 'granted'
+        ? `<div class="banner info"><b class="t">✓ Avisos permitidos</b>
+            Los recordatorios llegan mientras la app esté abierta o la hayas usado hace poco.</div>`
+        : `<div class="banner"><b class="t">Los avisos están apagados</b>
+            Hay que darles permiso una vez. Se puede quitar cuando queráis desde los ajustes del móvil.</div>
+           <button class="cta" style="margin:10px 0 4px" onclick="pedirPermisoAvisos()">Activar los avisos</button>`}
+
+    <div class="sec-h">Cuáles</div>
+    ${AVISOS.map(([id,h,t,d])=>`<div class="ing" style="align-items:flex-start">
       <div class="grow"><div style="font-size:14px; font-weight:650">${t}</div>
         <div class="note" style="margin:1px 0 0">${h} · ${d}</div></div>
-      <div class="check ${on?'':''}" style="${on?'background:var(--good);border-color:var(--good);color:#fff':''}">${on?'✓':''}</div></div>`).join('')}
-    <div class="banner" style="margin:16px 0"><b class="t">Una regla sobre el aviso de pareja</b>
-      Nunca dirá «Cristina ya ha registrado y tú no». Un aviso que compara genera resentimiento y acaba
-      silenciado. Dirá solo que el otro ha cerrado su día, y punto.</div>
-    <div class="card" style="box-shadow:none; margin:16px 0; background:var(--surface-2)">
-      <div class="sec-h" style="margin-top:0">Widget de pantalla de inicio · Android</div>
-      <div style="background:var(--surface); border-radius:14px; padding:12px; border:1px solid var(--border)">
-        <div class="row"><div class="thumb sm t-verdura">🥣</div>
-          <div class="grow"><div class="when">Cena · 21:15</div>
-            <b style="font-size:13.5px">Crema de calabacín y pollo</b></div>
-          <div class="check" style="border-color:var(--good)"></div></div></div>
-      <div class="note">Marcar una comida sin desbloquear ni abrir la app: es la menor fricción posible
-        y, en Android, no tiene ninguna limitación.</div></div>
-    <div class="banner"><b class="t">Aviso técnico</b>
-      En iPhone las notificaciones solo funcionan si la app se instala en la pantalla de inicio.
-      Hay que probarlo pronto: el cierre del día a las 21:45 es la pieza central del registro.</div>
-    <button class="cta" style="margin-top:14px" onclick="sheetAjustes()">‹ Volver</button>`);
+      <div class="check ${AVISOS_ON[id]?'on':''}" onclick="AVISOS_ON['${id}']=!AVISOS_ON['${id}']; sheetNotif()"
+        style="${AVISOS_ON[id]?'background:var(--good);border-color:var(--good);color:#fff':''}">${AVISOS_ON[id]?'✓':''}</div></div>`).join('')}
+
+    <div class="banner info" style="margin:16px 0"><b class="t">Solo avisan si hace falta</b>
+      Si ya cerraste el día, no te avisa de cerrarlo. Si ya te tomaste la medicación, no insiste.
+      Si no caduca nada, no dice nada. Un aviso que llega cuando ya lo has hecho es el que enseña
+      a ignorar todos los demás.</div>
+
+    <div class="note" style="margin-bottom:10px">Silencio de 23:00 a 07:00, pase lo que pase.
+      Máximo uno de cada tipo al día.</div>
+
+    <button class="act" style="width:100%" onclick="probarAviso()">Probar un aviso ahora</button>
+    ${ERROR_AVISOS?`<div class="banner" style="margin-top:10px"><b class="t">Ha fallado la suscripción</b>
+      ${ERROR_AVISOS}</div>`:''}
+    <div class="note" style="margin-top:10px">Para que lleguen con el móvil guardado hay que tener la app
+      <b>instalada</b> (en el navegador: menú → Añadir a pantalla de inicio). En una pestaña normal
+      Android los limita.</div>
+    <button class="cta" style="margin-top:14px" onclick="closeSheet()">Entendido</button>`);
 }
+
+/* La clave pública del servidor de avisos. Es pública por diseño: identifica
+   al emisor, no autoriza a nadie. La privada vive solo en Supabase. */
+const VAPID_PUBLIC = 'BOSlMKHKcYOg_UHDJYn3qJ7jUcWUgYdFfoQa9SdljkcGMeHHeKw5w-zpI5i8H6sc6VyiOplHN7ASaPSUivlZ8Jk';
+
+function b64aBytes(base64){
+  const s = (base64 + '='.repeat((4 - base64.length % 4) % 4)).replace(/-/g,'+').replace(/_/g,'/');
+  const raw = atob(s), out = new Uint8Array(raw.length);
+  for (let i=0;i<raw.length;i++) out[i]=raw.charCodeAt(i);
+  return out;
+}
+
+/* Suscribir ESTE móvil. Cada teléfono tiene su propia dirección: Cristina y
+   Tama reciben cada uno los suyos, y si uno cambia de móvil el viejo se marca
+   como caducado solo. */
+async function pedirPermisoAvisos(){
+  if (typeof Notification === 'undefined') return;
+  try {
+    PERMISO_AVISOS = await Notification.requestPermission();
+    if (PERMISO_AVISOS !== 'granted'){ sheetNotif(); return; }
+
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: b64aBytes(VAPID_PUBLIC)
+    });
+
+    const j = sub.toJSON();
+    if (GUARDAR_PUSH) await GUARDAR_PUSH({
+      endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth,
+      dispositivo: navigator.userAgent.slice(0, 120)
+    });
+    AVISOS.forEach(([id]) => AVISOS_ON[id] = true);
+  } catch(e){
+    PERMISO_AVISOS = 'error';
+    ERROR_AVISOS = e.message || String(e);
+  }
+  sheetNotif();
+}
+let ERROR_AVISOS = null;
+
+async function avisar(titulo, cuerpo){
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return false;
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (reg) await reg.showNotification(titulo, {body:cuerpo, icon:'./icono-192.png', tag:'tyc'});
+    else new Notification(titulo, {body:cuerpo, icon:'./icono-192.png'});
+    return true;
+  } catch(e){ return false; }
+}
+
+async function probarAviso(){
+  const ok = await avisar('T&C', 'Si ves esto, los avisos funcionan mientras la app esté viva.');
+  if (!ok) openSheet(`<h3>No ha salido el aviso</h3>
+    <div class="meta" style="margin-bottom:16px">Falta el permiso, o este navegador no los admite</div>
+    <div class="banner">En Android hay que <b>instalar la app</b> (menú del navegador → Añadir a pantalla
+      de inicio) para que los avisos funcionen. En un navegador normal, muchos los bloquean.</div>
+    <button class="cta" style="margin-top:14px" onclick="sheetNotif()">Volver</button>`);
+}
+
+/* Mientras la app está abierta sí se puede avisar a la hora que toque. Se
+   comprueba cada minuto: es barato y no depende de nada externo. */
+setInterval(() => {
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  const ahora = new Date(), hm = String(ahora.getHours()).padStart(2,'0') + ':' +
+                                 String(ahora.getMinutes()).padStart(2,'0');
+  for (const [id, hora, titulo] of AVISOS){
+    if (!AVISOS_ON[id] || hm !== hora) continue;
+    if (id === 'cierre' && ACC.cierre) continue;             // ya cerrado, no molestar
+    if (id === 'med' && MED[P].every(Boolean)) continue;     // ya tomada
+    if (id === 'peso' && !DIAS_PESO.includes(HOY_F.getDay())) continue;
+    avisar('T&C · ' + titulo, id === 'cierre'
+      ? `${HOY[P].filter(m=>!m.estado).length} comidas sin registrar`
+      : 'Toca ahora');
+  }
+}, 60000);
 /* ═══ COMPRA · flujo A (llega sola) + C (cierra la lista) ══════════════════ */
 
 /* A · lo primero que se ve en Compra: o ha llegado un ticket, o hay una lista
@@ -2147,6 +2250,18 @@ function pintarAvisos(){
   $('#dia-ant').style.visibility = DIA>-2?'visible':'hidden';
   $('#dia-sig').style.visibility = DIA<0?'visible':'hidden';
 }
+/* Qué comida está ocupando el bloque «Ahora toca», o null si no hay ninguna.
+   Antes esto se decidía en dos sitios distintos: «Ahora» la mostraba y la lista
+   de abajo la quitaba a ciegas con un slice(1). A partir de las 22 h «Ahora»
+   pasa a enseñar el cierre del día y ya no muestra ninguna comida, pero la
+   lista seguía quitando la primera: una comida sin marcar —la merienda de
+   Cristina— desaparecía de las dos y no había forma de registrarla. */
+function indiceEnAhora(){
+  if(DIA<0 || HOY_SIN_PLAN) return null;
+  if(HORA>=22) return null;                 // a esa hora manda el cierre del día
+  const i = HOY[P].findIndex(m=>!m.estado);
+  return i<0 ? null : i;
+}
 function pintarAhora(){
   if(DIA<0 || HOY_SIN_PLAN){$('#ahora').innerHTML=''; return}
   if(HORA>=22){
@@ -2184,7 +2299,9 @@ function bloque(titulo, contenido, resumen, completo){
 function pintarQuick(){
   const hechas=HOY[P].map((m,i)=>({m,i})).filter(x=>x.m.estado);
   let pend=HOY[P].map((m,i)=>({m,i})).filter(x=>!x.m.estado);
-  if(DIA===0 && pend.length) pend=pend.slice(1);   // la primera vive en el bloque "Ahora"
+  /* Se quita SOLO la que de verdad se está enseñando arriba. */
+  const enAhora=indiceEnAhora();
+  if(enAhora!==null) pend=pend.filter(x=>x.i!==enAhora);
   const fila=({m,i})=>{
     const r=R[m.r], cls=m.estado==='hecho'?'on':m.estado?'on alt':'';
     const ico={hecho:'✓',cambiado:'↔',fuera:'🍽',saltado:'⏭'}[m.estado]||'';

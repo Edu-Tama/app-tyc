@@ -910,7 +910,9 @@ async function leerRegistros(){
     const dia = f => { const d = new Date(f + 'T12:00');
       return `${d.getDate()} ${['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][d.getMonth()]}`; };
 
-    const [comidas, meds, medLogs, pesos, cierres, entrenos, series, extras, checks] = await Promise.all([
+    /* allSettled, no all: si una consulta falla, las otras siguen. Antes un
+       fallo en cualquiera dejaba la pantalla vacía sin decir en cuál. */
+    const partes = await Promise.allSettled([
       TYC.db.from('meal_logs').select('momento, estado, registrado_at').eq('fecha', hoy),
       TYC.db.from('medications').select('id, nombre').eq('activa', true),
       TYC.db.from('medication_logs').select('medication_id, tomada, momento').eq('fecha', hoy),
@@ -920,8 +922,23 @@ async function leerRegistros(){
       TYC.db.from('workout_logs').select('id, fecha, estado, rpe').gte('fecha', desde).order('fecha', {ascending:false}),
       TYC.db.from('set_logs').select('workout_log_id, reps, peso_kg'),
       TYC.db.from('extra_logs').select('nombre, cantidad').eq('fecha', hoy),
-      TYC.db.from('shared_checks').select('clave, estado, profiles(nombre)').eq('fecha', hoy)
+      /* La relación se nombra por su columna. Sin el alias, PostgREST no sabe
+         por qué camino llegar a profiles y devuelve error: una sola consulta
+         mal escrita dejaba la pantalla entera en blanco. */
+      TYC.db.from('shared_checks').select('clave, estado, profiles:marcado_por(nombre)').eq('fecha', hoy)
     ]);
+    const fallos = [];
+    const sacar = (i, nombre) => {
+      const p = partes[i];
+      if (p.status === 'rejected'){ fallos.push(`${nombre}: ${p.reason?.message || p.reason}`); return {data: []}; }
+      if (p.value?.error){ fallos.push(`${nombre}: ${p.value.error.message}`); return {data: []}; }
+      return p.value;
+    };
+    const comidas = sacar(0, 'comidas'), meds = sacar(1, 'medicación'),
+          medLogs = sacar(2, 'medicación marcada'), pesos = sacar(3, 'pesos'),
+          cierres = sacar(4, 'cierres'), entrenos = sacar(5, 'entrenos'),
+          series = sacar(6, 'series'), extras = sacar(7, 'extras'),
+          checks = sacar(8, 'checks de casa');
 
     const idMed = Object.fromEntries((meds.data || []).map(m => [m.id, m.nombre]));
     const porSesion = {};
@@ -959,7 +976,7 @@ async function leerRegistros(){
       {titulo:'De la casa · hoy', filas: (checks.data || []).map(c => ({
         qué: c.clave.replace(/^desc_/, 'sacar del congelador: ').replace(/^rutina_./, 'rutina diaria'),
         cuándo: c.profiles?.nombre || ''}))},
-    ]};
+    ], fallos};
   } catch(e){
     return {error: e.message || String(e)};
   }
@@ -1117,17 +1134,31 @@ async function cerrarCompraBD(datos){
 /* ── leer lo que ya está registrado hoy ─────────────────────────────────────
    Sin esto, abrir la app por la tarde enseñaría el día en blanco aunque el
    desayuno estuviera marcado desde las ocho. */
-async function hidratarDia(){
-  const f = hoyISO();
-  const [comidas, medic, checks, cierre, entreno] = await Promise.all([
+async function hidratarDia(off){
+  /* El día que se está mirando. Al ir a «ayer» hay que traer lo de ayer: antes
+     se leía siempre hoy, así que los días anteriores salían vacíos aunque
+     estuvieran registrados. */
+  const f = isoDe(off ?? DIA ?? 0);
+  /* Igual que en «qué hay registrado»: si una de estas cinco consultas falla,
+     las otras cuatro tienen que seguir. Que un fallo al leer los checks de la
+     casa borre las comidas marcadas del día es exactamente el tipo de cosa que
+     hace desconfiar de toda la app. */
+  const res = await Promise.allSettled([
     TYC.db.from('meal_logs').select('id, momento, estado').eq('fecha', f),
     TYC.db.from('medication_logs').select('medication_id, momento, tomada').eq('fecha', f),
-    TYC.db.from('shared_checks').select('clave, estado, profiles(nombre)').eq('fecha', f),
+    TYC.db.from('shared_checks').select('clave, estado, profiles:marcado_por(nombre)').eq('fecha', f),
     TYC.db.from('daily_close').select('*').eq('fecha', f).maybeSingle(),
     /* limit(1) en vez de «una sola»: si por lo que sea hubiera dos filas del
        mismo día, se coge una y se sigue, en vez de romperse. */
     TYC.db.from('workout_logs').select('estado').eq('fecha', f).limit(1)
   ]);
+  const ok = i => (res[i].status === 'fulfilled' && !res[i].value?.error)
+    ? res[i].value : {data: null};
+  const comidas = ok(0), medic = ok(1), checks = ok(2), cierre = ok(3), entreno = ok(4);
+  res.forEach((r, i) => {
+    const e = r.status === 'rejected' ? r.reason : r.value?.error;
+    if (e) console.warn('[T&C] lo de hoy, consulta ' + i + ':', e.message || e);
+  });
 
   for (const c of (comidas.data || [])){
     const m = MOM_APP[c.momento] || c.momento;
@@ -1162,6 +1193,14 @@ async function hidratarDia(){
   }
 
   return (comidas.data || []).length;
+}
+
+/* Al cambiar de día en la pantalla de Hoy hay que traer lo de ese día. */
+async function cambiarDia(nuevo){
+  DIA = nuevo;
+  sembrarDia(HORA);
+  try { await hidratarDia(DIA); } catch(e){ console.warn('[T&C] día:', e.message); }
+  render();
 }
 
 /* Cuando vuelve la conexión y se vacía la cola, lo que se ve tiene que
@@ -1413,6 +1452,7 @@ async function arrancarApp(){
     GUARDAR_MENU      = guardarMenuBD;
     GUARDAR_PUSH      = guardarPush;
     LEER_REGISTROS    = leerRegistros;
+    CAMBIAR_DIA       = cambiarDia;
     escucharCasa();
     vaciarCola();
 

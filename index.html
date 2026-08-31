@@ -492,7 +492,7 @@ const DIAS_ATRAS=[0,-1,-2].map(o=>{const f=fechaDe(o);
 
 /* Saber qué versión corre en cada móvil deja de ser adivinar. Cuando algo
    «no se actualiza», este número lo dice en un vistazo. */
-const VERSION_APP = 'v33 · 31 ago 2026';
+const VERSION_APP = 'v34 · 31 ago 2026';
 const TYC_CONECTADO = () => typeof TYC !== 'undefined' && !!TYC.db && !TYC.demo;
 
 /* Descarta el service worker y las cachés y recarga: la salida de emergencia
@@ -540,10 +540,13 @@ const MOMLAB={desayuno:'Desayuno',media:'Media mañana',comida:'Comida',merienda
    mentir sobre lo que has hecho. */
 let SIN_EJEMPLO=false, HOY_SIN_PLAN=false;
 function sembrarDia(h){
-  /* Si hoy no está dentro de la semana planificada, no se enseña el menú de
-     otro día como si fuera el de hoy. Antes del 31 no hay plan que seguir. */
-  HOY_SIN_PLAN = SIN_EJEMPLO && !MENU.some(x=>x.n===String(HOY_F.getDate()));
-  const d=MENU.find(x=>x.n===String(HOY_F.getDate())) || (SIN_EJEMPLO ? null : MENU[0]) || {};
+  /* EL DÍA QUE SE ESTÁ MIRANDO, no siempre hoy. La navegación «ayer /
+     anteayer» cambiaba el rótulo de arriba pero esta función seguía cargando
+     el menú de hoy: se veía el día equivocado con el título de otro. */
+  const fDia = fechaDe(DIA);
+  const numDia = String(fDia.getDate());
+  HOY_SIN_PLAN = SIN_EJEMPLO && !MENU.some(x=>x.n===numDia);
+  const d=MENU.find(x=>x.n===numDia) || (SIN_EJEMPLO ? null : MENU[0]) || {};
   /* Sin plan, el día está vacío. Rellenarlo con recetas indefinidas hacía que
      media app intentara pintar platos que no existen. */
   HOY = HOY_SIN_PLAN
@@ -1682,7 +1685,10 @@ function sheetRegistros(){
       ? '<div class="scan" style="margin:0"><div style="font-size:28px">⏳</div><div class="note" style="margin-top:8px">Consultando…</div></div>'
       : REGISTROS.error
         ? `<div class="banner"><b class="t">No se ha podido consultar</b>${REGISTROS.error}</div>`
-        : REGISTROS.bloques.map(b => `
+        : (REGISTROS.fallos && REGISTROS.fallos.length
+            ? `<div class="banner"><b class="t">${REGISTROS.fallos.length} consultas han fallado</b>
+                ${REGISTROS.fallos.join(' · ')}</div>` : '') +
+          REGISTROS.bloques.map(b => `
           <div class="sec-h">${b.titulo}</div>
           ${b.filas.length
             ? b.filas.map(f => `<div class="ing" style="font-size:13px">
@@ -3785,8 +3791,12 @@ $('#add-act').onclick=()=>sheetActividad();
 $('#btn-informe').onclick=sheetInforme;
 /* El selector de hora era una muleta para probar cómo se ve la app a distintas
    horas. En la versión real la hora es la del móvil y punto. */
-$('#dia-ant').onclick=()=>{if(DIA>-2){DIA--; render()}};
-$('#dia-sig').onclick=()=>{if(DIA<0){DIA++; render()}};
+/* Cambiar de día tiene que RECARGAR ese día, no solo repintar el de hoy. */
+let CAMBIAR_DIA=null;
+$('#dia-ant').onclick=()=>{ if(DIA>-2){ if(CAMBIAR_DIA) CAMBIAR_DIA(DIA-1);
+  else { DIA--; sembrarDia(HORA); render(); } } };
+$('#dia-sig').onclick=()=>{ if(DIA<0){ if(CAMBIAR_DIA) CAMBIAR_DIA(DIA+1);
+  else { DIA++; sembrarDia(HORA); render(); } } };
 document.addEventListener('click',e=>{
   /* Las casillas de la lista de la compra tienen su propio manejador y su propio
      estado: si este las tocara también, se destogglearían solas. */

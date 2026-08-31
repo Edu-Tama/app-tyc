@@ -808,6 +808,41 @@ async function guardarCardioBD(nombre, minutos, hecha){
           notas: hecha ? 'hecha' : 'elegida'}});
 }
 
+/* ── el historial de compras ────────────────────────────────────────────────
+   Las compras cerradas se guardaban en la base pero NADIE las volvía a leer:
+   la lista de «últimas compras» era un array en memoria, así que al cerrar la
+   app la compra desaparecía del historial aunque el gasto estuviera guardado.
+   Es de lo más desmoralizante que puede hacer una app: registras algo y al
+   volver no está. */
+const FID_APP = {exacta:'exacta', desde_lista:'lista', solo_gasto:'gasto'};
+async function hidratarCompras(){
+  const {data, error} = await TYC.db.from('tickets')
+    .select('id, fecha_compra, comercio, total, fidelidad, estado')
+    .order('fecha_compra', {ascending:false}).limit(20);
+  if (error) throw error;
+  COMPRAS.length = 0;
+  for (const t of (data || [])){
+    COMPRAS.push({
+      id: t.id, sitio: t.comercio || 'Otro',
+      fecha: fechaCorta(t.fecha_compra),
+      total: +t.total || 0,
+      fid: FID_APP[t.fidelidad] || 'gasto',
+      lineas: null, pendientes: 0
+    });
+  }
+  return COMPRAS.length;
+}
+
+/* Registrar a mano una compra que no pasó por la lista: la del súper de al
+   lado, la que se cerró antes de que la app guardara nada, la del mercado. */
+async function guardarCompraSuelta({comercio, total, fecha}){
+  const r = await escribir({tabla:'tickets', fila:{
+    household_id: SESION.household, fecha_compra: fecha || hoyISO(),
+    comercio, total, estado:'confirmado', fidelidad:'solo_gasto', via:'manual'}});
+  await hidratarCompras();
+  return r;
+}
+
 /* ── las puntuaciones de los platos ─────────────────────────────────────────
    Se leen las de los DOS: el menú es común, así que un plato que cualquiera de
    los dos ha marcado con 👎 tiene que dejar de proponerse. Se escriben solo las
@@ -901,6 +936,7 @@ async function cerrarCompraBD(datos){
   /* Y a partir de aquí, la despensa y la lista que se ven son las nuevas. */
   await hidratarDespensa();
   await leerMarcas();
+  await hidratarCompras();
   return {ok:true};
 }
 
@@ -965,6 +1001,148 @@ function escucharCasa(){
     .subscribe();
 }
 
+
+/* ── LO QUE FALTABA POR GUARDAR ────────────────────────────────────────────
+   Barrido completo de la app: siete sitios más pintaban desde memoria sin
+   escribir en la base. Se veían bien y desaparecían al cerrar. */
+
+/* 1 · fuera del plan: la cerveza, el picoteo, el café de media mañana. */
+async function guardarExtra(x){
+  return await escribir({tabla:'extra_logs', fila:{
+    profile_id:SESION.id, fecha:hoyISO(), nombre:x.n,
+    kcal:x.kcal|0, cantidad:x.n2|1, es_alcohol:!!x.alc}});
+}
+async function quitarExtraBD(nombre){
+  return await escribir({tabla:'extra_logs', tipo:'borrar',
+    donde:{profile_id:SESION.id, fecha:hoyISO(), nombre}});
+}
+async function hidratarExtras(){
+  const {data} = await TYC.db.from('extra_logs')
+    .select('nombre, kcal, cantidad, es_alcohol').eq('fecha', hoyISO());
+  EXTRA_LOG[SESION.perfil].length = 0;
+  for (const x of (data || []))
+    EXTRA_LOG[SESION.perfil].push({n:x.nombre, e:x.es_alcohol?'🍺':'➕',
+      kcal:+x.kcal, n2:x.cantidad, alc:x.es_alcohol});
+  return (data || []).length;
+}
+
+/* 2 · excepciones del menú: son de la casa y cambian la compra de los dos. */
+const TIPO_EXC = {fuera:'fuera', invitados:'invitados', vacaciones:'solo'};
+async function guardarExcepcionBD(e){
+  const dias = diasDeSemana(e.sem === 's2' ? 1 : 0);
+  const dia = dias.find(d => d.n === e.dia);
+  if (!dia) return {error:'día fuera de la semana'};
+  return await escribir({tabla:'meal_exceptions', conflicto:'household_id,fecha,momento',
+    fila:{household_id:SESION.household, fecha:dia.iso,
+          momento:MOM_BD[e.momento] || e.momento,
+          tipo:TIPO_EXC[e.tipo] || 'fuera',
+          comensales:e.personas || null, texto:e.txt || null}});
+}
+async function quitarExcepcionBD(sem, e){
+  const dias = diasDeSemana(sem === 's2' ? 1 : 0);
+  const dia = dias.find(d => d.n === e.fecha);
+  if (!dia) return;
+  const mom = Object.keys(MOMLAB).find(k => MOMLAB[k] === e.momento) || 'cena';
+  return await escribir({tabla:'meal_exceptions', tipo:'borrar',
+    donde:{household_id:SESION.household, fecha:dia.iso, momento:MOM_BD[mom] || mom}});
+}
+async function hidratarExcepciones(){
+  const {data, error} = await TYC.db.from('meal_exceptions')
+    .select('fecha, momento, tipo, comensales, texto');
+  if (error) throw error;
+  EXCEPCIONES.s1.length = 0; EXCEPCIONES.s2.length = 0;
+  const LARGO = {L:'Lunes',M:'Martes',X:'Miércoles',J:'Jueves',V:'Viernes',S:'Sábado',D:'Domingo'};
+  for (const x of (data || [])){
+    for (const [sem, off] of [['s1',0],['s2',1]]){
+      const d = diasDeSemana(off).find(dd => dd.iso === x.fecha);
+      if (!d) continue;
+      const mom = MOM_APP[x.momento] || x.momento;
+      EXCEPCIONES[sem].push({fecha:d.n, dia:LARGO[d.d], momento:MOMLAB[mom],
+        tipo:x.tipo === 'solo' ? 'vacaciones' : x.tipo,
+        txt:x.texto || '', personas:x.comensales || 2});
+    }
+  }
+  return EXCEPCIONES.s1.length + EXCEPCIONES.s2.length;
+}
+
+/* 3 · lo que entra sin ticket: huerta, regalo, la frutería de la esquina. */
+async function guardarDespensaBD(a){
+  const {data: ing} = await TYC.db.from('ingredients')
+    .select('id').eq('nombre', a.n).maybeSingle();
+  if (!ing) return {error:'ingrediente desconocido'};
+  const ORIG = {huerta:'huerta', regalo:'regalo', otra:'otra_tienda', pesca:'pesca'};
+  const {data: fila} = await TYC.db.from('pantry')
+    .select('id, cantidad').eq('ingredient_id', ing.id).maybeSingle();
+  if (fila){
+    await TYC.db.from('pantry').update({cantidad:+fila.cantidad + a.g,
+      caducidad:a.cad, actualizado_at:new Date().toISOString()}).eq('id', fila.id);
+  } else {
+    await TYC.db.from('pantry').insert({household_id:SESION.household,
+      ingredient_id:ing.id, cantidad:a.g, unidad:'g', caducidad:a.cad,
+      origen:ORIG[a.origen] || 'otra_tienda',
+      precio_referencia:PRECIO[a.n] || null});
+  }
+  await TYC.db.from('pantry_movements').insert({household_id:SESION.household,
+    ingredient_id:ing.id, cantidad:a.g, origen:ORIG[a.origen] || 'otra_tienda',
+    motivo:'espontaneo'});
+  await hidratarDespensa();
+  return {ok:true};
+}
+
+/* 4 · conservar antes de que caduque, o regalarlo. */
+async function guardarConservaBD(c){
+  const {data: ing} = await TYC.db.from('ingredients')
+    .select('id').eq('nombre', c.n).maybeSingle();
+  if (!ing) return {error:'ingrediente desconocido'};
+
+  if (c.metodo === 'regalado'){
+    await TYC.db.from('pantry').delete().eq('ingredient_id', ing.id);
+    await TYC.db.from('pantry_movements').insert({household_id:SESION.household,
+      ingredient_id:ing.id, cantidad:-c.g, origen:'ajuste', motivo:'regalado'});
+  } else {
+    await TYC.db.from('preserves').insert({household_id:SESION.household,
+      ingredient_id:ing.id, metodo:c.metodo, cantidad:c.g,
+      caducidad_nueva:c.cad, nota:c.ubic || null});
+    /* Lo conservado sigue estando, pero con otra caducidad y en otro sitio. */
+    await TYC.db.from('pantry').update({cantidad:c.g, caducidad:c.cad,
+      ubicacion:c.ubic || null, nota:c.metodo,
+      actualizado_at:new Date().toISOString()}).eq('ingredient_id', ing.id);
+    await TYC.db.from('pantry_movements').insert({household_id:SESION.household,
+      ingredient_id:ing.id, cantidad:c.g - (c.origen || c.g), origen:'conserva',
+      motivo:'conservado'});
+  }
+  await hidratarDespensa();
+  return {ok:true};
+}
+
+/* 5 · la semana siguiente, cuando se regenera a mano. */
+async function guardarSemana2(semana){
+  const ini = lunesISO(1);
+  const {data: plan} = await TYC.db.from('meal_plans')
+    .select('id').eq('semana_inicio', ini).maybeSingle();
+  if (plan){
+    await TYC.db.from('planned_meals').delete().eq('meal_plan_id', plan.id);
+    return await rellenarSemana(plan.id, ini, semana);
+  }
+  return await guardarSemana(ini, semana);
+}
+
+/* 6 · cuánto se desvía cada súper. Se recalculaba en memoria a cada compra y
+   se perdía al cerrar la app, así que el aprendizaje nunca llegaba a las tres
+   compras que hacen falta para que sirva de algo. */
+async function hidratarCadenas(){
+  const {data, error} = await TYC.db.from('retailers')
+    .select('nombre, factor, compras, es_referencia');
+  if (error) throw error;
+  for (const r of (data || []))
+    CADENAS[r.nombre] = {factor:+r.factor, compras:r.compras, ref:r.es_referencia};
+  return (data || []).length;
+}
+async function guardarCadena(nombre, factor, compras){
+  return await escribir({tabla:'retailers', conflicto:'household_id,nombre',
+    fila:{household_id:SESION.household, nombre, factor, compras}});
+}
+
 /* ── arranque ───────────────────────────────────────────────────────────── */
 async function arrancarApp(){
   if (typeof supabase === 'undefined'){ return caerADemo('no se ha podido cargar la librería'); }
@@ -990,7 +1168,11 @@ async function arrancarApp(){
                                 /* la compra va DESPUÉS del menú: la lista sale
                                    de lo que el menú de la casa necesita */
                                 ['compra',       hidratarCompra],
-                                ['puntuaciones', hidratarPuntuaciones]]){
+                                ['puntuaciones', hidratarPuntuaciones],
+                                ['compras',      hidratarCompras],
+                                ['extras',       hidratarExtras],
+                                ['excepciones',  hidratarExcepciones],
+                                ['cadenas',      hidratarCadenas]]){
       try { await fn(); }
       catch(err){ fallos.push(nombre); console.error('T&C · falla '+nombre+':', err.message||err); }
     }
@@ -1005,6 +1187,15 @@ async function arrancarApp(){
     GUARDAR_ENTRENO = guardarEntreno;
     GUARDAR_CARDIO  = guardarCardioBD;
     GUARDAR_COMPRA  = cerrarCompraBD;
+    GUARDAR_GASTO     = guardarCompraSuelta;
+    GUARDAR_EXTRA     = guardarExtra;
+    QUITAR_EXTRA      = quitarExtraBD;
+    GUARDAR_EXCEPCION = guardarExcepcionBD;
+    QUITAR_EXCEPCION  = quitarExcepcionBD;
+    GUARDAR_DESPENSA  = guardarDespensaBD;
+    GUARDAR_CONSERVA  = guardarConservaBD;
+    GUARDAR_SEMANA2   = guardarSemana2;
+    GUARDAR_CADENA    = guardarCadena;
     escucharCasa();
     vaciarCola();
 

@@ -1195,7 +1195,9 @@ let GUARDAR_OFICINA = null;
    sin ella la app sigue funcionando en local, pero avisando de que no guarda. */
 let GUARDAR_COMIDA=null, GUARDAR_MED=null, GUARDAR_PESO=null, GUARDAR_CINTURA=null,
     GUARDAR_CIERRE=null, GUARDAR_CHECK=null, GUARDAR_ENTRENO=null, GUARDAR_CARDIO=null,
-    GUARDAR_PUNT=null, GUARDAR_COMPRA=null, REABRIR_LISTA=null;
+    GUARDAR_PUNT=null, GUARDAR_COMPRA=null, REABRIR_LISTA=null, GUARDAR_GASTO=null,
+    GUARDAR_EXTRA=null, QUITAR_EXTRA=null, GUARDAR_EXCEPCION=null, QUITAR_EXCEPCION=null,
+    GUARDAR_DESPENSA=null, GUARDAR_CONSERVA=null, GUARDAR_SEMANA2=null, GUARDAR_CADENA=null;
 /* Lo que ya se cerró hoy, para no volver a preguntarlo en blanco. */
 let CIERRE_HOY = null;
 
@@ -1213,7 +1215,7 @@ const CADENAS={
 const PUERTAS=[
   ['digital','📧','Ticket digital de Mercadona','Compártelo desde el correo · nombres y precios exactos','exacta'],
   ['foto','📷','Foto del ticket de papel','Cuando pagaste en efectivo o con otra tarjeta','exacta'],
-  ['otro','🏪','Otro supermercado','Solo el total · las cantidades salen de la lista','lista'],
+  ['otro','🏪','Una compra que no salió de la lista','Solo el importe · el mercado, el súper de al lado','gasto'],
   ['suelto','🌱','Algo sin ticket','Huerta, regalo, frutería de la esquina','gasto']];
 
 /* Candidatos que propone el diccionario cuando una línea no se reconoce */

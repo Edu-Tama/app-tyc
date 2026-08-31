@@ -492,7 +492,7 @@ const DIAS_ATRAS=[0,-1,-2].map(o=>{const f=fechaDe(o);
 
 /* Saber qué versión corre en cada móvil deja de ser adivinar. Cuando algo
    «no se actualiza», este número lo dice en un vistazo. */
-const VERSION_APP = 'v23 · 31 ago 2026';
+const VERSION_APP = 'v25 · 31 ago 2026';
 const TYC_CONECTADO = () => typeof TYC !== 'undefined' && !!TYC.db && !TYC.demo;
 
 /* Descarta el service worker y las cachés y recarga: la salida de emergencia
@@ -937,6 +937,7 @@ function addExtra(i,n){
   if(x.kcal===0) return sheetOtroExtra();
   const ya=EXTRA_LOG[P].find(y=>y.n===x.n);
   if(ya) ya.n2+=n; else EXTRA_LOG[P].push({...x, n2:n});
+  if(GUARDAR_EXTRA) GUARDAR_EXTRA({n:x.n, kcal:x.kcal, n2:n, alc:!!x.alc});
   closeSheet(); pintarQuick(); pintarHero();
 }
 const RACIONES_EXTRA=[['Poca cosa',90,'un puñado, media pieza, un par de bocados'],
@@ -961,9 +962,15 @@ function guardarOtroExtra(kcal){
   const nom=(document.getElementById('extra-n')||{}).value||'Otro';
   if(!kcal) return;
   EXTRA_LOG[P].push({n:nom, e:'➕', kcal, n2:1});
+  if(GUARDAR_EXTRA) GUARDAR_EXTRA({n:nom, kcal, n2:1, alc:false});
   closeSheet(); pintarQuick(); pintarHero();
 }
-function quitarExtra(i){EXTRA_LOG[P].splice(i,1); pintarQuick(); pintarHero(); pintarAhora()}
+function quitarExtra(i){
+  const x=EXTRA_LOG[P][i];
+  EXTRA_LOG[P].splice(i,1);
+  if(QUITAR_EXTRA && x) QUITAR_EXTRA(x.n);
+  pintarQuick(); pintarHero(); pintarAhora();
+}
 /* EL CIERRE DEL DÍA.
    Era una maqueta: los chips no se podían seleccionar, el número de pasos no
    se leía y el botón cerraba la hoja sin guardar nada. Ahora es el registro
@@ -1117,10 +1124,17 @@ function guardarExcepcion(){
             : 'Vacaciones · plan en pausa';
   EXCEPCIONES[B.sem].push({fecha:B.dia, dia:LARGO[dia.d], momento:MOMLAB[B.momento],
                            tipo:B.tipo, txt, personas:B.personas});
+  if(GUARDAR_EXCEPCION) GUARDAR_EXCEPCION({sem:B.sem, dia:B.dia, momento:B.momento,
+    tipo:B.tipo, personas:B.personas, txt});
   pintarMenu(); pintarCompra();
   sheetExcepciones(B.sem);
 }
-function quitarExcepcion(sem,i){ EXCEPCIONES[sem].splice(i,1); pintarMenu(); pintarCompra(); sheetExcepciones(sem); }
+function quitarExcepcion(sem,i){
+  const x=EXCEPCIONES[sem][i];
+  EXCEPCIONES[sem].splice(i,1);
+  if(QUITAR_EXCEPCION && x) QUITAR_EXCEPCION(sem, x);
+  pintarMenu(); pintarCompra(); sheetExcepciones(sem);
+}
 /* ¿este plato tiene una excepción encima? */
 function excepcionDe(sem, n, mom){
   return (EXCEPCIONES[sem]||[]).find(x=>x.fecha===n && x.momento===MOMLAB[mom]);
@@ -1530,8 +1544,42 @@ function sheetRegistrar(){
 function puerta(id){
   if(id==='digital') return sheetTicketDigital();
   if(id==='suelto')  return sheetAnadirDespensa();
-  if(id==='otro')    return sheetOtroSuper();
+  if(id==='otro')    return sheetGastoSuelto();
   sheetFoto();
+}
+
+/* UNA COMPRA QUE NO PASÓ POR LA LISTA.
+   El súper de al lado, el mercado, o una que se cerró antes de que la app
+   guardara nada. Solo el gasto: sin líneas, la despensa no puede fiarse de
+   esto, y la app lo dice en vez de fingir que sí. */
+function sheetGastoSuelto(){
+  openSheet(`<h3>Registrar solo el gasto</h3>
+    <div class="meta" style="margin-bottom:16px">Para una compra que no salió de la lista</div>
+    <div class="f" style="border-top:0"><label>¿Dónde?</label></div>
+    <div class="seg" style="flex-wrap:wrap; margin-bottom:8px">
+      ${Object.keys(CADENAS).map(c=>`<span class="chip ${COMPRA_EN_CURSO.comercio===c?'on':''}"
+        onclick="COMPRA_EN_CURSO.comercio='${c}'; sheetGastoSuelto()">${c}</span>`).join('')}</div>
+    <div class="f"><label>Cuándo</label>
+      <input type="date" id="gasto-fecha" value="${isoDe(0)}" style="width:150px"></div>
+    <div class="f"><label>Total pagado</label>
+      <input id="gasto-total" type="number" step="0.01" inputmode="decimal" placeholder="0,00"
+        style="width:96px; text-align:right; font-size:16px; font-weight:650"> €</div>
+    <div class="banner" style="margin-top:12px"><b class="t">Cuenta para el gasto, no para la despensa</b>
+      Sin saber qué productos entraron, la despensa no se toca. El importe sí suma al mes, que es lo que
+      hace falta para saber cuánto cuesta comer de verdad.</div>
+    ${GUARDAR_GASTO?'':`<div class="banner" style="margin-top:10px"><b class="t">⚠ Sin conexión con la base</b>
+      Esto se ve ahora pero no se guarda.</div>`}
+    <button class="cta" style="margin-top:14px" onclick="guardarGasto()">Guardar la compra</button>`);
+}
+function guardarGasto(){
+  const t=parseFloat((document.getElementById('gasto-total')||{}).value||'')||0;
+  const f=(document.getElementById('gasto-fecha')||{}).value || isoDe(0);
+  if(!t) return;
+  const c=COMPRA_EN_CURSO.comercio;
+  COMPRAS.unshift({id:'g'+Date.now(), sitio:c, fecha:f.slice(8)+'/'+f.slice(5,7),
+    total:t, fid:'gasto', lineas:null, pendientes:0});
+  if(GUARDAR_GASTO) GUARDAR_GASTO({comercio:c, total:t, fecha:f}).then(()=>pintarCompra());
+  closeSheet(); pintarCompra();
 }
 
 /* C · cerrar la lista. El ticket no es una importación suelta: es lo que cuadra
@@ -1710,7 +1758,8 @@ function sheetOtroSuper(k){
 function nombrarSuper(nombre, k){
   const n=(nombre||'').trim();
   if(!n) return;
-  if(!CADENAS[n]) CADENAS[n]={factor:1.00, compras:0};
+  if(!CADENAS[n]){ CADENAS[n]={factor:1.00, compras:0};
+    if(GUARDAR_CADENA) GUARDAR_CADENA(n, 1.0, 0); }
   COMPRA_EN_CURSO.comercio=n;
   sheetOtroSuper(k);
 }
@@ -1734,6 +1783,9 @@ function cerrarSinTicket(k, est){
   const anterior=C.factor;
   C.factor=+(((C.factor*C.compras)+nuevo)/(C.compras+1)).toFixed(3);
   C.compras++;
+  /* Lo que la app aprende del súper también se guarda: si no, cada compra
+     empezaba de cero y nunca se llegaba a las tres que hacen falta. */
+  if(GUARDAR_CADENA) GUARDAR_CADENA(c, C.factor, C.compras);
   LISTAS[k].estado='cerrada'; LISTAS[k].cerrada='hoy';
   /* Cerrar la lista también es de la casa: si solo se cerrara en esta pantalla,
      el otro seguiría viéndola abierta y volvería a comprar lo mismo. */
@@ -2411,6 +2463,7 @@ function guardarAlta(){
   const cad=isoLocal(new Date(2026,7,19+dias));
   ESPONTANEOS.push({n, g, origen, fecha:'hoy', cad});
   DESPENSA[n]=[(DESPENSA[n]?DESPENSA[n][0]:0)+g, cad];
+  if(GUARDAR_DESPENSA) GUARDAR_DESPENSA({n, g, origen, cad});
   closeSheet(); pintarCompra(); pintarQuick();
   sheetEspontaneo(n, g);
 }
@@ -2443,6 +2496,7 @@ function conservar(n, g, id){
   if(id==='regalar'){
     delete DESPENSA[n];
     const i=ESPONTANEOS.findIndex(x=>x.n===n); if(i>=0) ESPONTANEOS.splice(i,1);
+    if(GUARDAR_CONSERVA) GUARDAR_CONSERVA({n, g, metodo:'regalado'});
     closeSheet(); pintarCompra();
     return openSheet(`<h3>Regalado</h3>
       <div class="meta" style="margin-bottom:14px">${kg(g)} de ${n.toLowerCase()} fuera de la despensa</div>
@@ -2454,6 +2508,7 @@ function conservar(n, g, id){
   const d=new Date(2026,7,19); d.setMonth(d.getMonth()+c.meses);
   const cad=isoLocal(d);
   CONSERVAS_HECHAS.push({n, metodo:c.m, e:c.e, origen:g, g:final, ubic:c.ubic, cad, fecha:'hoy'});
+  if(GUARDAR_CONSERVA) GUARDAR_CONSERVA({n, g:final, origen:g, metodo:c.m, cad, ubic:c.ubic});
   DESPENSA[n+' · '+c.m.toLowerCase()]=[final, cad];
   UBIC[n+' · '+c.m.toLowerCase()]=c.ubic;
   PRECIO[n+' · '+c.m.toLowerCase()]=PRECIO[n]||0;
@@ -2637,9 +2692,15 @@ function planB(modo, sem){
 function regenerar(){
   const r=generarSemana();
   if(!r){alert('No se ha encontrado una semana válida. Con la biblioteca actual pasa: hacen falta más recetas.');return}
-  const D=['L','M','X','J','V','S','D'], N=['24','25','26','27','28','29','30'];
-  MENU2=r.semana.map((d,i)=>({d:D[i],n:N[i],desayuno:d.desayuno,media:d.media,comida:d.comida,
-                              merienda:d.merienda,cena:d.cena,_c:d._c,_t:d._t}));
+  /* Los días salían de una lista escrita a mano (24 a 30 de agosto). Y la
+     semana regenerada no se guardaba: al recargar volvía la anterior. */
+  const dias=diasDeSemana(1);
+  MENU2.length=0;
+  r.semana.forEach((d,i)=>{ if(!dias[i]) return;
+    MENU2.push({d:dias[i].d, n:dias[i].n, iso:dias[i].iso,
+      desayuno:d.desayuno, media:d.media, comida:d.comida,
+      merienda:d.merienda, cena:d.cena, _c:d._c, _t:d._t}); });
+  if(GUARDAR_SEMANA2) GUARDAR_SEMANA2(r.semana);
   pintarMenu();
   $('#gen-info').innerHTML=`Generada aplicando las 8 restricciones duras y las 10 blandas ·
     ${r.intentos} ${r.intentos===1?'intento':'intentos'} hasta encontrar una semana válida.`;

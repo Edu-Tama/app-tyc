@@ -1198,7 +1198,8 @@ let GUARDAR_COMIDA=null, GUARDAR_MED=null, GUARDAR_PESO=null, GUARDAR_CINTURA=nu
     GUARDAR_PUNT=null, GUARDAR_COMPRA=null, REABRIR_LISTA=null, GUARDAR_GASTO=null,
     GUARDAR_EXTRA=null, QUITAR_EXTRA=null, GUARDAR_EXCEPCION=null, QUITAR_EXCEPCION=null,
     GUARDAR_DESPENSA=null, GUARDAR_CONSERVA=null, GUARDAR_SEMANA2=null, GUARDAR_CADENA=null,
-    GUARDAR_RANGO=null, GUARDAR_LAB=null, GUARDAR_MENU=null, GUARDAR_PUSH=null;
+    GUARDAR_RANGO=null, GUARDAR_LAB=null, GUARDAR_MENU=null, GUARDAR_PUSH=null,
+    LEER_REGISTROS=null;
 /* Lo que ya se cerró hoy, para no volver a preguntarlo en blanco. */
 let CIERRE_HOY = null;
 

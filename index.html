@@ -492,7 +492,7 @@ const DIAS_ATRAS=[0,-1,-2].map(o=>{const f=fechaDe(o);
 
 /* Saber qué versión corre en cada móvil deja de ser adivinar. Cuando algo
    «no se actualiza», este número lo dice en un vistazo. */
-const VERSION_APP = 'v32 · 31 ago 2026';
+const VERSION_APP = 'v33 · 31 ago 2026';
 const TYC_CONECTADO = () => typeof TYC !== 'undefined' && !!TYC.db && !TYC.demo;
 
 /* Descarta el service worker y las cachés y recarga: la salida de emergencia
@@ -1496,10 +1496,12 @@ function guardarPeso(){
   closeSheet(); pintarQuick(); pintarSalud(); pintarPeso();
 }
 function sheetAjustes(){
+  REGISTROS = null;                     // se relee cada vez que se abre
   openSheet(`<h3>Ajustes</h3>
     <div class="meta" style="margin-bottom:16px">${PERFILES[SESION.perfil].nombre} · ${SESION.email}</div>
     <button class="opt" onclick="sheetAcceso()">🔐 <span class="grow">Acceso y seguridad<small>Sesión permanente · bloqueo por huella activado</small></span>›</button>
     <button class="opt" onclick="sheetNotif()">🔔 <span class="grow">Notificaciones<small>4 al día como máximo · todas silenciables</small></span>›</button>
+    <button class="opt" onclick="sheetRegistros()">📋 <span class="grow">Qué hay registrado<small>Lo que la app tiene guardado de verdad, leído de la base</small></span>›</button>
     <button class="opt" onclick="sheetDatos()">💾 <span class="grow">Copias y datos<small>Exportación automática el día 1 de cada mes</small></span>›</button>
     <button class="opt" onclick="sheetRitmo()">🛒 <span class="grow">Ritmo de compra y cocina<small>${AJUSTES_COMPRA.diaCompra?'Compra los '+DIA_LARGO[AJUSTES_COMPRA.diaCompra]:'Compra sin día fijo'} · tanda los ${DIA_LARGO[AJUSTES_COMPRA.diaTanda]}</small></span>›</button>
     <button class="opt" onclick="sheetOficina()">🏢 <span class="grow">Días de oficina de Tama<small>${OFICINA.t.length} marcados · se llevan túper</small></span>›</button>
@@ -1667,6 +1669,34 @@ const AVISOS = [
 const AVISOS_ON = {};
 let PERMISO_AVISOS = (typeof Notification !== 'undefined') ? Notification.permission : 'no-soportado';
 
+/* QUÉ HAY REGISTRADO DE VERDAD.
+   Después de tres días viendo cosas que se guardaban y cosas que no, hace
+   falta poder mirarlo sin fiarse de la pantalla ni de mí: esto lee la base
+   directamente y enseña lo que hay, con la hora a la que se guardó. Si algo
+   no aparece aquí, no está guardado. */
+let REGISTROS = null;
+function sheetRegistros(){
+  openSheet(`<h3>Qué hay registrado</h3>
+    <div class="meta" style="margin-bottom:16px">Leído de la base ahora mismo · ${PERFILES[P].nombre}</div>
+    ${REGISTROS === null
+      ? '<div class="scan" style="margin:0"><div style="font-size:28px">⏳</div><div class="note" style="margin-top:8px">Consultando…</div></div>'
+      : REGISTROS.error
+        ? `<div class="banner"><b class="t">No se ha podido consultar</b>${REGISTROS.error}</div>`
+        : REGISTROS.bloques.map(b => `
+          <div class="sec-h">${b.titulo}</div>
+          ${b.filas.length
+            ? b.filas.map(f => `<div class="ing" style="font-size:13px">
+                <span class="grow">${f.qué}</span>
+                <span style="color:var(--muted); font-size:11.5px">${f.cuándo}</span></div>`).join('')
+            : '<div class="note" style="margin:2px 0 8px">Nada guardado</div>'}`).join('')}
+    <div class="note" style="margin-top:12px">Lo que aparezca aquí está en la base y sobrevive a cerrar la
+      app, cambiar de móvil o reinstalarla.</div>
+    <button class="cta" style="margin-top:14px" onclick="closeSheet()">Cerrar</button>`);
+  if (REGISTROS === null && LEER_REGISTROS)
+    LEER_REGISTROS().then(r => { REGISTROS = r; sheetRegistros(); });
+  else if (REGISTROS === null)
+    { REGISTROS = {error:'La app no está conectada a la base.'}; sheetRegistros(); }
+}
 function sheetNotif(){
   const soporta = typeof Notification !== 'undefined';
   openSheet(`<h3>Avisos</h3>
@@ -2257,13 +2287,35 @@ function pintarAvisos(){
    lista seguía quitando la primera: una comida sin marcar —la merienda de
    Cristina— desaparecía de las dos y no había forma de registrarla. */
 function indiceEnAhora(){
+  /* MISMAS condiciones que pintarAhora, en el mismo sitio y una sola vez. La
+     merienda desapareció dos veces por tener esta decisión duplicada: primero
+     al pasar de las 22 h, y después al cerrar el día. Si aquí y allí no se
+     preguntan lo mismo, siempre habrá una comida que se pierda por el hueco. */
   if(DIA<0 || HOY_SIN_PLAN) return null;
-  if(HORA>=22) return null;                 // a esa hora manda el cierre del día
+  if(ACC.cierre) return null;               // el bloque enseña «día cerrado»
+  if(HORA>=22) return null;                 // a esa hora enseña el cierre
   const i = HOY[P].findIndex(m=>!m.estado);
   return i<0 ? null : i;
 }
 function pintarAhora(){
   if(DIA<0 || HOY_SIN_PLAN){$('#ahora').innerHTML=''; return}
+  if(ACC.cierre){
+    /* Cerrar el día no bloquea: uno se acuerda a las once de que no marcó la
+       merienda, y eso sigue siendo un dato bueno. Pero tiene que VERSE que ya
+       está cerrado, y que lo que se toque después queda anotado igual. */
+    const faltan=HOY[P].filter(m=>!m.estado).length;
+    $('#ahora').innerHTML=`<div class="card" style="border-color:var(--good)">
+      <div class="row"><div class="thumb sm t-verdura">✓</div>
+        <div class="grow"><div class="when" style="color:var(--good-ink)">Día cerrado</div>
+          <div class="name" style="margin:0">${CIERRE_HOY
+            ? 'Hambre, energía y sueño registrados'
+            : 'Registrado'}</div>
+          <div class="note" style="margin:2px 0 0">${faltan
+            ? `Quedan ${faltan} ${faltan===1?'comida':'comidas'} sin marcar. Puedes marcarlas todavía: se guardan igual.`
+            : 'Todo registrado.'}</div></div>
+        <span class="chip" onclick="sheetCierre()" style="cursor:pointer">Editar</span></div></div>`;
+    return;
+  }
   if(HORA>=22){
     const faltan=HOY[P].filter(m=>!m.estado).length;
     $('#ahora').innerHTML=`<div class="card tap" style="border-color:var(--acc); border-width:1.5px" onclick="sheetCierre()">

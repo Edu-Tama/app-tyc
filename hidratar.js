@@ -811,8 +811,12 @@ async function guardarEntreno(estado, series, fin){
        sesión NO se hace, y esto es una sesión hecha con una molestia. */
     if (fin.molestia && fin.molestia !== 'Ninguna') fila.notas = 'Molestia: ' + fin.molestia;
   }
+  /* upsert POR PERSONA Y DÍA. Sin esto cada marca creaba otra fila —marcar la
+     sesión desde Hoy y luego terminarla dejaba dos— y al leerlas la app pedía
+     «una sola» y recibía un error: la sesión aparecía como no hecha al volver
+     a abrir. Es lo que pasó con la sesión de Cristina. */
   const {data, error} = await TYC.db.from('workout_logs')
-    .upsert(fila).select('id').maybeSingle();
+    .upsert(fila, {onConflict:'profile_id,fecha'}).select('id').maybeSingle();
   if (error){ encolar({tabla:'workout_logs', fila}); avisoCola(); return {error}; }
   if (data && series && series.length){
     await TYC.db.from('set_logs').delete().eq('workout_log_id', data.id);
@@ -890,6 +894,75 @@ async function hidratarAnaliticas(){
       BAJA.includes(n) ? 'baja' : n === 'Vitamina D' ? 'sube' : '—']);
   }
   return LABS_EVO.length;
+}
+
+/* LO QUE HAY GUARDADO, tal cual está en la base.
+   No pinta lo que la app cree recordar: consulta y devuelve lo que hay. Si una
+   cosa no sale aquí, no está guardada, y eso es exactamente lo que hay que
+   poder comprobar sin preguntarle a nadie. */
+async function leerRegistros(){
+  try {
+    const hoy = hoyISO();
+    const hace7 = new Date(); hace7.setDate(hace7.getDate() - 7);
+    const desde = isoLocal(hace7);
+    const hora = t => t ? new Date(t).toLocaleTimeString('es-ES',
+      {hour:'2-digit', minute:'2-digit'}) : '';
+    const dia = f => { const d = new Date(f + 'T12:00');
+      return `${d.getDate()} ${['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][d.getMonth()]}`; };
+
+    const [comidas, meds, medLogs, pesos, cierres, entrenos, series, extras, checks] = await Promise.all([
+      TYC.db.from('meal_logs').select('momento, estado, registrado_at').eq('fecha', hoy),
+      TYC.db.from('medications').select('id, nombre').eq('activa', true),
+      TYC.db.from('medication_logs').select('medication_id, tomada, momento').eq('fecha', hoy),
+      TYC.db.from('weight_logs').select('fecha, peso_kg').gte('fecha', desde).order('fecha', {ascending:false}),
+      TYC.db.from('daily_close').select('fecha, hambre, energia, sueno, pasos, cerrado_at')
+        .gte('fecha', desde).order('fecha', {ascending:false}),
+      TYC.db.from('workout_logs').select('id, fecha, estado, rpe').gte('fecha', desde).order('fecha', {ascending:false}),
+      TYC.db.from('set_logs').select('workout_log_id, reps, peso_kg'),
+      TYC.db.from('extra_logs').select('nombre, cantidad').eq('fecha', hoy),
+      TYC.db.from('shared_checks').select('clave, estado, profiles(nombre)').eq('fecha', hoy)
+    ]);
+
+    const idMed = Object.fromEntries((meds.data || []).map(m => [m.id, m.nombre]));
+    const porSesion = {};
+    for (const s of (series.data || []))
+      porSesion[s.workout_log_id] = (porSesion[s.workout_log_id] || 0) + 1;
+
+    const ESTADO = {hecho:'✓ hecha', cambiado:'↔ cambiada', fuera:'🍽 fuera', saltado:'⏭ saltada'};
+    const NIVEL = ['', 'bajo', 'normal', 'alto'];
+
+    return {bloques: [
+      {titulo:'Comidas de hoy', filas: (comidas.data || []).map(c => ({
+        qué: `${MOMLAB[MOM_APP[c.momento] || c.momento] || c.momento} · ${ESTADO[c.estado] || c.estado}`,
+        cuándo: hora(c.registrado_at)}))},
+
+      {titulo:'Medicación de hoy', filas: (medLogs.data || []).map(m => ({
+        qué: `${idMed[m.medication_id] || 'medicación'} · ${m.tomada ? '✓ tomada' : '✗ no tomada'}`,
+        cuándo: m.momento || ''}))},
+
+      {titulo:'Entrenamiento · últimos 7 días', filas: (entrenos.data || []).map(e => ({
+        qué: `${e.estado}${e.rpe ? ' · esfuerzo ' + e.rpe : ''}${
+          porSesion[e.id] ? ' · ' + porSesion[e.id] + ' series' : ' · sin series'}`,
+        cuándo: dia(e.fecha)}))},
+
+      {titulo:'Peso · últimos 7 días', filas: (pesos.data || []).map(p => ({
+        qué: `${(+p.peso_kg).toFixed(1).replace('.', ',')} kg`, cuándo: dia(p.fecha)}))},
+
+      {titulo:'Cierres del día', filas: (cierres.data || []).map(c => ({
+        qué: `hambre ${NIVEL[c.hambre] || '—'} · energía ${NIVEL[c.energia] || '—'} · sueño ${
+          NIVEL[c.sueno] || '—'}${c.pasos ? ' · ' + c.pasos.toLocaleString('es') + ' pasos' : ''}`,
+        cuándo: dia(c.fecha) + ' ' + hora(c.cerrado_at)}))},
+
+      {titulo:'Fuera del plan · hoy', filas: (extras.data || []).map(x => ({
+        qué: `${x.nombre}${x.cantidad > 1 ? ' ×' + x.cantidad : ''}`, cuándo: ''}))},
+
+      {titulo:'De la casa · hoy', filas: (checks.data || []).map(c => ({
+        qué: c.clave.replace(/^desc_/, 'sacar del congelador: ').replace(/^rutina_./, 'rutina diaria'),
+        cuándo: c.profiles?.nombre || ''}))},
+    ]};
+  } catch(e){
+    return {error: e.message || String(e)};
+  }
 }
 
 /* La dirección de este móvil para recibir avisos. Se guarda una por teléfono:
@@ -1051,7 +1124,9 @@ async function hidratarDia(){
     TYC.db.from('medication_logs').select('medication_id, momento, tomada').eq('fecha', f),
     TYC.db.from('shared_checks').select('clave, estado, profiles(nombre)').eq('fecha', f),
     TYC.db.from('daily_close').select('*').eq('fecha', f).maybeSingle(),
-    TYC.db.from('workout_logs').select('estado').eq('fecha', f).maybeSingle()
+    /* limit(1) en vez de «una sola»: si por lo que sea hubiera dos filas del
+       mismo día, se coge una y se sigue, en vez de romperse. */
+    TYC.db.from('workout_logs').select('estado').eq('fecha', f).limit(1)
   ]);
 
   for (const c of (comidas.data || [])){
@@ -1073,7 +1148,8 @@ async function hidratarDia(){
                   pasos:c.pasos, alcohol:c.alcohol, nota:c.nota};
     ACC.cierre = 'hecho';
   }
-  if (entreno.data && entreno.data.estado === 'hecha') ACC.sesion = 'hecho';
+  const ent = Array.isArray(entreno.data) ? entreno.data[0] : entreno.data;
+  if (ent && ent.estado === 'hecha') ACC.sesion = 'hecho';
 
   /* Las comidas marcadas ANTES de que existiera el descuento no gastaron nada
      de la despensa. Al abrir la app se ponen al día: el descuento comprueba si
@@ -1172,8 +1248,12 @@ async function guardarDespensaBD(a){
     .select('id').eq('nombre', a.n).maybeSingle();
   if (!ing) return {error:'ingrediente desconocido'};
   const ORIG = {huerta:'huerta', regalo:'regalo', otra:'otra_tienda', pesca:'pesca'};
-  const {data: fila} = await TYC.db.from('pantry')
-    .select('id, cantidad').eq('ingredient_id', ing.id).maybeSingle();
+  /* Un ingrediente puede tener VARIAS filas en despensa, una por caducidad.
+     Pedir «una sola» devolvía error y el alta se perdía en silencio. */
+  const {data: filas} = await TYC.db.from('pantry')
+    .select('id, cantidad, caducidad').eq('ingredient_id', ing.id)
+    .order('caducidad', {ascending:true}).limit(1);
+  const fila = (filas || [])[0];
   if (fila){
     await TYC.db.from('pantry').update({cantidad:+fila.cantidad + a.g,
       caducidad:a.cad, actualizado_at:new Date().toISOString()}).eq('id', fila.id);
@@ -1332,6 +1412,7 @@ async function arrancarApp(){
     GUARDAR_LAB       = guardarAnaliticaBD;
     GUARDAR_MENU      = guardarMenuBD;
     GUARDAR_PUSH      = guardarPush;
+    LEER_REGISTROS    = leerRegistros;
     escucharCasa();
     vaciarCola();
 

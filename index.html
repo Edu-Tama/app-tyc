@@ -492,7 +492,7 @@ const DIAS_ATRAS=[0,-1,-2].map(o=>{const f=fechaDe(o);
 
 /* Saber qué versión corre en cada móvil deja de ser adivinar. Cuando algo
    «no se actualiza», este número lo dice en un vistazo. */
-const VERSION_APP = 'v19 · 31 ago 2026';
+const VERSION_APP = 'v21 · 31 ago 2026';
 const TYC_CONECTADO = () => typeof TYC !== 'undefined' && !!TYC.db && !TYC.demo;
 
 /* Descarta el service worker y las cachés y recarga: la salida de emergencia
@@ -1647,6 +1647,10 @@ function sheetOtroSuper(k){
     <div class="seg" style="flex-wrap:wrap; margin-bottom:8px">
       ${Object.keys(CADENAS).map(c=>`<span class="chip ${COMPRA_EN_CURSO.comercio===c?'on':''}"
         onclick="COMPRA_EN_CURSO.comercio='${c}'; sheetOtroSuper('${k}')">${c}</span>`).join('')}</div>
+    ${COMPRA_EN_CURSO.comercio==='Otro'?`<div class="f" style="border-top:0"><label>¿Cuál?
+      <div class="note" style="margin-top:2px">Se guarda como cadena nueva y empieza a aprender su desviación</div></label>
+      <input id="super-nombre" placeholder="Alcampo, Aldi…" style="width:120px"
+        onchange="nombrarSuper(this.value, '${k}')"></div>`:''}
     ${C.compras>=3?`<div class="note" style="margin:-2px 0 10px">Con ${C.compras} compras aquí, la app ya sabe que
       pagáis un <b>${Math.abs(Math.round((C.factor-1)*100))} % ${C.factor<1?'menos':'más'}</b> que mis precios de
       referencia. Estimación para esta: <b>${eur(prevista)}</b>.</div>`
@@ -1673,10 +1677,30 @@ function sheetOtroSuper(k){
       pero sí <b>cuánto se desvía esta cadena en total</b>, que es lo que sirve para prever el mes.</div>
     <button class="cta" style="margin-top:14px" onclick="cerrarSinTicket('${k}',${est})">Cerrar la compra</button>`);
 }
+/* Comprar fuera de las cuatro cadenas conocidas no es un caso raro: hay que
+   poder nombrar el súper y que la app empiece a aprender cuánto se desvía. */
+function nombrarSuper(nombre, k){
+  const n=(nombre||'').trim();
+  if(!n) return;
+  if(!CADENAS[n]) CADENAS[n]={factor:1.00, compras:0};
+  COMPRA_EN_CURSO.comercio=n;
+  sheetOtroSuper(k);
+}
 function cerrarSinTicket(k, est){
   const inp=document.getElementById('total-pagado');
   const pagado=parseFloat((inp&&inp.value||'').replace(',','.'))||est;
   const c=COMPRA_EN_CURSO.comercio, C=CADENAS[c];
+  /* Lo comprado tiene que entrar en la despensa, y lo que no se compró no
+     puede evaporarse: pasa a una lista nueva. Antes cerrar la compra solo
+     cambiaba el estado de la lista y la despensa se quedaba igual. */
+  const lista=listaVista(), items=LISTAS[k].secciones.flatMap(x=>lista[x]||[]);
+  const cogidos=items.filter(i=>(MARCAS[i.n]||{}).cogido)
+    .map(i=>({n:i.n, g: MARCAS[i.n].g!=null ? MARCAS[i.n].g : i.g}));
+  const pendientes=items.filter(i=>{const m=MARCAS[i.n]||{};
+    return !m.cogido && (!m.noHabia || m.motivo==='pendiente');})
+    .map(i=>({n:i.n, g:i.g, sec:ING[i.n]?ING[i.n][2]:'Despensa', envases:i.envases, formato:i.formato}));
+  if(GUARDAR_COMPRA) GUARDAR_COMPRA({tipo:k, comercio:c, total:pagado, cogidos, pendientes})
+    .then(()=>pintarCompra());
   /* El factor se actualiza como media móvil: una compra rara no lo desvía entero. */
   const nuevo=est?pagado/est:1;
   const anterior=C.factor;
@@ -1686,7 +1710,8 @@ function cerrarSinTicket(k, est){
   /* Cerrar la lista también es de la casa: si solo se cerrara en esta pantalla,
      el otro seguiría viéndola abierta y volvería a comprar lo mismo. */
   if(CERRAR_LISTA) CERRAR_LISTA(k);
-  COMPRAS.unshift({id:'cx'+C.compras, sitio:c, fecha:'hoy', total:pagado, fid:'lista', lineas:null, pendientes:0});
+  COMPRAS.unshift({id:'cx'+C.compras, sitio:c, fecha:'hoy', total:pagado, fid:'lista',
+    lineas:null, pendientes:pendientes.length});
   closeSheet(); pintarCompra();
   openSheet(`<h3>Compra cerrada</h3>
     <div class="meta" style="margin-bottom:16px">${c} · ${eur(pagado)}
@@ -1707,20 +1732,53 @@ function cerrarSinTicket(k, est){
         : `El factor de ${c} pasa de ×${anterior.toFixed(2).replace('.',',')} a
            <b>×${C.factor.toFixed(2).replace('.',',')}</b> sobre ${C.compras} compras. La previsión del mes ya
            lo usa. Los precios por producto no se tocan: los de ${c} no valen para Mercadona.`}</div>
+    <div class="card" style="box-shadow:none; background:var(--surface-2); margin-top:12px">
+      <div class="sec-h" style="margin-top:0">Qué pasa ahora</div>
+      <div class="ing" style="border-top:0"><span class="grow">Entran en la despensa</span>
+        <span style="font-weight:650">${cogidos.length} productos</span></div>
+      ${pendientes.length?`<div class="ing"><span class="grow">Quedan pendientes</span>
+        <span class="chip acc">${pendientes.length}</span></div>
+        <div class="note">No se pierden: se abre una lista nueva con ellos, para la próxima vez que vayáis.</div>`
+        :'<div class="note">No queda nada pendiente: la lista se cierra entera.</div>'}
+    </div>
     <button class="cta" style="margin-top:14px" onclick="closeSheet()">Hecho</button>`);
 }
+/* LA FOTO DEL TICKET.
+   Era una maqueta: un recuadro dibujado y un botón que cerraba la hoja sin
+   hacer nada. Todavía no hay lectura automática —eso llegará con el formato
+   real del correo de Mercadona—, así que lo honesto es que la foto sirva para
+   lo que sí sirve hoy: tener el ticket delante mientras se teclea el total, y
+   guardar la imagen para poder repasarla después. */
+let FOTO_TICKET = null;
 function sheetFoto(){
   openSheet(`<h3>Foto del ticket</h3>
     <div class="meta" style="margin-bottom:16px">Para cuando no llega el digital</div>
-    <div class="scan" style="margin-bottom:14px"><div style="font-size:34px">📷</div>
-      <div style="font-weight:650; margin-top:8px">Hacer la foto</div>
-      <div class="note" style="margin-top:4px">Ticket estirado, con luz, y que quepa entero</div></div>
-    <div class="banner"><b class="t">Es el camino peor, y conviene saberlo</b>
-      El papel térmico de Mercadona se borra y se dobla, así que la lectura falla más que la del correo.
-      Si pagasteis con la tarjeta de siempre, el digital ya está esperando: usadlo.</div>
-    <button class="cta" style="margin-top:14px" onclick="closeSheet()">Continuar con la foto</button>`);
+    <input type="file" accept="image/*" capture="environment" id="foto-in"
+      style="display:none" onchange="cargarFoto(this)">
+    ${FOTO_TICKET
+      ? `<img src="${FOTO_TICKET}" alt="Ticket" style="width:100%; border-radius:14px;
+           max-height:280px; object-fit:contain; background:var(--surface-2)">
+         <button class="act" style="width:100%; margin-top:8px"
+           onclick="document.getElementById('foto-in').click()">Repetir la foto</button>`
+      : `<div class="scan tap" style="margin-bottom:14px; cursor:pointer"
+           onclick="document.getElementById('foto-in').click()">
+           <div style="font-size:34px">📷</div>
+           <div style="font-weight:650; margin-top:8px">Hacer la foto</div>
+           <div class="note" style="margin-top:4px">Ticket estirado, con luz, y que quepa entero</div></div>`}
+    <div class="banner" style="margin-top:12px"><b class="t">Todavía no se lee sola</b>
+      La foto no se convierte aún en líneas y precios: eso llega cuando tengamos el formato del ticket
+      digital de Mercadona. Por ahora sirve para tener el ticket delante y no perder el papel; el total
+      se teclea al cerrar la compra.</div>
+    <button class="cta" style="margin-top:14px"
+      onclick="closeSheet(); sheetOtroSuper('fresco')">Continuar y poner el total</button>`);
 }
-
+function cargarFoto(inp){
+  const f = inp.files && inp.files[0];
+  if (!f) return;
+  const lector = new FileReader();
+  lector.onload = e => { FOTO_TICKET = e.target.result; sheetFoto(); };
+  lector.readAsDataURL(f);
+}
 function sheetCompra(id){
   const c=COMPRAS.find(x=>x.id===id), F=FIDELIDAD[c.fid];
   openSheet(`<h3>${c.sitio} · ${c.fecha}</h3>

@@ -175,10 +175,38 @@ async function hidratarCompra(){
   }
 
   await leerMarcas();
+  /* La lista guardada es una foto del momento en que se abrió. Si después
+     cambia el menú —se regenera la semana, se corrige el catálogo— aparecen
+     ingredientes que el menú pide y la lista no tiene: pasó con las ciruelas.
+     Se añaden los que falten SIN tocar nada de lo ya marcado. Quitar no se
+     quita nada por las bravas: un producto de menos en la lista, estando en el
+     súper, es peor que uno de más. */
+  await completarLista(idIng, lista);
+  await leerMarcas();
   GUARDAR_MARCA = guardarMarca;
   CERRAR_LISTA  = cerrarListaBD;
   escucharLista();
   return Object.values(LISTA_ID).filter(Boolean).length;
+}
+
+async function completarLista(idIng, lista){
+  const nuevas = [];
+  for (const [tipo, L] of Object.entries(LISTAS)){
+    const id = LISTA_ID[tipo]; if (!id) continue;
+    for (const sec of L.secciones){
+      for (const i of (lista[sec] || [])){
+        if (ITEM_ID[i.n] || !idIng[i.n]) continue;      // ya está en la lista
+        nuevas.push({shopping_list_id:id, ingredient_id:idIng[i.n],
+          cantidad:i.comprado, unidad:'g', seccion_super:sec,
+          envases:i.envases, formato_g:i.formato});
+      }
+    }
+  }
+  if (!nuevas.length) return 0;
+  const {error} = await TYC.db.from('shopping_items').insert(nuevas);
+  if (error){ console.warn('[T&C] no se han podido añadir artículos:', error.message); return 0; }
+  console.log(`T&C · ${nuevas.length} artículos añadidos a la lista (el menú los pide y no estaban)`);
+  return nuevas.length;
 }
 
 /* Lo guardado: la lista Y lo marcado. Esto es lo que se pinta.
@@ -690,6 +718,70 @@ async function guardarPuntuacion(clave, valor){
     fila:{profile_id:SESION.id, recipe_id:id, valor, puntuado_at:new Date().toISOString()}});
 }
 
+/* ── cerrar la compra ───────────────────────────────────────────────────────
+   Cerrar la lista no era suficiente: lo comprado tiene que ENTRAR EN LA
+   DESPENSA. Si no, la despensa se queda como estaba, el menú de la semana
+   siguiente vuelve a pedir lo mismo y la lista repite productos que ya están
+   en casa. Esto es lo que cierra el círculo compra → despensa → menú. */
+async function cerrarCompraBD(datos){
+  const {tipo, comercio, total, cogidos} = datos;
+  const listaId = LISTA_ID[tipo] || null;
+
+  /* 1 · el ticket: el gasto, con su nivel de fidelidad. */
+  const {data: tk} = await TYC.db.from('tickets').insert({
+    household_id: SESION.household, fecha_compra: hoyISO(),
+    comercio, total, estado: 'confirmado',
+    fidelidad: 'desde_lista', via: 'manual',
+    shopping_list_id: listaId
+  }).select('id').maybeSingle();
+
+  /* 2 · a la despensa. Lo que ya estaba se SUMA, no se sustituye: si quedaban
+     200 g de arroz y entran 1000, hay 1200, no 1000. */
+  const {data: ings} = await TYC.db.from('ingredients').select('id, nombre');
+  const idIng = Object.fromEntries((ings || []).map(i => [i.nombre, i.id]));
+  const {data: hay} = await TYC.db.from('pantry').select('id, ingredient_id, cantidad');
+  const enCasa = Object.fromEntries((hay || []).map(p => [p.ingredient_id, p]));
+
+  for (const c of cogidos){
+    const ing = idIng[c.n]; if (!ing) continue;
+    const previo = enCasa[ing];
+    if (previo){
+      await TYC.db.from('pantry').update({cantidad: +previo.cantidad + c.g,
+        actualizado_at: new Date().toISOString()}).eq('id', previo.id);
+    } else {
+      await TYC.db.from('pantry').insert({household_id: SESION.household,
+        ingredient_id: ing, cantidad: c.g, unidad: 'g', origen: 'ticket'});
+    }
+    /* El movimiento deja el rastro: cuánto entró, cuándo y de qué compra. */
+    await TYC.db.from('pantry_movements').insert({household_id: SESION.household,
+      ingredient_id: ing, cantidad: c.g, origen: 'ticket',
+      motivo: 'ticket', referencia_id: tk ? tk.id : null});
+  }
+
+  /* 3 · la lista se cierra, y lo que no se compró NO se pierde: pasa a una
+     lista nueva. Si no, «lo compro el jueves» equivale a olvidarlo. */
+  await cerrarListaBD(tipo);
+  if (datos.pendientes && datos.pendientes.length){
+    const {data: nueva} = await TYC.db.from('shopping_lists')
+      .insert({household_id: SESION.household, tipo, estado: 'abierta'})
+      .select('id').maybeSingle();
+    if (nueva){
+      LISTA_ID[tipo] = nueva.id;
+      const filas = datos.pendientes.map(i => ({
+        shopping_list_id: nueva.id, ingredient_id: idIng[i.n],
+        cantidad: i.g, unidad: 'g', seccion_super: i.sec,
+        envases: i.envases, formato_g: i.formato
+      })).filter(f => f.ingredient_id);
+      if (filas.length) await TYC.db.from('shopping_items').insert(filas);
+    }
+  }
+
+  /* Y a partir de aquí, la despensa y la lista que se ven son las nuevas. */
+  await hidratarDespensa();
+  await leerMarcas();
+  return {ok:true};
+}
+
 /* ── leer lo que ya está registrado hoy ─────────────────────────────────────
    Sin esto, abrir la app por la tarde enseñaría el día en blanco aunque el
    desayuno estuviera marcado desde las ocho. */
@@ -780,6 +872,7 @@ async function arrancarApp(){
     GUARDAR_CHECK   = guardarCheck;
     GUARDAR_ENTRENO = guardarEntreno;
     GUARDAR_CARDIO  = guardarCardioBD;
+    GUARDAR_COMPRA  = cerrarCompraBD;
     escucharCasa();
     vaciarCola();
 

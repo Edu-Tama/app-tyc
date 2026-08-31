@@ -333,7 +333,7 @@
       <button class="cta" id="add-act" style="margin:2px 0 20px">+ Registrar actividad libre</button>
     </div>
     <div data-tab-e="sesion" hidden>
-      <h2 style="margin-top:14px">Próxima sesión</h2><div id="ejercicios"></div>
+      <h2 style="margin-top:14px" id="ses-tit">Sesión</h2><div id="ejercicios"></div>
     </div>
     <div data-tab-e="progreso" hidden>
       <h2 style="margin-top:14px">Adherencia al entrenamiento</h2><div class="card" id="ent-adh"></div>
@@ -492,7 +492,7 @@ const DIAS_ATRAS=[0,-1,-2].map(o=>{const f=fechaDe(o);
 
 /* Saber qué versión corre en cada móvil deja de ser adivinar. Cuando algo
    «no se actualiza», este número lo dice en un vistazo. */
-const VERSION_APP = 'v15 · 31 ago 2026';
+const VERSION_APP = 'v16 · 31 ago 2026';
 const TYC_CONECTADO = () => typeof TYC !== 'undefined' && !!TYC.db && !TYC.demo;
 
 /* Descarta el service worker y las cachés y recarga: la salida de emergencia
@@ -2411,24 +2411,37 @@ function sheetItem(n){
   const lista=listaVista(), i=Object.values(lista).flat().find(x=>x.n===n);
   if(!i) return;
   const m=MARCAS[n]||{}, f=i.formato;
-  const ops=[1,2,3,4].map(k=>k*f).filter(g=>g!==i.comprado);
+  /* Lo que se compra por piezas se corrige por piezas. Ofrecer «540 g» cuando
+     has cogido 9 huevos obliga a dividir de cabeza justo cuando menos apetece:
+     de pie, en el pasillo, con el carro puesto. */
+  const ud = porUnidades(n), pu = ud ? ING[n][3] : null;
+  const nec = ud ? Math.ceil(i.g/pu) : i.g;
+  const ops = ud
+    ? [-6,-4,-2,2,4,6].map(k=>nec+k).filter(u=>u>0)
+    : [1,2,3,4].map(k=>k*f).filter(g=>g!==i.comprado);
   openSheet(`<h3>${n}</h3>
     <div class="meta" style="margin-bottom:16px">Hacen falta <b>${cant(n, i.g)}</b> para las recetas
-      de la semana${i.tengo?` · en casa hay ${cant(n, i.tengo)}`:''}</div>
+      de la semana${i.tengo?` · en casa hay ${cant(n, i.tengo)}`:''}${
+        ud?` · una unidad son unos ${pu} g`:''}</div>
     <button class="opt" onclick="marcarConCantidad('${n}',${i.g})">
       ${m.cogido&&m.g==null?'✅':'⬜'} <span class="grow">Cogido, lo que hacía falta
         <small>${cant(n, i.g)} · ${eur(i.precioReal)}</small></span></button>
     <div class="sec-h">O la cantidad que venga en este súper</div>
-    <div class="note" style="margin:-4px 0 8px">De referencia, en Mercadona va en ${fmt(f)}.
+    <div class="note" style="margin:-4px 0 8px">${ud
+      ? 'En Mercadona suelen ir en docenas o media docena.'
+      : 'De referencia, en Mercadona va en '+fmt(f)+'.'}
       Da igual el formato: lo que se apunta es cuánto entra en casa.</div>
-    ${ops.map(g=>`<button class="opt" onclick="marcarConCantidad('${n}',${g})">
-      ${m.g===g?'✅':'⬜'} <span class="grow">${kg(g)}<small>${g<i.g?'se queda corto · faltarían '+kg(i.g-g):
-        `sobran ${kg(g-i.g)} · se quedan en despensa`}</small></span></button>`).join('')}
+    ${ops.map(v=>{ const g = ud ? v*pu : v;
+      return `<button class="opt" onclick="marcarConCantidad('${n}',${g})">
+      ${m.g===g?'✅':'⬜'} <span class="grow">${cant(n,g)}<small>${g<i.g
+        ? 'se queda corto · faltarían '+cant(n,i.g-g)
+        : `sobran ${cant(n,g-i.g)} · se quedan en despensa`}</small></span></button>`}).join('')}
     <div class="f"><label>Otra cantidad</label>
-      <input id="cant-otra" placeholder="${Math.round(i.g)}" style="width:80px; text-align:right">
-      <span class="meta" style="width:22px">g</span></div>
+      <input id="cant-otra" type="number" inputmode="numeric" placeholder="${Math.round(nec)}"
+        style="width:80px; text-align:right">
+      <span class="meta" style="width:56px">${ud?(PLURAL[n]||'unidades'):'g'}</span></div>
     <button class="cta" style="margin-top:10px"
-      onclick="marcarConCantidad('${n}', +document.getElementById('cant-otra').value || ${Math.round(i.g)})">Guardar</button>
+      onclick="marcarConCantidad('${n}', (+document.getElementById('cant-otra').value || ${Math.round(nec)})${ud?'*'+pu:''})">Guardar</button>
     <button class="act" style="width:100%; margin-top:8px" onclick="noHabia('${n}')">No había</button>`);
 }
 function marcarConCantidad(n,g){
@@ -2609,7 +2622,7 @@ function pintarCompra(){
             ${porUnidades(i.n)?'':i.n+' '}<b style="color:var(--acc-txt)">${cant(i.n, i.g)}</b>
             <span class="note" style="margin:0; display:block">
               ${m.noHabia?'<b style="color:var(--crit)">no había · '+m.noHabia+'</b>'
-               :difiere?`<b style="color:var(--acc-txt)">cogido ${kg(real)}</b>${m.quien?' · '+m.quien:''}`
+               :difiere?`<b style="color:var(--acc-txt)">cogido ${cant(i.n, real)}</b>${m.quien?' · '+m.quien:''}`
                :m.cogido?`<b style="color:var(--good-ink)">cogido${m.quien?' · '+m.quien:''}</b>`
                /* Lo que manda es cuánto hace falta. El formato de venta lo decide
                   el súper en el que se acabe comprando, y ponerlo delante ya hizo
@@ -2771,43 +2784,63 @@ function pintarEntreno(){
       ? 'Fuerza subiendo mientras el peso baja: es la prueba de que lo que se pierde es grasa y no músculo.'
       : 'Con el peso estable y las cargas subiendo, la recomposición va por donde debe.'}</div>`;
 
-  $('#ejercicios').innerHTML=`
-    ${(()=>{const sel=CARDIO_HECHO[P];
-      if(!sel) return `<div class="card tap" onclick="sheetCardio()">
-        <div class="row"><div class="thumb t-pescado">🚴</div>
-          <div class="grow"><div class="when">${P==='c'?'Martes':'Sábado'} · sesión de cardio en Forus</div>
-            <div class="name" style="margin:2px 0 3px">Elegir actividad</div>
-            <div class="meta">${CARDIO_FORUS.length} opciones con objetivo de tiempo o distancia</div></div>
-          <span style="color:var(--muted); font-size:18px">›</span></div></div>`;
-      const x=CARDIO_FORUS[sel.i], hecha=sel.estado==='hecha';
-      return `<div class="card tap" style="border-color:${hecha?'var(--good)':'var(--acc)'}"
-        onclick="sheetCardioHecho()">
-        <div class="row"><div class="thumb t-pescado">${x.e}</div>
-          <div class="grow"><div class="when" style="color:${hecha?'var(--good-ink)':'var(--acc-txt)'}">
-            ${hecha?'✓ Cardio hecho':'Elegida para hoy'}</div>
-            <div class="name" style="margin:2px 0 3px">${x.n}</div>
-            <div class="meta">${hecha?(sel.real?sel.real:x.obj):'Objetivo: '+x.obj}</div></div>
-          ${hecha?'<span class="chip good">✓</span>':'<button class="act primary" style="flex:0 0 auto; padding:11px 15px">Hecha</button>'}
-        </div></div>`})()}
+  /* LA SESIÓN VA PRIMERO. Antes esta pestaña abría con la tarjeta de cardio
+     —que para Tama es del sábado— y la sesión de fuerza del día quedaba
+     debajo: se entraba a ver el entrenamiento de hoy y lo primero que se leía
+     era «sábado · sesión de cardio». El cardio aparece ahora el día que toca,
+     o si ya se eligió una actividad. */
+  const hoyEs = planDeDia(P, 0);
+  const tocaHoy    = !antesDeEmpezar() && hoyEs && hoyEs[3]==='gym';
+  const tocaCardio = !antesDeEmpezar() && hoyEs && hoyEs[3]==='cardio';
+  const sig2 = proximaSesion(P);
+  const tit = document.getElementById('ses-tit');
+  if (tit) tit.textContent = tocaHoy ? 'Sesión de hoy'
+    : (sig2 ? 'Próxima sesión · ' + sig2.nombre : 'Sesión');
+
+  const tarjetaSesion = `
     <div class="card tap" style="border-color:var(--acc)" onclick="sheetSesion(0)">
       <div class="row"><div class="thumb t-gym">▶</div>
-        <div class="grow"><div class="when">${(()=>{
-          /* «Hoy 19:00» estaba escrito a mano: la pestaña decía que había sesión
-             hoy también los días que no toca. */
-          const h=planDeDia(P,0); if(h && h[3]==='gym') return 'Hoy · Forus o en casa';
-          const s2=proximaSesion(P);
-          return s2 ? `El ${s2.nombre} · Forus o en casa` : 'Sin sesión programada';})()}</div>
-          <div class="name" style="margin:2px 0 3px">${planDeDia(P,0)&&planDeDia(P,0)[3]==='gym'?'Empezar sesión':'Ver la sesión'}</div>
+        <div class="grow">
+          <div class="when">${tocaHoy ? 'Hoy · Forus o en casa'
+            : sig2 ? 'El ' + sig2.nombre + ' · Forus o en casa' : 'Sin sesión programada'}</div>
+          <div class="name" style="margin:2px 0 3px">${tocaHoy ? 'Empezar sesión' : 'Ver la sesión'}</div>
           <div class="meta">${d.ejercicios.length} ejercicios · calentamiento incluido · ~45 min</div></div>
-        <span style="color:var(--muted); font-size:18px">›</span></div></div>`+
-    d.ejercicios.map(ex=>`
+        <span style="color:var(--muted); font-size:18px">›</span></div></div>`;
+
+  const tarjetaCardio = (() => {
+    if (!tocaCardio && !CARDIO_HECHO[P]) return '';
+    const sel = CARDIO_HECHO[P];
+    const cuerpo = !sel
+      ? `<div class="card tap" onclick="sheetCardio()">
+          <div class="row"><div class="thumb t-pescado">🚴</div>
+            <div class="grow"><div class="when">Hoy · sesión de cardio en Forus</div>
+              <div class="name" style="margin:2px 0 3px">Elegir actividad</div>
+              <div class="meta">${CARDIO_FORUS.length} opciones con objetivo de tiempo o distancia</div></div>
+            <span style="color:var(--muted); font-size:18px">›</span></div></div>`
+      : (() => { const x = CARDIO_FORUS[sel.i], hecha = sel.estado === 'hecha';
+          return `<div class="card tap" style="border-color:${hecha?'var(--good)':'var(--acc)'}"
+            onclick="sheetCardioHecho()">
+            <div class="row"><div class="thumb t-pescado">${x.e}</div>
+              <div class="grow"><div class="when" style="color:${hecha?'var(--good-ink)':'var(--acc-txt)'}">
+                ${hecha?'✓ Cardio hecho':'Elegida para hoy'}</div>
+                <div class="name" style="margin:2px 0 3px">${x.n}</div>
+                <div class="meta">${hecha?(sel.real||x.obj):'Objetivo: '+x.obj}</div></div>
+              ${hecha?'<span class="chip good">✓</span>'
+                :'<button class="act primary" style="flex:0 0 auto; padding:11px 15px">Hecha</button>'}
+            </div></div>`; })();
+    return `<h2 style="margin:18px 0 8px">Cardio</h2>` + cuerpo;
+  })();
+
+  const listaEjercicios = d.ejercicios.map(ex => `
     <div class="card"><div class="row"><div class="grow">
       <div class="name" style="margin-top:0">${ex.n}</div><div class="meta">Prescrito: ${ex.p}</div></div></div>
-      ${ex.sets.map((s,si)=>`<div class="set"><span class="n">${si+1}</span>
-        <input value="${s[0]}"><span class="x">${ex.t?'seg':'reps'}</span>
-        ${ex.t||!s[1]?'':`<input value="${s[1]}"><span class="x">kg</span>`}
+      ${ex.sets.map((st, si) => `<div class="set"><span class="n">${si+1}</span>
+        <input value="${st[0]}"><span class="x">${ex.t?'seg':'reps'}</span>
+        ${ex.t||!st[1]?'':`<input value="${st[1]}"><span class="x">kg</span>`}
         <span class="grow"></span><span class="box"></span></div>`).join('')}
       </div>`).join('');
+
+  $('#ejercicios').innerHTML = tarjetaSesion + listaEjercicios + tarjetaCardio;
 }
 function pintarSalud(){
   const d=PERFILES[P];

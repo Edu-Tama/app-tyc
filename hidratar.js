@@ -658,6 +658,38 @@ async function guardarCardioBD(nombre, minutos, hecha){
           notas: hecha ? 'hecha' : 'elegida'}});
 }
 
+/* ── las puntuaciones de los platos ─────────────────────────────────────────
+   Se leen las de los DOS: el menú es común, así que un plato que cualquiera de
+   los dos ha marcado con 👎 tiene que dejar de proponerse. Se escriben solo las
+   propias, que para eso son opiniones. */
+async function hidratarPuntuaciones(){
+  const {data, error} = await TYC.db.from('recipe_ratings')
+    .select('valor, profile_id, recipes(clave)');
+  if (error) throw error;
+  vaciar(PUNT);
+  for (const r of (data || [])){
+    const k = r.recipes?.clave; if (!k) continue;
+    /* Un 👎 de cualquiera manda sobre el 👍 del otro: si a uno no le gusta, esa
+       cena no vuelve a la mesa. */
+    if (PUNT[k] === 'no') continue;
+    if (r.valor === 'no' || r.profile_id === SESION.id) PUNT[k] = r.valor;
+    else if (!PUNT[k]) PUNT[k] = r.valor;
+  }
+  GUARDAR_PUNT = guardarPuntuacion;
+  return Object.keys(PUNT).length;
+}
+
+async function guardarPuntuacion(clave, valor){
+  const id = REC_ID[clave];
+  if (!id) return {error:'receta sin id'};
+  if (!valor){
+    return await escribir({tabla:'recipe_ratings', tipo:'borrar',
+      donde:{profile_id:SESION.id, recipe_id:id}});
+  }
+  return await escribir({tabla:'recipe_ratings', conflicto:'profile_id,recipe_id',
+    fila:{profile_id:SESION.id, recipe_id:id, valor, puntuado_at:new Date().toISOString()}});
+}
+
 /* ── leer lo que ya está registrado hoy ─────────────────────────────────────
    Sin esto, abrir la app por la tarde enseñaría el día en blanco aunque el
    desayuno estuviera marcado desde las ocho. */
@@ -733,7 +765,8 @@ async function arrancarApp(){
                                 ['menú',       hidratarMenu],
                                 /* la compra va DESPUÉS del menú: la lista sale
                                    de lo que el menú de la casa necesita */
-                                ['compra',     hidratarCompra]]){
+                                ['compra',       hidratarCompra],
+                                ['puntuaciones', hidratarPuntuaciones]]){
       try { await fn(); }
       catch(err){ fallos.push(nombre); console.error('T&C · falla '+nombre+':', err.message||err); }
     }

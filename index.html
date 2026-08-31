@@ -492,7 +492,7 @@ const DIAS_ATRAS=[0,-1,-2].map(o=>{const f=fechaDe(o);
 
 /* Saber qué versión corre en cada móvil deja de ser adivinar. Cuando algo
    «no se actualiza», este número lo dice en un vistazo. */
-const VERSION_APP = 'v18 · 31 ago 2026';
+const VERSION_APP = 'v19 · 31 ago 2026';
 const TYC_CONECTADO = () => typeof TYC !== 'undefined' && !!TYC.db && !TYC.demo;
 
 /* Descarta el service worker y las cachés y recarga: la salida de emergencia
@@ -646,7 +646,9 @@ function marcarSesion(){
 function marcar(i,estado,alt){
   const m=HOY[P][i]; m.estado=estado; if(alt)m.r=alt;
   if(GUARDAR_COMIDA) GUARDAR_COMIDA(m.k, estado, alt||m.r);
-  closeSheet(); pintarQuick(); pintarHero();
+  /* «Ahora toca» es otra zona de la misma pantalla y también cambia al marcar:
+     sin esto se quedaba con la comida ya hecha hasta cerrar y abrir la app. */
+  closeSheet(); pintarQuick(); pintarHero(); pintarAhora();
 }
 
 /* vídeos propios: un clip de 10 s hecho en el gimnasio vale más que
@@ -911,7 +913,14 @@ function cerrarTodo(){
     if(GUARDAR_COMIDA) GUARDAR_COMIDA(m.k,'hecho',m.r); } });
   closeSheet(); render();
 }
-function puntuar(k,v){PUNT[k]=v; pintarQuick(); pintarMenu()}
+/* Puntuar es de lo más valioso que se registra: es lo único que le dice al
+   generador qué repetir y qué no volver a proponer. Volver a tocar la misma
+   carita la quita, para poder deshacer un toque sin querer. */
+function puntuar(k,v){
+  PUNT[k] = PUNT[k]===v ? undefined : v;
+  if(GUARDAR_PUNT) GUARDAR_PUNT(k, PUNT[k]);
+  pintarQuick(); pintarMenu();
+}
 function sheetExtra(){
   openSheet(`<h3>Fuera del plan</h3>
     <div class="meta" style="margin-bottom:16px">Una cerveza al salir del trabajo, un picoteo, un café fuera. Dos toques y no hace falta que sea a la hora de una comida.</div>
@@ -952,7 +961,7 @@ function guardarOtroExtra(kcal){
   EXTRA_LOG[P].push({n:nom, e:'➕', kcal, n2:1});
   closeSheet(); pintarQuick(); pintarHero();
 }
-function quitarExtra(i){EXTRA_LOG[P].splice(i,1); pintarQuick(); pintarHero()}
+function quitarExtra(i){EXTRA_LOG[P].splice(i,1); pintarQuick(); pintarHero(); pintarAhora()}
 /* EL CIERRE DEL DÍA.
    Era una maqueta: los chips no se podían seleccionar, el número de pasos no
    se leía y el botón cerraba la hoja sin guardar nada. Ahora es el registro

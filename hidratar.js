@@ -1139,6 +1139,15 @@ async function hidratarDia(off){
      se leía siempre hoy, así que los días anteriores salían vacíos aunque
      estuvieran registrados. */
   const f = isoDe(off ?? DIA ?? 0);
+
+  /* SE EMPIEZA EN LIMPIO. Todo lo que hay en ACC —el cierre, la sesión hecha,
+     la rutina, los checks de la casa— es de UN día concreto. Al mirar ayer se
+     cargaba encima de lo de hoy sin borrar, y al volver hoy heredaba el cierre
+     y la sesión de ayer: la app decía que habías entrenado cuando no. */
+  vaciar(ACC);
+  CIERRE_HOY = null;
+  NOTA = '';
+
   /* Igual que en «qué hay registrado»: si una de estas cinco consultas falla,
      las otras cuatro tienen que seguir. Que un fallo al leer los checks de la
      casa borre las comidas marcadas del día es exactamente el tipo de cosa que

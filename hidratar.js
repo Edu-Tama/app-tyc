@@ -1456,6 +1456,12 @@ async function hidratarDia(off){
     if (fila && fila.r) await descontarComida(c.id, fila.r);
   }
 
+  /* LO DE FUERA DEL PLAN TAMBIÉN ES DE UN DÍA.
+     Se leía una sola vez al arrancar —siempre el día de hoy— y se quedaba
+     pintado mirases el día que mirases: el refresco de hoy aparecía también en
+     ayer, sumando calorías a un día en el que nadie se lo había bebido. */
+  try { await hidratarExtras(); } catch(e){ console.warn('[T&C] extras:', e.message||e); }
+
   return (comidas.data || []).length;
 }
 

@@ -657,13 +657,19 @@ function pintarCola(){
 const avisoCola = pintarCola;
 
 const hoyISO = () => isoDe(0);
+/* EL DÍA QUE SE ESTÁ MIRANDO. Todo lo que es un registro de un día —una comida,
+   una pastilla, el peso, el cierre, la sesión— tiene que guardarse en el día
+   que hay en pantalla. Estaba todo escrito con hoyISO(): si volvías a ayer para
+   corregir algo, se guardaba en HOY, y además de no arreglar ayer, ensuciaba
+   hoy. Las compras y los tickets siguen con hoyISO(), que ahí «hoy» es «hoy». */
+const diaISO = () => isoDe(typeof DIA === 'number' ? DIA : 0);
 
 /* ── comidas ───────────────────────────────────────────────────────────────
    El momento es la clave: una comida por momento y día. Volver a marcarla
    pisa la anterior en vez de duplicarla. */
 async function guardarComida(momApp, estado, claveAlt){
   const fila = {
-    profile_id: SESION.id, fecha: hoyISO(),
+    profile_id: SESION.id, fecha: diaISO(),
     momento: MOM_BD[momApp] || momApp,
     estado: ESTADO_BD[estado] || 'hecho'
   };
@@ -768,29 +774,29 @@ async function guardarMed(i, tomada){
   const m = MEDICACION[P][i];
   if (!m || !m.id) return {error:'medicación sin id'};
   return await escribir({tabla:'medication_logs', conflicto:'medication_id,fecha,momento',
-    fila:{medication_id:m.id, fecha:hoyISO(), momento:m.mom || 'desayuno', tomada:!!tomada}});
+    fila:{medication_id:m.id, fecha:diaISO(), momento:m.mom || 'desayuno', tomada:!!tomada}});
 }
 
 /* ── peso y cintura ────────────────────────────────────────────────────────── */
 async function guardarPesoBD(kg){
   const r = await escribir({tabla:'weight_logs', conflicto:'profile_id,fecha',
-    fila:{profile_id:SESION.id, fecha:hoyISO(), peso_kg:kg}});
+    fila:{profile_id:SESION.id, fecha:diaISO(), peso_kg:kg}});
   const serie = SESION.perfil === 'c' ? PESO_C : PESO_T;
   serie.push(+kg);
   return r;
 }
 async function guardarCinturaBD(cm){
   const r = await escribir({tabla:'measurements', conflicto:'profile_id,fecha',
-    fila:{profile_id:SESION.id, fecha:hoyISO(), cintura_cm:cm}});
+    fila:{profile_id:SESION.id, fecha:diaISO(), cintura_cm:cm}});
   CINTURA[SESION.perfil].push(+cm);
-  CINTURA_ULT_F = hoyISO();
+  CINTURA_ULT_F = diaISO();
   return r;
 }
 
 /* ── cierre del día ───────────────────────────────────────────────────────── */
 async function guardarCierre(d){
   const r = await escribir({tabla:'daily_close', conflicto:'profile_id,fecha',
-    fila:{profile_id:SESION.id, fecha:hoyISO(),
+    fila:{profile_id:SESION.id, fecha:diaISO(),
           hambre:d.hambre, energia:d.energia, sueno:d.sueno,
           pasos:d.pasos ?? null, alcohol:d.alcohol ?? null, nota:d.nota || null}});
   if (d.pasos != null) PASOS[SESION.perfil] = d.pasos;
@@ -803,10 +809,10 @@ async function guardarCierre(d){
 async function guardarCheck(clave, estado){
   if (estado === null){
     return await escribir({tabla:'shared_checks', tipo:'borrar',
-      donde:{household_id:SESION.household, fecha:hoyISO(), clave}});
+      donde:{household_id:SESION.household, fecha:diaISO(), clave}});
   }
   return await escribir({tabla:'shared_checks', conflicto:'household_id,fecha,clave',
-    fila:{household_id:SESION.household, fecha:hoyISO(), clave, estado,
+    fila:{household_id:SESION.household, fecha:diaISO(), clave, estado,
           marcado_por:SESION.id, marcado_at:new Date().toISOString()}});
 }
 
@@ -814,7 +820,7 @@ async function guardarCheck(clave, estado){
    La sesión hecha, y las series con sus repeticiones y kilos: sin las series
    no hay progresión de cargas, que es lo único que dice si el bloque funciona. */
 async function guardarEntreno(estado, series, fin){
-  const fila = {profile_id:SESION.id, fecha:hoyISO(), estado};
+  const fila = {profile_id:SESION.id, fecha:diaISO(), estado};
   if (fin){
     fila.rpe = fin.rpe || null;
     /* La molestia se guarda en las notas: `motivo_fallo` es para cuando la
@@ -843,7 +849,7 @@ async function guardarEntreno(estado, series, fin){
 
 async function guardarCardioBD(nombre, minutos, hecha, imparte, rpe){
   return await escribir({tabla:'unplanned_activities',
-    fila:{profile_id:SESION.id, fecha:hoyISO(), tipo:nombre,
+    fila:{profile_id:SESION.id, fecha:diaISO(), tipo:nombre,
           duracion_min:minutos || 30,
           intensidad: rpe >= 8 ? 'alta' : rpe <= 4 ? 'suave' : 'normal',
           /* Dirigir un entreno no es entrenar: se guarda, pero marcado, para
@@ -1294,16 +1300,16 @@ function escucharCasa(){
 /* 1 · fuera del plan: la cerveza, el picoteo, el café de media mañana. */
 async function guardarExtra(x){
   return await escribir({tabla:'extra_logs', fila:{
-    profile_id:SESION.id, fecha:hoyISO(), nombre:x.n,
+    profile_id:SESION.id, fecha:diaISO(), nombre:x.n,
     kcal:x.kcal|0, cantidad:x.n2|1, es_alcohol:!!x.alc}});
 }
 async function quitarExtraBD(nombre){
   return await escribir({tabla:'extra_logs', tipo:'borrar',
-    donde:{profile_id:SESION.id, fecha:hoyISO(), nombre}});
+    donde:{profile_id:SESION.id, fecha:diaISO(), nombre}});
 }
 async function hidratarExtras(){
   const {data} = await TYC.db.from('extra_logs')
-    .select('nombre, kcal, cantidad, es_alcohol').eq('fecha', hoyISO());
+    .select('nombre, kcal, cantidad, es_alcohol').eq('fecha', diaISO());
   EXTRA_LOG[SESION.perfil].length = 0;
   for (const x of (data || []))
     EXTRA_LOG[SESION.perfil].push({n:x.nombre, e:x.es_alcohol?'🍺':'➕',

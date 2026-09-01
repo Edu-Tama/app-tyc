@@ -476,7 +476,9 @@ const diasDeSemana = off => { const a=lunesDe(baseSemana()); a.setDate(a.getDate
    vez de dar por hecho que hoy es el día de sesión. */
 function planDeDia(persona, off){
   const sem = PERFILES[persona].semana;
-  const i = ((HOY_F.getDay()+6)%7 + (off||0)) % 7;
+  /* Resto SIEMPRE positivo: con off=-1 (ayer) esto daba -1 y devolvía
+     undefined, así que al volver a ayer no había ni sesión ni agenda. */
+  const i = (((HOY_F.getDay()+6)%7 + (off||0)) % 7 + 7) % 7;
   return sem[i];
 }
 function proximaSesion(persona){
@@ -492,7 +494,7 @@ const DIAS_ATRAS=[0,-1,-2].map(o=>{const f=fechaDe(o);
 
 /* Saber qué versión corre en cada móvil deja de ser adivinar. Cuando algo
    «no se actualiza», este número lo dice en un vistazo. */
-const VERSION_APP = 'v37 · 1 sep 2026';
+const VERSION_APP = 'v38 · 1 sep 2026';
 const TYC_CONECTADO = () => typeof TYC !== 'undefined' && !!TYC.db && !TYC.demo;
 
 /* Descarta el service worker y las cachés y recarga: la salida de emergencia
@@ -2447,12 +2449,19 @@ function pintarQuick(){
       <div class="tx"><div class="when">Fuera del plan</div>
         <b style="color:var(--acc-txt)">Añadir una bebida o un picoteo</b></div>
       <div class="kc"></div><div class="check" style="border:0"></div></div>` : `
-    ${hechas.length?`<div class="qr" style="border-top:0" onclick="VER_HECHAS=!VER_HECHAS; pintarQuick()">
+${/* Un día pasado se abre DESPLEGADO. Plegar lo registrado tiene sentido
+        hoy, que lo que importa es lo que queda por hacer; en ayer, lo
+        registrado es lo único que hay, y dejarlo detrás de un «ver» hacía
+        que ayer pareciera vacío. */''}
+    ${hechas.length && DIA===0?`<div class="qr" style="border-top:0" onclick="VER_HECHAS=!VER_HECHAS; pintarQuick()">
       <div class="thumb sm t-off" style="color:var(--good-ink); font-size:15px">✓</div>
       <div class="tx"><div class="when">Ya registradas</div><b style="color:var(--muted)">${hechas.length} comidas · ${hechas.map(x=>MOMLAB[x.m.k].toLowerCase()).join(', ')}</b></div>
       <div class="kc" style="color:var(--acc-txt); font-weight:650">${VER_HECHAS?'ocultar':'ver'}</div></div>`:''}
-    ${VER_HECHAS?hechas.map(fila).join(''):''}
-    ${pend.length?'':`<div class="qr" style="border-top:0"><div class="thumb sm t-off" style="color:var(--muted)">↑</div>
+    ${hechas.length && DIA<0?`<div class="qr" style="border-top:0">
+      <div class="thumb sm t-off" style="color:var(--good-ink); font-size:15px">✓</div>
+      <div class="tx"><div class="when">${DIAS_ATRAS[-DIA].split(' · ')[0]}</div><b style="color:var(--muted)">${hechas.length} de 5 comidas registradas</b></div></div>`:''}
+    ${(VER_HECHAS || DIA<0)?hechas.map(fila).join(''):''}
+    ${pend.length || DIA<0?'':`<div class="qr" style="border-top:0"><div class="thumb sm t-off" style="color:var(--muted)">↑</div>
       <div class="tx"><b style="color:var(--muted); font-size:13.5px">Solo queda lo de arriba</b></div></div>`}
     ${pend.map(fila).join('')}
     ${EXTRA_LOG[P].map((x,i)=>`<div class="qr on alt" onclick="quitarExtra(${i})">
@@ -2469,7 +2478,7 @@ function pintarQuick(){
   const meds=MEDICACION[P], tomadas=MED[P].filter(Boolean).length;
   /* DIAS_PESO son los días de la semana, no un número escrito a mano.
      0=domingo … 3=miércoles, 6=sábado. */
-  const tocaPeso=DIAS_PESO.includes(HOY_F.getDay());
+  const tocaPeso=DIA===0 && DIAS_PESO.includes(fechaDe(DIA).getDay());
   const ultCint=CINTURA[P] && CINTURA[P].length ? CINTURA[P].at(-1) : null;
   /* La cintura se mide una vez al mes, y se propone el mismo día que el peso:
      si no, la propuesta aparece los siete días hasta que alguien la mide. */
@@ -2480,7 +2489,7 @@ function pintarQuick(){
   /* Lo que toca hoy sale del plan de la semana, no de un texto fijo: decía
      «Impartes entreno · 20:00-21:30» también los domingos, que es el día que
      Tama dirige partido, y «la siguiente, jueves» cualquier día del año. */
-  const hoyPlan = planDeDia(P, 0), sig = proximaSesion(P);
+  const hoyPlan = planDeDia(P, DIA), sig = proximaSesion(P);
   /* El deporte también empieza el 31: mientras no arranque el plan no se
      programa ninguna sesión, igual que no se programa comida. Y el título de la
      sesión sale del plan del día, no del perfil: por eso ponía «Entrena al
@@ -2517,7 +2526,7 @@ function pintarQuick(){
     ${esSesion
       ? `<div class="qr" style="border-top:0" onclick="sheetSesion(0)">
           <div class="thumb sm t-gym">🏋</div>
-          <div class="tx"><div class="when">Sesión de hoy</div><b>${hoyPlan[2]}</b></div>
+          <div class="tx"><div class="when">${DIA===0?'Sesión de hoy':'Sesión de ese día'}</div><b>${hoyPlan[2]}</b></div>
           <div class="kc">${/* Ponía «actividad profesional» encima de una sesión
              de fuerza: esa etiqueta es de los entrenos que imparte Tama, no de
              la suya. */ ''}${e.tipo==='profesional'?'45 min':e.meta.split('·').pop().trim()}</div>
@@ -2532,7 +2541,8 @@ function pintarQuick(){
          <div class="qr" ${hoyPlan && hoyPlan[3]==='work'?'':'style="border-top:0"'}>
           <div class="thumb sm t-off" style="color:var(--muted)">·</div>
           <div class="tx"><div class="when">Sesión propia</div><b style="color:var(--muted)">${
-            sig ? `Hoy no toca · la siguiente, ${sig.nombre}` : 'Hoy no toca'}</b></div>
+            DIA<0 ? 'Ese día no tocaba'
+                  : sig ? `Hoy no toca · la siguiente, ${sig.nombre}` : 'Hoy no toca'}</b></div>
           <div class="check" style="border:0"></div></div>`}
     ${CARDIO_HECHO[P]?(()=>{const sel=CARDIO_HECHO[P], x=CARDIO_FORUS[sel.i], h=sel.estado==='hecha';
       return `<div class="qr ${h?'on':''}" onclick="sheetCardioHecho()">

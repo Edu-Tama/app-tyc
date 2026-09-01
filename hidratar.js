@@ -896,6 +896,52 @@ async function hidratarAnaliticas(){
   return LABS_EVO.length;
 }
 
+/* LA PANTALLA DE SALUD, con datos de verdad.
+   El bienestar y la adherencia a la medicación se pintaban desde arrays que
+   nadie rellenaba: decía «sin cierres todavía» aunque hubiera cierres, y
+   «todavía no hay días marcados» con la medicación marcada. Ahora se leen. */
+async function hidratarSalud(){
+  const yo = SESION.perfil;
+  const hace8sem = new Date(); hace8sem.setDate(hace8sem.getDate() - 56);
+  const desde = isoLocal(hace8sem);
+
+  /* Bienestar: un punto por cierre, de más antiguo a más reciente. */
+  const {data: cierres} = await TYC.db.from('daily_close')
+    .select('fecha, hambre, energia, sueno').gte('fecha', desde).order('fecha');
+  ['hambre','energia','sueno'].forEach(k => { BIENESTAR[yo][k].length = 0; });
+  for (const c of (cierres || [])){
+    if (c.hambre)  BIENESTAR[yo].hambre.push(c.hambre);
+    if (c.energia) BIENESTAR[yo].energia.push(c.energia);
+    if (c.sueno)   BIENESTAR[yo].sueno.push(c.sueno);
+  }
+
+  /* Adherencia a la medicación: días marcados sobre días desde que se empezó.
+     Con menos de tres días no se enseña porcentaje: no significaría nada. */
+  const {data: meds} = await TYC.db.from('medications')
+    .select('id, nombre, dosis, momentos').eq('activa', true);
+  MED_ADH[yo].length = 0;
+  if (meds && meds.length){
+    const {data: marcas} = await TYC.db.from('medication_logs')
+      .select('medication_id, fecha, tomada').gte('fecha', desde).eq('tomada', true);
+    const dias = new Set((marcas || []).map(m => m.fecha));
+    const total = Math.max(1, dias.size);
+    if (dias.size >= 3){
+      for (const m of meds){
+        const suyas = new Set((marcas || [])
+          .filter(x => x.medication_id === m.id).map(x => x.fecha));
+        MED_ADH[yo].push({
+          n: m.nombre + (m.dosis ? ' ' + m.dosis : ''),
+          pct: Math.round(100 * suyas.size / total)});
+      }
+    }
+  }
+
+  /* Adherencia semanal y días en rango: se calculan sobre semanas completas.
+     Sin una semana cerrada no hay barra que pintar, y eso ya lo dice la
+     pantalla en vez de inventar un porcentaje. */
+  return (cierres || []).length;
+}
+
 /* LO QUE HAY GUARDADO, tal cual está en la base.
    No pinta lo que la app cree recordar: consulta y devuelve lo que hay. Si una
    cosa no sale aquí, no está guardada, y eso es exactamente lo que hay que
@@ -1147,6 +1193,10 @@ async function hidratarDia(off){
   vaciar(ACC);
   CIERRE_HOY = null;
   NOTA = '';
+  /* Los pasos también son de un día concreto: si hoy no hay cierre, no se
+     heredan los de ayer. Salía una barra con 4.015 pasos que nadie había
+     registrado hoy. */
+  PASOS[SESION.perfil] = 0;
 
   /* Igual que en «qué hay registrado»: si una de estas cinco consultas falla,
      las otras cuatro tienen que seguir. Que un fallo al leer los checks de la
@@ -1432,7 +1482,8 @@ async function arrancarApp(){
                                 ['extras',       hidratarExtras],
                                 ['excepciones',  hidratarExcepciones],
                                 ['cadenas',      hidratarCadenas],
-                                ['analíticas',   hidratarAnaliticas]]){
+                                ['analíticas',   hidratarAnaliticas],
+                                ['salud',        hidratarSalud]]){
       try { await fn(); }
       catch(err){ fallos.push(nombre); console.error('T&C · falla '+nombre+':', err.message||err); }
     }

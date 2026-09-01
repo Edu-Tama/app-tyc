@@ -710,7 +710,15 @@ function describirOp(op){
     workout_logs:'sesión', set_logs:'series', extra_logs:'fuera del plan',
     unplanned_activities:'actividad', planned_meals:'menú', shopping_items:'lista de la compra',
   }[op.tabla] || op.tabla;
-  const detalle = [f.momento, f.clave, f.nombre, f.tipo, f.estado].filter(Boolean).join(' · ');
+  /* «algo de la casa · rutina_t» no le dice nada a nadie. */
+  const nombreClave = c =>
+    /^rutina_/.test(c) ? 'rutina diaria de espalda' :
+    /^tanda_/.test(c)  ? 'tanda de cocina de la semana del ' + c.slice(6) :
+    /^desc_/.test(c)   ? 'sacar del congelador: ' + c.slice(5) :
+    c === 'cardio_elegido' ? 'cardio elegido' :
+    c === 'tuper' ? 'preparar los túper' : c;
+  const detalle = [f.momento, f.clave ? nombreClave(f.clave) : null,
+                   f.nombre, f.tipo, f.nota].filter(Boolean).join(' · ');
   return `${que}${f.fecha ? ' del ' + f.fecha : ''}${detalle ? ' · ' + detalle : ''}`;
 }
 
@@ -740,7 +748,26 @@ async function reintentarTodo(){
       .push({...op, porque: String(r.error.message || r.error)}); }
   }
   guardarCola(quedanCola); guardarFallos(quedanFallos);
-  pintarCola(); closeSheet();
+  pintarCola();
+  const salvadas = todo.length - quedanCola.length - quedanFallos.length;
+  if (quedanCola.length + quedanFallos.length === 0){
+    closeSheet();
+  } else {
+    /* Un botón que no hace nada visible es peor que no tener botón: si vuelve
+       a fallar, hay que decirlo y decir por qué. */
+    openSheet(`<h3>${salvadas ? salvadas + ' guardadas, ' : ''}${
+      quedanCola.length + quedanFallos.length} siguen sin poder guardarse</h3>
+      <div class="meta" style="margin-bottom:14px">Esto no se arregla reintentando: la base
+        las rechaza por el mismo motivo cada vez.</div>
+      ${[...quedanCola, ...quedanFallos].map(o => `<div class="qr">
+        <div class="thumb sm t-off" style="color:var(--bad)">!</div>
+        <div class="tx"><b>${describirOp(o)}</b>
+          <div class="note" style="margin:1px 0 0">${o.porque || ''}</div></div></div>`).join('')}
+      <div class="banner" style="margin-top:12px"><b class="t">Qué hacer</b>
+        Enséñale esta pantalla a quien lleva la app. Si lo que había que registrar
+        ya lo has vuelto a marcar, puedes descartarlas sin perder nada.</div>
+      <button class="opt" style="margin-top:8px" onclick="descartarPendientes()">Descartar y olvidarlas</button>`);
+  }
   await recargarDia(); render();
 }
 
@@ -920,13 +947,27 @@ async function guardarCierre(d){
 /* ── lo de la casa ─────────────────────────────────────────────────────────
    Descongelar algo, preparar los túper, la tanda del domingo. Lleva quién lo
    marcó porque «¿lo has sacado tú?» debería ser un dato y no una conversación. */
-async function guardarCheck(clave, estado){
+/* `estado` NO es un campo libre: la tabla solo admite estas siete palabras.
+   Se estaba usando para meter la franja de la rutina («mañana») o el nombre de
+   un cardio («Remo 2 km»), y la base rechazaba la fila. El rechazo se quedaba
+   esperando en la cola, reintentando algo que no podía salir bien nunca: por
+   eso la rutina de espalda se marcaba y no aparecía marcada.
+
+   Ahora cualquier cosa que no sea un estado de verdad se guarda como nota, que
+   es donde va, y el estado queda en «hecho». Así ningún sitio de la app puede
+   volver a romper esto sin darse cuenta. */
+const ESTADOS_CHECK = ['hecho','usado','congelado','tirado','pospuesto','corta','saltada'];
+
+async function guardarCheck(clave, estado, nota){
   if (estado === null){
     return await escribir({tabla:'shared_checks', tipo:'borrar',
       donde:{household_id:SESION.household, fecha:diaISO(), clave}});
   }
+  const esEstado = ESTADOS_CHECK.includes(estado);
   return await escribir({tabla:'shared_checks', conflicto:'household_id,fecha,clave',
-    fila:{household_id:SESION.household, fecha:diaISO(), clave, estado,
+    fila:{household_id:SESION.household, fecha:diaISO(), clave,
+          estado: esEstado ? estado : 'hecho',
+          nota:   esEstado ? (nota || null) : String(estado),
           marcado_por:SESION.id, marcado_at:new Date().toISOString()}});
 }
 
@@ -1374,7 +1415,25 @@ async function hidratarDia(off){
   MED[P] = MEDICACION[P].map(m =>
     (medic.data || []).some(x => x.medication_id === m.id && x.momento === m.mom && x.tomada));
 
-  for (const ch of (checks.data || [])) ACC[ch.clave] = ch.estado;
+  for (const ch of (checks.data || [])){
+    /* La rutina diaria se guarda por persona («rutina_t»), pero la pantalla la
+       lee como ACC.rutina. Sin esta traducción se guardaba bien y salía sin
+       marcar, que es lo que pasaba con la de espalda. */
+    if (ch.clave === 'rutina_' + SESION.perfil){
+      ACC.rutina = 'hecho';
+      if (ch.nota) ACC.franja = ch.nota;
+      continue;
+    }
+    if (/^rutina_/.test(ch.clave)) continue;      // la del otro, no es mía
+    if (/^tanda_/.test(ch.clave)) continue;       // la tanda es de la semana, no del día
+    if (ch.clave === 'cardio_elegido'){
+      const i = (typeof CARDIO_FORUS !== 'undefined')
+        ? CARDIO_FORUS.findIndex(x => x.n === ch.nota) : -1;
+      if (i >= 0) CARDIO_HECHO[SESION.perfil] = {i, estado:'elegida', real:null};
+      continue;
+    }
+    ACC[ch.clave] = ch.estado;
+  }
 
   if (cierre.data){
     const c = cierre.data;

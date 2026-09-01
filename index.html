@@ -494,7 +494,7 @@ const DIAS_ATRAS=[0,-1,-2].map(o=>{const f=fechaDe(o);
 
 /* Saber qué versión corre en cada móvil deja de ser adivinar. Cuando algo
    «no se actualiza», este número lo dice en un vistazo. */
-const VERSION_APP = 'v41 · 1 sep 2026';
+const VERSION_APP = 'v42 · 1 sep 2026';
 const TYC_CONECTADO = () => typeof TYC !== 'undefined' && !!TYC.db && !TYC.demo;
 
 /* Descarta el service worker y las cachés y recarga: la salida de emergencia
@@ -792,7 +792,9 @@ function sheetMiVideo(n){
    la casa con la franja elegida, para poder ver si se hace de verdad. */
 function rutinaHecha(){
   ACC.rutina='hecho';
-  if(GUARDAR_CHECK) GUARDAR_CHECK('rutina_'+P, ACC.franja || 'hecho');
+  /* La franja es una NOTA, no un estado: pasarla como estado hacía que la base
+     rechazara la fila y la rutina no llegara a guardarse nunca. */
+  if(GUARDAR_CHECK) GUARDAR_CHECK('rutina_'+P, 'hecho', ACC.franja || null);
   closeSheet(); pintarQuick(); pintarEntreno();
 }
 let SES={ex:0, serie:0, casa:false, desc:0, timer:null};
@@ -851,7 +853,7 @@ function elegirCardio(i){
   CARDIO_HECHO[P]={i, estado:'elegida', real:null};
   /* Elegir ya deja rastro: si solo se guardara al hacerla, «lo elegí y no fui»
      sería indistinguible de «no me lo planteé». */
-  if(GUARDAR_CHECK) GUARDAR_CHECK('cardio_elegido', CARDIO_FORUS[i].n);
+  if(GUARDAR_CHECK) GUARDAR_CHECK('cardio_elegido', 'hecho', CARDIO_FORUS[i].n);
   closeSheet(); pintarQuick(); pintarEntreno();
 }
 function sheetCardioHecho(){
@@ -2354,6 +2356,10 @@ function marcarCasa(id){
   if(ACC[id]) { delete ACC[id]; delete POR[id]; }
   else { ACC[id]='hecho'; POR[id]={quien:SESION.perfil, hora:String(HORA).padStart(2,'0')+':'+
         String(new Date().getMinutes()).padStart(2,'0')}; }
+  /* Los preparativos —sacar la merluza, preparar los túper— son de la casa y no
+     se guardaban en ninguna parte: se marcaban, el otro no los veía, y al
+     cerrar la app desaparecían. */
+  if(GUARDAR_CHECK) GUARDAR_CHECK(id, ACC[id] || null);
   pintarQuick();
 }
 const firma = id => POR[id] ? `<div class="note" style="margin:1px 0 0">Lo marcó

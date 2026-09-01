@@ -492,7 +492,7 @@ const DIAS_ATRAS=[0,-1,-2].map(o=>{const f=fechaDe(o);
 
 /* Saber qué versión corre en cada móvil deja de ser adivinar. Cuando algo
    «no se actualiza», este número lo dice en un vistazo. */
-const VERSION_APP = 'v36 · 1 sep 2026';
+const VERSION_APP = 'v37 · 1 sep 2026';
 const TYC_CONECTADO = () => typeof TYC !== 'undefined' && !!TYC.db && !TYC.demo;
 
 /* Descarta el service worker y las cachés y recarga: la salida de emergencia
@@ -2435,7 +2435,8 @@ function pintarQuick(){
   const htmlComida = (SIN_EJEMPLO && HOY_SIN_PLAN) ? `
     <div class="qr" style="border-top:0">
       <div class="thumb sm t-off" style="color:var(--muted)">📅</div>
-      <div class="tx"><div class="when">El plan todavía no ha empezado</div>
+      <div class="tx"><div class="when">${antesDeEmpezar()
+        ? 'El plan todavía no ha empezado' : 'Sin menú para hoy'}</div>
         <b>${antesDeEmpezar()?`Arranca el lunes ${INICIO_PLAN.getDate()} de ${MES_NOM[INICIO_PLAN.getMonth()]}`:'Hoy no hay menú planificado'}</b>
         <div class="note" style="margin:1px 0 0">${antesDeEmpezar()
           ? (diasAlPlan===1?'Queda un día.':`Quedan ${diasAlPlan} días.`)+' El menú de esa semana ya está hecho: míralo en Menú.'

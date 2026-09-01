@@ -502,6 +502,16 @@ async function rellenarSemana(planId, ini, semana){
       profile_id: SESION.id }); });
   });
   if (!filas.length) return false;
+
+  /* Las comidas son únicas por persona, fecha y momento. Si esas fechas ya
+     estaban colgando de OTRO plan —pasó al haber planes que empezaban en
+     domingo—, el insert chocaba y la semana se quedaba con la cabecera vacía:
+     la app no encontraba menú para hoy y decía que el plan no había empezado.
+     Se limpian esas fechas antes de escribir, vengan del plan que vengan. */
+  const fechas = [...new Set(filas.map(f => f.fecha))];
+  await TYC.db.from('planned_meals')
+    .delete().eq('profile_id', SESION.id).in('fecha', fechas);
+
   /* El error de esta inserción se ignoraba. Si falla, el plan queda vacío y la
      app enseña el menú de ejemplo sin decir nada: hay que enterarse. */
   const {error} = await TYC.db.from('planned_meals').insert(filas);

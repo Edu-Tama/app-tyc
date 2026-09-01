@@ -653,13 +653,35 @@ async function escribir(op){
 }
 
 async function ejecutar(op){
-  const t = TYC.db.from(op.tabla);
   if (op.tipo === 'borrar'){
-    let q = t.delete();
+    let q = TYC.db.from(op.tabla).delete();
     for (const [k, v] of Object.entries(op.donde)) q = q.eq(k, v);
     return await q;
   }
-  return await t.upsert(op.fila, op.conflicto ? {onConflict: op.conflicto} : undefined);
+
+  const r = await TYC.db.from(op.tabla)
+    .upsert(op.fila, op.conflicto ? {onConflict: op.conflicto} : undefined);
+
+  /* SI LA BASE AÚN NO TIENE LA REGLA, SE HACE A MANO.
+     «there is no unique or exclusion constraint matching the ON CONFLICT
+     specification» quiere decir que falta pasar una migración. Eso pasará
+     siempre: la app se actualiza sola en el móvil y la migración la pasa una
+     persona a mano, así que hay un rato en que la app va por delante. Que en
+     ese rato no se pueda registrar NADA es inaceptable: se borra lo que hubiera
+     con esa misma clave y se inserta, que es lo que iba a hacer el upsert. */
+  if (r.error && op.conflicto &&
+      /no unique or exclusion constraint/i.test(String(r.error.message || ''))){
+    let q = TYC.db.from(op.tabla).delete();
+    for (const k of op.conflicto.split(',').map(x => x.trim()))
+      q = q.eq(k, op.fila[k]);
+    await q;
+    const r2 = await TYC.db.from(op.tabla).insert(op.fila);
+    if (!r2.error) console.warn('[T&C] falta una migración en ' + op.tabla +
+      ': se ha guardado igual, pero pásala en cuanto puedas.');
+    return r2;
+  }
+
+  return r;
 }
 
 function encolar(op){ const c = leerCola(); c.push({...op, t: Date.now()}); guardarCola(c); pintarCola(); }
@@ -763,6 +785,10 @@ async function reintentarTodo(){
         <div class="thumb sm t-off" style="color:var(--bad)">!</div>
         <div class="tx"><b>${describirOp(o)}</b>
           <div class="note" style="margin:1px 0 0">${o.porque || ''}</div></div></div>`).join('')}
+      ${[...quedanCola, ...quedanFallos].some(o => /constraint|column .* does not exist/i.test(o.porque || ''))
+        ? `<div class="banner" style="margin-top:12px"><b class="t">Falta una migración</b>
+            La base todavía no tiene un cambio que la app ya usa. Se arregla pasando
+            la migración pendiente en Supabase; después, «Reintentar ahora».</div>` : ''}
       <div class="banner" style="margin-top:12px"><b class="t">Qué hacer</b>
         Enséñale esta pantalla a quien lleva la app. Si lo que había que registrar
         ya lo has vuelto a marcar, puedes descartarlas sin perder nada.</div>

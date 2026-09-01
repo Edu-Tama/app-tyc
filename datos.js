@@ -1361,7 +1361,11 @@ function generar(opts={}){
       // A9: si ese día hay alguien en la oficina, lo que se lleva tiene que poder llevarse.
       // No es lo mismo que aguantar en túper: una tostada aguanta en la nevera y
       // llega blanda a las 11.
-      const fecha = FECHA_DE[['17','18','19','20','21','22','23'][d]] || '';
+      /* La fecha sale del CALENDARIO. Estaba escrita a mano como '17','18'…:
+         en septiembre no hay ningún 17 en estas semanas, así que no encontraba
+         fecha, daba por hecho que nadie iba a la oficina y la regla del túper
+         y del desayuno portátil no se aplicaba al generar. */
+      const fecha = (diasDeSemana(0)[d] || {}).iso || '';
       const hayOficina = fecha && (enOficina('c',fecha) || enOficina('t',fecha));
       const hayDesayunoFuera = fecha && (desayunoFuera('c',fecha) || desayunoFuera('t',fecha));
       // A6: miércoles y viernes, cena lista en ≤15 min
@@ -1404,11 +1408,15 @@ function generarSemana(){
 /* ── necesidades de la semana ── */
 function necesidades(){
   const need={};
-  for(const d of MENU) for(const k of MOM) for(const p of ['c','t'])
+  /* Un día sin menú no pide comida. Antes MENU solo traía días con plan; ahora
+     trae los siete y hay que saltarse los vacíos o esto revienta. */
+  for(const d of MENU) for(const k of MOM) for(const p of ['c','t']){
+    if(!d[k] || !R[d[k]]) continue;
     for(const [n,c,u] of R[d[k]].ing){
       const q=escala(n,c,u,p), g=gramos(n,q,u);
       need[n]=(need[n]||0)+g;
     }
+  }
   return need;
 }
 /* LA LISTA QUE SE VE.

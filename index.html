@@ -494,7 +494,7 @@ const DIAS_ATRAS=[0,-1,-2].map(o=>{const f=fechaDe(o);
 
 /* Saber qué versión corre en cada móvil deja de ser adivinar. Cuando algo
    «no se actualiza», este número lo dice en un vistazo. */
-const VERSION_APP = 'v46 · 1 sep 2026';
+const VERSION_APP = 'v47 · 1 sep 2026';
 const TYC_CONECTADO = () => typeof TYC !== 'undefined' && !!TYC.db && !TYC.demo;
 
 /* Descarta el service worker y las cachés y recarga: la salida de emergencia
@@ -547,8 +547,13 @@ function sembrarDia(h){
      el menú de hoy: se veía el día equivocado con el título de otro. */
   const fDia = fechaDe(DIA);
   const numDia = String(fDia.getDate());
-  HOY_SIN_PLAN = SIN_EJEMPLO && !MENU.some(x=>x.n===numDia);
-  const d=MENU.find(x=>x.n===numDia) || (SIN_EJEMPLO ? null : MENU[0]) || {};
+  /* Que el día ESTÉ en la semana no basta: puede estar sin menú. Desde que cada
+     comida se pinta en su fecha, la semana siempre trae los siete días, y los
+     que no tengan plan vienen vacíos. Un día vacío es «sin menú», no un día
+     normal con recetas indefinidas. */
+  const dSem = MENU.find(x=>x.n===numDia);
+  HOY_SIN_PLAN = SIN_EJEMPLO && !(dSem && dSem.desayuno);
+  const d=dSem || (SIN_EJEMPLO ? null : MENU[0]) || {};
   /* Sin plan, el día está vacío. Rellenarlo con recetas indefinidas hacía que
      media app intentara pintar platos que no existen. */
   HOY = HOY_SIN_PLAN
@@ -2733,6 +2738,20 @@ ${/* Un día pasado se abre DESPLEGADO. Plegar lo registrado tiene sentido
 function semanaHTML(datos, editable, cocina, sem){
   sem = sem || (editable ? 's2' : 's1');
   return datos.map(day=>{
+    /* UN DÍA SIN MENÚ SE ENSEÑA, no desaparece. Que el domingo simplemente no
+       saliera es lo que hizo falta una semana para detectar: la app pintaba lo
+       que había y se callaba lo que faltaba. */
+    if(!day.desayuno) return `<div class="card">
+      <div class="row" style="margin-bottom:6px">
+        <div class="dcol" style="width:38px"><b>${day.n}</b><span>${day.d}</span></div>
+        <span class="grow"></span>
+        ${day.d==='D'?'<span class="chip acc">tanda</span>':''}</div>
+      <div class="qr" style="border-top:0">
+        <div class="thumb xs t-off" style="color:var(--muted)">📅</div>
+        <div class="tx"><div class="when">Sin menú</div>
+          <b style="font-size:13.5px; color:var(--muted)">Este día no tiene comidas planificadas</b>
+          <div class="note" style="margin:1px 0 0">No entra en la lista de la compra ni en los totales.</div></div>
+        <span class="chip acc" style="cursor:pointer" onclick="regenerar()">Generar</span></div></div>`;
     /* Lo que se come fuera no lo pone la app: no puede contarlo como si lo pusiera.
        El día se calcula sin esa comida y se dice en el total. */
     const dentro = MOM.filter(k=>{const e=excepcionDe(sem, day.n, k); return !(e && e.tipo==='fuera')});

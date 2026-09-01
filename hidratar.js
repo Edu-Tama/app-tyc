@@ -425,7 +425,7 @@ async function hidratarMenu(){
   for (const [off, destino] of [[0, MENU], [1, MENU2]]){
     const ini = lunesISO(off);
     let {data: plan} = await TYC.db.from('meal_plans')
-      .select('id, planned_meals(fecha, momento, recipe_id, recipes(clave))')
+      .select('id, planned_meals(fecha, momento, profile_id, recipe_id, recipes(clave))')
       .eq('semana_inicio', ini).maybeSingle();
 
     if (!plan || !(plan.planned_meals || []).length){
@@ -448,7 +448,7 @@ async function hidratarMenu(){
            (4 kg de patata en uno y 2 kg en el otro). El plan de la casa es uno:
            se relee el que ya existe y se usa ese. */
         const {data: otra} = await TYC.db.from('meal_plans')
-          .select('id, planned_meals(fecha, momento, recipe_id, recipes(clave))')
+          .select('id, planned_meals(fecha, momento, profile_id, recipe_id, recipes(clave))')
           .eq('semana_inicio', ini).maybeSingle();
         if (otra && (otra.planned_meals || []).length) plan = otra; else continue;
         volcarDesdePlan(destino, off, plan);
@@ -462,11 +462,32 @@ async function hidratarMenu(){
 function volcarDesdePlan(destino, off, plan){
   const porFecha = {};
   for (const pm of plan.planned_meals){
+    /* SOLO LAS MÍAS. Al no filtrar, cada uno veía las del otro sin saberlo. */
+    if (pm.profile_id && SESION.id && pm.profile_id !== SESION.id) continue;
     const m = MOM_APP[pm.momento] || pm.momento;
     (porFecha[pm.fecha] = porFecha[pm.fecha] || {})[m] = pm.recipes?.clave;
   }
-  const dias = Object.keys(porFecha).sort();
-  volcarSemana(destino, off, dias.map(f => porFecha[f]));
+  /* Si no hay ninguna mía —plan viejo escrito solo para el otro— se pintan las
+     que haya, en vez de dejar la semana en blanco. */
+  if (!Object.keys(porFecha).length)
+    for (const pm of plan.planned_meals){
+      const m = MOM_APP[pm.momento] || pm.momento;
+      (porFecha[pm.fecha] = porFecha[pm.fecha] || {})[m] = pm.recipes?.clave;
+    }
+
+  /* CADA COMIDA EN SU FECHA, no por orden de llegada.
+     Antes se ordenaban las fechas que hubiera y se pintaba la primera en lunes,
+     la segunda en martes… Si faltaba un día por el medio, todo lo posterior se
+     corría un día y en pantalla cuadraba siendo mentira. Ahora se busca cada
+     día del calendario; el que no tenga menú se queda vacío y SE VE. */
+  const dias = diasDeSemana(off);
+  destino.length = 0;
+  for (const dia of dias){
+    const d = porFecha[dia.iso] || {};
+    destino.push({d: dia.d, n: dia.n, iso: dia.iso,
+      desayuno: d.desayuno, media: d.media, comida: d.comida,
+      merienda: d.merienda, cena: d.cena, _c: d._c, _t: d._t});
+  }
 }
 function volcarSemana(destino, off, semana){
   const dias = diasDeSemana(off);
@@ -493,13 +514,25 @@ async function rellenarSemana(planId, ini, semana){
   const claves = [...new Set(semana.flatMap(d => MOM.map(m => d[m])))];
   const {data: recs} = await TYC.db.from('recipes').select('id, clave').in('clave', claves);
   const idDe = Object.fromEntries((recs || []).map(r => [r.clave, r.id]));
+
+  /* EL MENÚ ES DE LA CASA, ASÍ QUE SE ESCRIBE PARA LOS DOS.
+     Antes se guardaba solo con el profile_id de quien pulsaba el botón. El otro
+     se quedaba sin ninguna fila y no se notaba porque al leer no se filtraba por
+     persona: veía las del primero y le cuadraba. Cristina llevaba así desde el
+     lunes. El día que las raciones o las excepciones de uno difieran, estaría
+     viendo un menú que no es el suyo. */
+  const {data: gente} = await TYC.db.from('profiles')
+    .select('id').eq('household_id', SESION.household);
+  const perfiles = (gente || []).map(p => p.id);
+  if (!perfiles.includes(SESION.id)) perfiles.push(SESION.id);
+
   const filas = [];
   semana.forEach((d, i) => {
     const f = new Date(ini + 'T12:00'); f.setDate(f.getDate() + i);
     const fecha = isoLocal(f);   // local, no UTC: si no, el plan se corre un día
-    MOM.forEach(m => { if (idDe[d[m]]) filas.push({
+    MOM.forEach(m => { if (idDe[d[m]]) for (const pid of perfiles) filas.push({
       meal_plan_id: planId, fecha, momento: MOM_BD[m], recipe_id: idDe[d[m]],
-      profile_id: SESION.id }); });
+      profile_id: pid }); });
   });
   if (!filas.length) return false;
 
@@ -510,7 +543,7 @@ async function rellenarSemana(planId, ini, semana){
      Se limpian esas fechas antes de escribir, vengan del plan que vengan. */
   const fechas = [...new Set(filas.map(f => f.fecha))];
   await TYC.db.from('planned_meals')
-    .delete().eq('profile_id', SESION.id).in('fecha', fechas);
+    .delete().in('profile_id', perfiles).in('fecha', fechas);
 
   /* El error de esta inserción se ignoraba. Si falla, el plan queda vacío y la
      app enseña el menú de ejemplo sin decir nada: hay que enterarse. */

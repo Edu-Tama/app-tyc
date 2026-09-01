@@ -494,7 +494,7 @@ const DIAS_ATRAS=[0,-1,-2].map(o=>{const f=fechaDe(o);
 
 /* Saber qué versión corre en cada móvil deja de ser adivinar. Cuando algo
    «no se actualiza», este número lo dice en un vistazo. */
-const VERSION_APP = 'v40 · 1 sep 2026';
+const VERSION_APP = 'v41 · 1 sep 2026';
 const TYC_CONECTADO = () => typeof TYC !== 'undefined' && !!TYC.db && !TYC.demo;
 
 /* Descarta el service worker y las cachés y recarga: la salida de emergencia
@@ -2439,15 +2439,37 @@ function pintarAhora(){
       <button class="act primary" style="flex:0 0 auto; padding:11px 15px"
         onclick="event.stopPropagation(); marcar(${i},'hecho')">✓ Hecho</button></div></div>`;
 }
-function bloque(titulo, contenido, resumen, completo){
-  if(completo) return `<h2>${titulo}</h2><div class="card flush">
-    <div class="qr on" style="border-top:0"><div class="thumb sm t-off" style="color:var(--good-ink)">✓</div>
+/* UN BLOQUE COMPLETO SE PLIEGA, PERO SE PUEDE ABRIR.
+   Antes, en cuanto un bloque estaba completo, su contenido se sustituía por una
+   línea de resumen SIN nada que tocar: las cinco comidas marcadas y la sesión
+   hecha dejaban de existir para la pantalla. Plegarlo está bien —lo terminado
+   estorba—; lo que no vale es que plegado signifique inaccesible, porque
+   entonces nada se puede rectificar. Y en un día pasado se abre solo: repasar
+   es justo para lo que uno vuelve a ayer. */
+const BLOQUE_ABIERTO = {};
+function abrirBloque(k){ BLOQUE_ABIERTO[k] = !(BLOQUE_ABIERTO[k] ?? (DIA<0)); pintarQuick(); }
+function bloque(titulo, contenido, resumen, completo, clave){
+  const k = clave || String(titulo).replace(/<[^>]*>/g,'').trim().split(/[\s·]/)[0].toLowerCase();
+  if(completo){
+    const abierto = BLOQUE_ABIERTO[k] ?? (DIA<0);
+    return `<h2>${titulo}</h2><div class="card flush">
+    <div class="qr on tap" style="border-top:0" onclick="abrirBloque('${k}')">
+      <div class="thumb sm t-off" style="color:var(--good-ink)">✓</div>
       <div class="tx"><b style="color:var(--muted)">${resumen}</b></div>
-      <div class="check" style="background:var(--good); border-color:var(--good); color:#fff">✓</div></div></div>`;
+      <div class="kc" style="color:var(--acc-txt); font-weight:650">${abierto?'ocultar':'ver'}</div>
+      <div class="check" style="background:var(--good); border-color:var(--good); color:#fff">✓</div></div>
+    ${abierto?contenido:''}</div>`;
+  }
   return `<h2>${titulo}</h2><div class="card flush">${contenido}</div>`;
 }
 function pintarQuick(){
   const hechas=HOY[P].map((m,i)=>({m,i})).filter(x=>x.m.estado);
+  /* Cuando el bloque entero de Comida está plegado por completo y se abre, no
+     tiene sentido que dentro haya OTRO «ver» para lo mismo: eran dos pliegues
+     encima del mismo contenido, y abrir el de fuera seguía sin enseñar nada. */
+  const todasHechas = !HOY_SIN_PLAN && hechas.length === 5;
+  const bloqueComidaAbierto = todasHechas && (BLOQUE_ABIERTO.comida ?? (DIA<0));
+  const verHechas = VER_HECHAS || DIA<0 || bloqueComidaAbierto;
   let pend=HOY[P].map((m,i)=>({m,i})).filter(x=>!x.m.estado);
   /* Se quita SOLO la que de verdad se está enseñando arriba. */
   const enAhora=indiceEnAhora();
@@ -2486,14 +2508,14 @@ ${/* Un día pasado se abre DESPLEGADO. Plegar lo registrado tiene sentido
         hoy, que lo que importa es lo que queda por hacer; en ayer, lo
         registrado es lo único que hay, y dejarlo detrás de un «ver» hacía
         que ayer pareciera vacío. */''}
-    ${hechas.length && DIA===0?`<div class="qr" style="border-top:0" onclick="VER_HECHAS=!VER_HECHAS; pintarQuick()">
+    ${hechas.length && DIA===0 && !bloqueComidaAbierto?`<div class="qr" style="border-top:0" onclick="VER_HECHAS=!VER_HECHAS; pintarQuick()">
       <div class="thumb sm t-off" style="color:var(--good-ink); font-size:15px">✓</div>
       <div class="tx"><div class="when">Ya registradas</div><b style="color:var(--muted)">${hechas.length} comidas · ${hechas.map(x=>MOMLAB[x.m.k].toLowerCase()).join(', ')}</b></div>
       <div class="kc" style="color:var(--acc-txt); font-weight:650">${VER_HECHAS?'ocultar':'ver'}</div></div>`:''}
     ${hechas.length && DIA<0?`<div class="qr" style="border-top:0">
       <div class="thumb sm t-off" style="color:var(--good-ink); font-size:15px">✓</div>
       <div class="tx"><div class="when">${DIAS_ATRAS[-DIA].split(' · ')[0]}</div><b style="color:var(--muted)">${hechas.length} de 5 comidas registradas</b></div></div>`:''}
-    ${(VER_HECHAS || DIA<0)?hechas.map(fila).join(''):''}
+    ${verHechas?hechas.map(fila).join(''):''}
     ${pend.length || DIA<0?'':`<div class="qr" style="border-top:0"><div class="thumb sm t-off" style="color:var(--muted)">↑</div>
       <div class="tx"><b style="color:var(--muted); font-size:13.5px">Solo queda lo de arriba</b></div></div>`}
     ${pend.map(fila).join('')}
@@ -2669,9 +2691,11 @@ ${/* Un día pasado se abre DESPLEGADO. Plegar lo registrado tiene sentido
   const dep = e.tipo==='profesional' ? !!ACC.paseo : (!!ACC.sesion && (P!=='c'||!!ACC.paseo));
   $('#bloques').innerHTML=[
     bloque(`Comida <span class="r" onclick="ir('menu')">Ver menú ›</span>`, htmlComida,
-           `${nComidas} comidas registradas · ${EXTRA_LOG[P].length} extras`, !HOY_SIN_PLAN && nComidas===5),
-    bloque('Deporte', htmlDeporte, 'Sesión hecha y pasos al día', dep),
-    bloque('Medicación', htmlMed, `Todo tomado hoy · ${meds.length} de ${meds.length}`, meds.length>0 && tomadas===meds.length),
+           `${nComidas} comidas registradas · ${EXTRA_LOG[P].length} extras`,
+           !HOY_SIN_PLAN && nComidas===5, 'comida'),
+    bloque('Deporte', htmlDeporte, 'Sesión hecha y pasos al día', dep, 'deporte'),
+    bloque('Medicación', htmlMed, `Todo tomado${DIA===0?' hoy':''} · ${meds.length} de ${meds.length}`,
+           meds.length>0 && tomadas===meds.length, 'medicacion'),
     bloque('Salud', htmlSaludFix, 'Todo al día', false),
     acc.length ? bloque((acc.some(a=>!a.when.startsWith('Caduca'))?'Preparativos · para mañana':'Preparativos')
       +' <span class="chip" style="margin-left:8px; font-size:10px; padding:3px 8px; text-transform:none; letter-spacing:0">🏠 de los dos</span>',

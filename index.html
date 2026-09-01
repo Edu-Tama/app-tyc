@@ -494,7 +494,7 @@ const DIAS_ATRAS=[0,-1,-2].map(o=>{const f=fechaDe(o);
 
 /* Saber qué versión corre en cada móvil deja de ser adivinar. Cuando algo
    «no se actualiza», este número lo dice en un vistazo. */
-const VERSION_APP = 'v39 · 1 sep 2026';
+const VERSION_APP = 'v40 · 1 sep 2026';
 const TYC_CONECTADO = () => typeof TYC !== 'undefined' && !!TYC.db && !TYC.demo;
 
 /* Descarta el service worker y las cachés y recarga: la salida de emergencia
@@ -617,7 +617,9 @@ function sheetComida(i){
     <button class="opt" onclick="sheetFuera(${i})">🍽️ <span class="grow">Comí fuera<small>Estimación gruesa</small></span></button>
     <button class="opt" onclick="marcar(${i},'saltado')">⏭️ <span class="grow">Me la salté<small>También es un dato</small></span></button>
     <button class="opt" onclick="sheetIntercambiar(${i})">🔁 <span class="grow">Cambiarla por la de otro día<small>Sin ese ingrediente hoy, pero sí mañana</small></span></button>
-    <button class="opt" onclick="sheetReceta('${m.r}')">📖 <span class="grow">Ver la receta<small>Cantidades y pasos</small></span></button>`);
+    <button class="opt" onclick="sheetReceta('${m.r}')">📖 <span class="grow">Ver la receta<small>Cantidades y pasos</small></span></button>
+    ${m.estado?`<button class="opt" onclick="desmarcar(${i})" style="margin-top:8px">↩️ <span class="grow">Quitar la marca<small>Vuelve a quedar sin registrar${
+      m.estado==='hecho'||m.estado==='cambiado'?'. Lo descontado vuelve a la despensa':''}</small></span></button>`:''}`);
 }
 /* INTERCAMBIAR CON OTRO DÍA.
    El caso real: hoy toca filete y no queda ternera, pero mañana toca algo que
@@ -739,6 +741,15 @@ function marcarSesion(){
   ACC.sesion = ACC.sesion ? null : 'hecho';
   if(GUARDAR_ENTRENO) GUARDAR_ENTRENO(ACC.sesion ? 'hecha' : null);
   pintarQuick(); pintarEntreno();
+}
+/* QUITAR LA MARCA. Vuelve a «sin registrar», que no es lo mismo que «me la
+   salté»: saltársela es un dato, no haberla registrado es no saberlo. Y lo
+   descontado de la despensa se devuelve. */
+function desmarcar(i){
+  const m=HOY[P][i]; m.estado=null;
+  if(BORRAR_COMIDA) BORRAR_COMIDA(m.k);
+  closeSheet(); pintarQuick(); pintarHero(); pintarAhora();
+  if(TAB==='despensa') pintarCompra();
 }
 function marcar(i,estado,alt){
   const m=HOY[P][i]; m.estado=estado; if(alt)m.r=alt;

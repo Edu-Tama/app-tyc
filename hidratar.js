@@ -628,6 +628,13 @@ function esFalloDeRed(e){
 
 function leerFallos(){ try { return JSON.parse(localStorage.getItem(FALLOS) || '[]'); } catch { return []; } }
 function guardarFallos(f){ try { localStorage.setItem(FALLOS, JSON.stringify(f)); } catch {} }
+/* Los dos caminos que se saltaban a `escribir` —comidas y entreno, que además
+   de guardar hacen cosas después— tienen que tratar el error igual que todo lo
+   demás: cola si es la conexión, aviso rojo si la base ha dicho que no. */
+function anotarError(op, e){
+  if (esFalloDeRed(e)) encolar(op); else apuntarFallo(op, e);
+}
+
 function apuntarFallo(op, e){
   const f = leerFallos();
   f.push({...op, t: Date.now(), porque: String((e && (e.message || e.msg)) || e || 'sin detalle')});
@@ -769,8 +776,8 @@ async function guardarComida(momApp, estado, claveAlt){
 
   const {data, error} = await TYC.db.from('meal_logs')
     .upsert(fila, {onConflict:'profile_id,fecha,momento'}).select('id').maybeSingle();
-  if (error){ encolar({tabla:'meal_logs', fila, conflicto:'profile_id,fecha,momento'});
-              avisoCola(); return {error}; }
+  if (error){ anotarError({tabla:'meal_logs', fila, conflicto:'profile_id,fecha,momento'}, error);
+              return {error}; }
 
   /* Comer gasta despensa. Saltarse una comida o comer fuera, no. */
   if (data){
@@ -856,6 +863,24 @@ async function devolverComida(mealLogId){
   await hidratarDespensa();
 }
 
+/* QUITAR LA MARCA.
+   Marcar por error es lo más fácil del mundo, y hasta ahora no había manera de
+   rectificar: la hoja de una comida ofrecía cambiar de estado, nunca volver a
+   «sin registrar». Borrar la fila es lo correcto —que no haya registro es «no
+   lo sé», que es justo lo que se quiere decir— y lo descontado de la despensa
+   se devuelve, porque si esa comida no se hizo, esos ingredientes siguen ahí. */
+async function borrarComida(momApp){
+  const fecha = diaISO(), momento = MOM_BD[momApp] || momApp;
+  const donde = {profile_id:SESION.id, fecha, momento};
+  if (navigator.onLine && TYC.db){
+    const {data} = await TYC.db.from('meal_logs').select('id')
+      .eq('profile_id', SESION.id).eq('fecha', fecha).eq('momento', momento).limit(1);
+    const fila = Array.isArray(data) ? data[0] : data;
+    if (fila && fila.id) await devolverComida(fila.id);
+  }
+  return await escribir({tabla:'meal_logs', tipo:'borrar', donde});
+}
+
 /* ── medicación ────────────────────────────────────────────────────────────
    Se guarda también cuando se DESMARCA (tomada = false): que no haya fila es
    «no lo sé», y que la haya en false es «no la tomé». No es lo mismo. */
@@ -909,6 +934,21 @@ async function guardarCheck(clave, estado){
    La sesión hecha, y las series con sus repeticiones y kilos: sin las series
    no hay progresión de cargas, que es lo único que dice si el bloque funciona. */
 async function guardarEntreno(estado, series, fin){
+  /* Desmarcar la sesión NO es guardarla con estado vacío: la columna no admite
+     vacío, así que el intento lo rechazaba la base… y ese rechazo se contaba
+     como «sin conexión» y se quedaba esperando para siempre. Desmarcar es
+     borrar la sesión de ese día, con sus series. */
+  if (!estado){
+    const fecha = diaISO();
+    if (navigator.onLine && TYC.db){
+      const {data} = await TYC.db.from('workout_logs').select('id')
+        .eq('profile_id', SESION.id).eq('fecha', fecha).limit(1);
+      const fila = Array.isArray(data) ? data[0] : data;
+      if (fila && fila.id) await TYC.db.from('set_logs').delete().eq('workout_log_id', fila.id);
+    }
+    return await escribir({tabla:'workout_logs', tipo:'borrar',
+      donde:{profile_id:SESION.id, fecha}});
+  }
   const fila = {profile_id:SESION.id, fecha:diaISO(), estado};
   if (fin){
     fila.rpe = fin.rpe || null;
@@ -922,7 +962,8 @@ async function guardarEntreno(estado, series, fin){
      a abrir. Es lo que pasó con la sesión de Cristina. */
   const {data, error} = await TYC.db.from('workout_logs')
     .upsert(fila, {onConflict:'profile_id,fecha'}).select('id').maybeSingle();
-  if (error){ encolar({tabla:'workout_logs', fila}); avisoCola(); return {error}; }
+  if (error){ anotarError({tabla:'workout_logs', fila, conflicto:'profile_id,fecha'}, error);
+              return {error}; }
   if (data && series && series.length){
     await TYC.db.from('set_logs').delete().eq('workout_log_id', data.id);
     /* Se guarda el nombre del ejercicio en las notas de la serie: el catálogo
@@ -1612,6 +1653,7 @@ async function arrancarApp(){
     if (fallos.length) avisoParcial(fallos);
     /* Los ganchos de registro. A partir de aquí, lo que se marca se guarda. */
     GUARDAR_COMIDA  = guardarComida;
+    BORRAR_COMIDA   = borrarComida;
     GUARDAR_MED     = guardarMed;
     GUARDAR_PESO    = guardarPesoBD;
     GUARDAR_CINTURA = guardarCinturaBD;

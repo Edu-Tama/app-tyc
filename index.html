@@ -492,7 +492,7 @@ const DIAS_ATRAS=[0,-1,-2].map(o=>{const f=fechaDe(o);
 
 /* Saber qué versión corre en cada móvil deja de ser adivinar. Cuando algo
    «no se actualiza», este número lo dice en un vistazo. */
-const VERSION_APP = 'v35 · 1 sep 2026';
+const VERSION_APP = 'v36 · 1 sep 2026';
 const TYC_CONECTADO = () => typeof TYC !== 'undefined' && !!TYC.db && !TYC.demo;
 
 /* Descarta el service worker y las cachés y recarga: la salida de emergencia
@@ -614,7 +614,64 @@ function sheetComida(i){
     <button class="opt" onclick="sheetCambio(${i})">↔️ <span class="grow">Lo cambié<small>Elegir qué comiste</small></span></button>
     <button class="opt" onclick="sheetFuera(${i})">🍽️ <span class="grow">Comí fuera<small>Estimación gruesa</small></span></button>
     <button class="opt" onclick="marcar(${i},'saltado')">⏭️ <span class="grow">Me la salté<small>También es un dato</small></span></button>
+    <button class="opt" onclick="sheetIntercambiar(${i})">🔁 <span class="grow">Cambiarla por la de otro día<small>Sin ese ingrediente hoy, pero sí mañana</small></span></button>
     <button class="opt" onclick="sheetReceta('${m.r}')">📖 <span class="grow">Ver la receta<small>Cantidades y pasos</small></span></button>`);
+}
+/* INTERCAMBIAR CON OTRO DÍA.
+   El caso real: hoy toca filete y no queda ternera, pero mañana toca algo que
+   sí se puede hacer. No hace falta replanificar la semana entera —eso mueve la
+   compra y la tanda— basta con cambiar dos platos de sitio. */
+function sheetIntercambiar(i){
+  const m = HOY[P][i], hoyNum = String(fechaDe(DIA).getDate());
+  const candidatos = MENU
+    .map((d, idx) => ({d, idx}))
+    .filter(({d}) => d.n !== hoyNum && d[m.k])
+    .map(({d, idx}) => {
+      const k = d[m.k];
+      /* Cuánto de esa receta se puede hacer con lo que hay en casa: sin eso,
+         cambiar por otra que tampoco se puede cocinar no arregla nada. */
+      const stock = cocinablesAhora().find(x => x.k === k);
+      return {idx, d, k, pct: stock ? stock.pct : 0};
+    })
+    .sort((a, b) => b.pct - a.pct);
+
+  openSheet(`<h3>Cambiar por la de otro día</h3>
+    <div class="meta" style="margin-bottom:16px">${MOMLAB[m.k]} de hoy · ${R[m.r].n}</div>
+    <div class="banner info"><b class="t">Se cambian los dos días</b>
+      Lo de hoy pasa a ese día y lo de ese día viene a hoy. La compra no cambia:
+      lo que hacía falta esta semana sigue haciendo falta.</div>
+    ${candidatos.map(c => `<button class="opt" onclick="intercambiarDias(${i}, ${c.idx})">
+      <span class="thumb sm ${R[c.k].t}">${R[c.k].e}</span>
+      <span class="grow">${R[c.k].n}<small>${LARGO_DIA[c.d.d] || c.d.d} ${c.d.n} · ${
+        c.pct >= 100 ? 'todo en despensa' : c.pct + ' % en despensa'}</small></span></button>`).join('')
+      || '<div class="note">No hay otro día con esa comida en la semana.</div>'}`);
+}
+const LARGO_DIA = {L:'Lunes', M:'Martes', X:'Miércoles', J:'Jueves', V:'Viernes', S:'Sábado', D:'Domingo'};
+
+function intercambiarDias(i, idxOtro){
+  const m = HOY[P][i], hoyNum = String(fechaDe(DIA).getDate());
+  const iHoy = MENU.findIndex(d => d.n === hoyNum);
+  if (iHoy < 0) return;
+  const a = MENU[iHoy][m.k], b = MENU[idxOtro][m.k];
+  MENU[iHoy][m.k] = b; MENU[idxOtro][m.k] = a;
+  delete MENU[iHoy]._c; delete MENU[iHoy]._t;
+  delete MENU[idxOtro]._c; delete MENU[idxOtro]._t;
+  /* El día de hoy se vuelve a sembrar para que la pantalla enseñe el plato
+     nuevo, conservando lo que ya estuviera marcado. */
+  const estados = HOY[P].map(x => x.estado);
+  sembrarDia(HORA);
+  HOY[P].forEach((x, n) => x.estado = estados[n]);
+  if (GUARDAR_MENU) GUARDAR_MENU(0, MENU.map(d => ({desayuno:d.desayuno, media:d.media,
+    comida:d.comida, merienda:d.merienda, cena:d.cena})));
+  closeSheet(); render();
+  openSheet(`<h3>Cambiado</h3>
+    <div class="meta" style="margin-bottom:16px">Hoy: ${R[b].n} · ${
+      LARGO_DIA[MENU[idxOtro].d]} ${MENU[idxOtro].n}: ${R[a].n}</div>
+    <div class="banner info"><b class="t">La compra no se mueve</b>
+      Los dos platos siguen en la semana, así que hace falta lo mismo. Si lo que
+      falta es un ingrediente que ya no vais a comprar, márcalo en la lista con
+      la ✕ y la app propone sustituir el plato.</div>
+    <button class="cta" style="margin-top:14px" onclick="closeSheet()">Hecho</button>`);
 }
 function sheetCambio(i){
   const m=HOY[P][i], mm=(m.k==='media'||m.k==='merienda')?'snack':m.k;

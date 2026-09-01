@@ -613,11 +613,35 @@ const guardarCola = c => { try { localStorage.setItem(COLA, JSON.stringify(c.sli
 
 /* La operación se describe con datos, no con una función: así se puede guardar
    en el móvil y repetirla tal cual cuando vuelva la conexión. */
+const FALLOS = 'tyc_fallos_v1';
+
+/* ¿Esto es que no hay cobertura, o es que la base ha DICHO QUE NO?
+   Son dos cosas distintas y hasta ahora se trataban igual: cualquier error
+   iba a la cola con el cartel de «se envía cuando vuelva la conexión», y ahí
+   se quedaba para siempre, porque la cola solo se reintentaba al recuperar
+   la conexión y la conexión nunca se había ido. */
+function esFalloDeRed(e){
+  if (!navigator.onLine) return true;
+  const m = String((e && (e.message || e.msg || e)) || '').toLowerCase();
+  return /failed to fetch|networkerror|network request failed|load failed|timeout|aborted/.test(m);
+}
+
+function leerFallos(){ try { return JSON.parse(localStorage.getItem(FALLOS) || '[]'); } catch { return []; } }
+function guardarFallos(f){ try { localStorage.setItem(FALLOS, JSON.stringify(f)); } catch {} }
+function apuntarFallo(op, e){
+  const f = leerFallos();
+  f.push({...op, t: Date.now(), porque: String((e && (e.message || e.msg)) || e || 'sin detalle')});
+  guardarFallos(f); pintarCola();
+}
+
 async function escribir(op){
   if (!TYC.db) return {error:'sin base'};
   if (!navigator.onLine){ encolar(op); return {encolada:true}; }
   const r = await ejecutar(op);
-  if (r.error){ encolar(op); avisoCola(); }
+  if (r.error){
+    if (esFalloDeRed(r.error)) encolar(op);
+    else apuntarFallo(op, r.error);   // la base lo ha rechazado: eso no es cobertura
+  }
   return r;
 }
 
@@ -643,17 +667,82 @@ async function vaciarCola(){
   return cola.length - quedan.length;
 }
 window.addEventListener('online', () => vaciarCola().then(n => { if (n) recargarDia(); }));
+/* Y al volver a la app. Atarlo SOLO al evento «online» es lo que dejaba cosas
+   atrapadas: si el fallo fue un tropiezo puntual y nunca se perdió la
+   conexión, ese evento no se dispara jamás. */
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible')
+    vaciarCola().then(n => { if (n) recargarDia().then(() => render()); });
+});
 
 /* Que se vea cuántas cosas están esperando: una cola invisible es una cola en
    la que nadie confía. */
 function pintarCola(){
-  const n = leerCola().length;
+  const enCola = leerCola().length, fallidas = leerFallos().length;
   const el = document.getElementById('aviso-cola');
   if (!el) return;
-  el.innerHTML = n ? `<div class="banner" style="margin-bottom:11px"><b class="t">${n} ${
-    n===1?'cosa sin enviar':'cosas sin enviar'}</b>
-    Se han guardado en este móvil y se envían solas cuando vuelva la conexión.</div>` : '';
+  const trozos = [];
+  if (enCola) trozos.push(`<div class="banner tap" style="margin-bottom:11px" onclick="sheetPendientes()">
+    <b class="t">${enCola} ${enCola===1?'cosa sin enviar':'cosas sin enviar'}</b>
+    Guardadas en este móvil. Se envían solas al volver la conexión, y también
+    cada vez que abres la app. Toca para verlas.</div>`);
+  if (fallidas) trozos.push(`<div class="banner tap" style="margin-bottom:11px; border-color:var(--bad)"
+      onclick="sheetPendientes()">
+    <b class="t">${fallidas} ${fallidas===1?'cosa no se ha guardado':'cosas no se han guardado'}</b>
+    No es la conexión: la base las ha rechazado. Toca para ver cuáles y por qué.</div>`);
+  el.innerHTML = trozos.join('');
 }
+
+/* Una cola que no se puede abrir es una caja negra. Aquí se ve qué hay dentro,
+   por qué está ahí, y se puede reintentar o tirar. */
+function describirOp(op){
+  const f = op.fila || op.donde || {};
+  const que = {
+    meal_logs:'comida', medication_logs:'medicación', weight_logs:'peso',
+    waist_logs:'cintura', daily_close:'cierre del día', shared_checks:'algo de la casa',
+    workout_logs:'sesión', set_logs:'series', extra_logs:'fuera del plan',
+    unplanned_activities:'actividad', planned_meals:'menú', shopping_items:'lista de la compra',
+  }[op.tabla] || op.tabla;
+  const detalle = [f.momento, f.clave, f.nombre, f.tipo, f.estado].filter(Boolean).join(' · ');
+  return `${que}${f.fecha ? ' del ' + f.fecha : ''}${detalle ? ' · ' + detalle : ''}`;
+}
+
+async function sheetPendientes(){
+  const cola = leerCola(), fallos = leerFallos();
+  const linea = (op, rojo) => `<div class="qr">
+      <div class="thumb sm ${rojo?'t-off':'t-lacteo'}" style="${rojo?'color:var(--bad)':''}">${rojo?'!':'⏳'}</div>
+      <div class="tx"><div class="when">${new Date(op.t).toLocaleString('es-ES',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</div>
+        <b>${describirOp(op)}</b>
+        ${op.porque?`<div class="note" style="margin:1px 0 0">${op.porque}</div>`:''}</div></div>`;
+  openSheet(`<h3>Lo que está esperando</h3>
+    <div class="meta" style="margin-bottom:14px">${cola.length + fallos.length} en total</div>
+    ${cola.map(o=>linea(o,false)).join('')}
+    ${fallos.map(o=>linea(o,true)).join('')}
+    ${cola.length+fallos.length ? '' : '<div class="meta">Nada pendiente.</div>'}
+    <button class="cta" style="margin-top:12px" onclick="reintentarTodo()">Reintentar ahora</button>
+    <button class="opt" style="margin-top:8px" onclick="descartarPendientes()">Descartar y olvidarlas</button>`);
+}
+
+/* Reintentar a mano, sin esperar a que «vuelva» una conexión que no se fue. */
+async function reintentarTodo(){
+  const todo = [...leerCola(), ...leerFallos()];
+  const quedanCola = [], quedanFallos = [];
+  for (const op of todo){
+    const r = await ejecutar(op);
+    if (r.error){ (esFalloDeRed(r.error) ? quedanCola : quedanFallos)
+      .push({...op, porque: String(r.error.message || r.error)}); }
+  }
+  guardarCola(quedanCola); guardarFallos(quedanFallos);
+  pintarCola(); closeSheet();
+  await recargarDia(); render();
+}
+
+function descartarPendientes(){
+  guardarCola([]); guardarFallos([]); pintarCola(); closeSheet();
+}
+window.sheetPendientes = sheetPendientes;
+window.reintentarTodo = reintentarTodo;
+window.descartarPendientes = descartarPendientes;
 const avisoCola = pintarCola;
 
 const hoyISO = () => isoDe(0);
@@ -1270,6 +1359,23 @@ async function hidratarDia(off){
   return (comidas.data || []).length;
 }
 
+/* LA TANDA DE COCINA, DE VUELTA.
+   Se marcaba «hecha», se guardaba en shared_checks… y nadie la leía nunca, así
+   que al salir volvía a aparecer pendiente. No va en hidratarDia porque no es
+   de un día: es de una SEMANA, y la clave lleva dentro el lunes al que
+   pertenece. */
+async function leerTandas(){
+  const {data, error} = await TYC.db.from('shared_checks')
+    .select('clave, estado').like('clave', 'tanda_%');
+  if (error){ console.warn('[T&C] tandas:', error.message); return; }
+  const porClave = {};
+  for (const f of data || []) porClave[f.clave] = f.estado;
+  for (const sem of ['s1','s2']){
+    const e = porClave[claveTanda(sem)];
+    if (e) TANDA_ESTADO[sem] = ESTADO_TANDA_UI[e] || 'hecha';
+  }
+}
+
 /* Al cambiar de día en la pantalla de Hoy hay que traer lo de ese día. */
 async function cambiarDia(nuevo){
   DIA = nuevo;
@@ -1531,6 +1637,7 @@ async function arrancarApp(){
     CAMBIAR_DIA       = cambiarDia;
     escucharCasa();
     vaciarCola();
+    try { await leerTandas(); } catch(e){ console.warn('[T&C] tandas:', e.message||e); }
 
     P = yo; DISPOSITIVO = yo;
     console.log(`T&C · ${cat.ing} ingredientes · ${cat.rec} recetas · ${nd} en despensa · ${SESION.nombre}`);

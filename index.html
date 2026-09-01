@@ -494,7 +494,7 @@ const DIAS_ATRAS=[0,-1,-2].map(o=>{const f=fechaDe(o);
 
 /* Saber qué versión corre en cada móvil deja de ser adivinar. Cuando algo
    «no se actualiza», este número lo dice en un vistazo. */
-const VERSION_APP = 'v38 · 1 sep 2026';
+const VERSION_APP = 'v39 · 1 sep 2026';
 const TYC_CONECTADO = () => typeof TYC !== 'undefined' && !!TYC.db && !TYC.demo;
 
 /* Descarta el service worker y las cachés y recarga: la salida de emergencia
@@ -1085,10 +1085,21 @@ function sheetTanda(sem){
     <button class="cta" style="margin-top:8px" onclick="tandaHecha('${sem}')">✓ Tanda hecha</button>`);
 }
 const TANDA_ESTADO={s1:null, s2:null};
-function tandaHecha(sem){ TANDA_ESTADO[sem]='hecha';
-  if(GUARDAR_CHECK) GUARDAR_CHECK('tanda_'+sem, 'hecho');
+/* La clave lleva el LUNES de esa semana, no «s1». Guardarlo como «tanda_s1»
+   hacía que la marca de esta semana se leyera como la de la siguiente en
+   cuanto pasara el domingo. Y con la fecha dentro se puede volver a leer,
+   que es lo que faltaba: se marcaba «hecha», se guardaba, y al salir volvía
+   a aparecer pendiente porque nadie la leía de vuelta. */
+const claveTanda = sem => 'tanda_' + diasDeSemana(sem==='s2' ? 1 : 0)[0].iso;
+const ESTADO_TANDA_BD = {hecha:'hecho', movida:'pospuesto', corta:'corta', saltada:'saltada'};
+const ESTADO_TANDA_UI = {hecho:'hecha', pospuesto:'movida', corta:'corta', saltada:'saltada'};
+function marcarTanda(sem, estadoUI){
+  TANDA_ESTADO[sem] = estadoUI;
+  if(GUARDAR_CHECK) GUARDAR_CHECK(claveTanda(sem), ESTADO_TANDA_BD[estadoUI] || 'hecho');
+}
+function tandaHecha(sem){ marcarTanda(sem, 'hecha');
   closeSheet(); pintarMenu(); pintarQuick(); }
-function tandaMovida(sem){ TANDA_ESTADO[sem]='movida'; closeSheet(); pintarMenu();
+function tandaMovida(sem){ marcarTanda(sem, 'movida'); closeSheet(); pintarMenu();
   openSheet(`<h3>Tanda movida al lunes</h3>
     <div class="meta" style="margin-bottom:14px">Las comidas de lunes siguen siendo del día anterior</div>
     <div class="banner"><b class="t">Lo que hay que resolver</b>
@@ -2363,18 +2374,29 @@ function indiceEnAhora(){
   return i<0 ? null : i;
 }
 function pintarAhora(){
-  if(DIA<0 || HOY_SIN_PLAN){$('#ahora').innerHTML=''; return}
+  if(HOY_SIN_PLAN){$('#ahora').innerHTML=''; return}
+  /* En un día pasado no hay «ahora toca» —eso es de hoy—, pero el CIERRE sí
+     tiene que verse: es el resumen de cómo fue ese día, y era justo lo que
+     desaparecía al volver a ayer. */
+  if(DIA<0 && !ACC.cierre){$('#ahora').innerHTML=''; return}
   if(ACC.cierre){
     /* Cerrar el día no bloquea: uno se acuerda a las once de que no marcó la
        merienda, y eso sigue siendo un dato bueno. Pero tiene que VERSE que ya
        está cerrado, y que lo que se toque después queda anotado igual. */
     const faltan=HOY[P].filter(m=>!m.estado).length;
+    /* Con los números delante, no «registrados»: el cierre solo sirve si se
+       puede releer. */
+    const cerr = CIERRE_HOY ? [
+      CIERRE_HOY.hambre!=null ? 'hambre '+CIERRE_HOY.hambre : null,
+      CIERRE_HOY.energia!=null ? 'energía '+CIERRE_HOY.energia : null,
+      CIERRE_HOY.sueno!=null ? 'sueño '+CIERRE_HOY.sueno : null,
+      CIERRE_HOY.pasos ? CIERRE_HOY.pasos.toLocaleString('es')+' pasos' : null,
+    ].filter(Boolean).join(' · ') : '';
     $('#ahora').innerHTML=`<div class="card" style="border-color:var(--good)">
       <div class="row"><div class="thumb sm t-verdura">✓</div>
-        <div class="grow"><div class="when" style="color:var(--good-ink)">Día cerrado</div>
-          <div class="name" style="margin:0">${CIERRE_HOY
-            ? 'Hambre, energía y sueño registrados'
-            : 'Registrado'}</div>
+        <div class="grow"><div class="when" style="color:var(--good-ink)">${
+          DIA===0 ? 'Día cerrado' : DIAS_ATRAS[-DIA].split(' · ')[0]+' · día cerrado'}</div>
+          <div class="name" style="margin:0">${cerr || 'Registrado'}</div>
           <div class="note" style="margin:2px 0 0">${faltan
             ? `Quedan ${faltan} ${faltan===1?'comida':'comidas'} sin marcar. Puedes marcarlas todavía: se guardan igual.`
             : 'Todo registrado.'}</div></div>
@@ -3219,7 +3241,7 @@ function planB(modo, sem){
     d.comida = nueva; delete d._c; delete d._t;
     cambios.push([d.d+' '+d.n, R[antes].n, R[nueva].n, R[nueva].tot, cuadra(d,nueva)]);
   });
-  TANDA_ESTADO[sem] = modo==='media' ? 'corta' : 'saltada';
+  marcarTanda(sem, modo==='media' ? 'corta' : 'saltada');
 
   const minDia = cambios.reduce((a,c)=>a+c[3],0);
   closeSheet(); render();

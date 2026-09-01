@@ -494,7 +494,7 @@ const DIAS_ATRAS=[0,-1,-2].map(o=>{const f=fechaDe(o);
 
 /* Saber qué versión corre en cada móvil deja de ser adivinar. Cuando algo
    «no se actualiza», este número lo dice en un vistazo. */
-const VERSION_APP = 'v43 · 1 sep 2026';
+const VERSION_APP = 'v45 · 1 sep 2026';
 const TYC_CONECTADO = () => typeof TYC !== 'undefined' && !!TYC.db && !TYC.demo;
 
 /* Descarta el service worker y las cachés y recarga: la salida de emergencia
@@ -512,7 +512,7 @@ async function forzarActualizacion(){
 
 let SESION={perfil:'c', email:'cristina@…'};
 let DISPOSITIVO=SESION.perfil;
-let P=SESION.perfil, DIA=0, HORA=new Date().getHours(), TAB='lista', TABM='s1', HOY={}, ACC={}, NOTA='', EXTRA_LOG={c:[],t:[]}, VER_HECHAS=false, VER_TICKET=false, MED={c:[false,false,false],t:[false,false]};
+let P=SESION.perfil, DIA=0, HORA=new Date().getHours(), TAB='lista', TABM='s1', HOY={}, ACC={}, NOTA='', EXTRA_LOG={c:[],t:[]}, EXTRA_LOG_DIA=null, VER_HECHAS=false, VER_TICKET=false, MED={c:[false,false,false],t:[false,false]};
 const $=s=>document.querySelector(s);
 const media=a=>a.map((_,i)=>{const s=a.slice(Math.max(0,i-3),i+1); return s.reduce((x,y)=>x+y,0)/s.length});
 const eur=v=>v.toFixed(2).replace('.',',')+' €';
@@ -730,9 +730,12 @@ function descartarAviso(){ AVISO_DESCARTADO=true; pintarSalud(); }
    una cerveza» es justo lo que alimenta el objetivo de retirarla, y lo que
    explica un día que se sale de rango sin motivo aparente. */
 function registrarBebida(nombre, kcal, alcohol){
+  EXTRA_LOG_DIA = isoDe(DIA);
   const ya=EXTRA_LOG[P].find(y=>y.n===nombre);
   if(ya) ya.n2++; else EXTRA_LOG[P].push({n:nombre, e:alcohol?'🍺':'💧', kcal, n2:1, alc:alcohol});
-  if(GUARDAR_EXTRA) GUARDAR_EXTRA({n:nombre, kcal, n2:1, alc:alcohol});
+  /* La cantidad que se guarda es el TOTAL del día, no «uno más»: si no, dos
+     toques dejaban dos apuntes de uno en vez de un apunte de dos. */
+  if(GUARDAR_EXTRA) GUARDAR_EXTRA({n:nombre, kcal, n2:(ya?ya.n2:1), alc:alcohol});
   closeSheet(); pintarQuick(); pintarHero();
 }
 
@@ -1170,9 +1173,10 @@ function addExtra(i,n){
   /* «Otro» con 0 kcal no aporta nada: ni suma al día ni dice qué fue. Si se
      registra algo, tiene que pesar. */
   if(x.kcal===0) return sheetOtroExtra();
+  EXTRA_LOG_DIA = isoDe(DIA);
   const ya=EXTRA_LOG[P].find(y=>y.n===x.n);
   if(ya) ya.n2+=n; else EXTRA_LOG[P].push({...x, n2:n});
-  if(GUARDAR_EXTRA) GUARDAR_EXTRA({n:x.n, kcal:x.kcal, n2:n, alc:!!x.alc});
+  if(GUARDAR_EXTRA) GUARDAR_EXTRA({n:x.n, kcal:x.kcal, n2:(ya?ya.n2:n), alc:!!x.alc});
   closeSheet(); pintarQuick(); pintarHero();
 }
 const RACIONES_EXTRA=[['Poca cosa',90,'un puñado, media pieza, un par de bocados'],
@@ -1196,6 +1200,7 @@ function sheetOtroExtra(){
 function guardarOtroExtra(kcal){
   const nom=(document.getElementById('extra-n')||{}).value||'Otro';
   if(!kcal) return;
+  EXTRA_LOG_DIA = isoDe(DIA);
   EXTRA_LOG[P].push({n:nom, e:'➕', kcal, n2:1});
   if(GUARDAR_EXTRA) GUARDAR_EXTRA({n:nom, kcal, n2:1, alc:false});
   closeSheet(); pintarQuick(); pintarHero();
@@ -2313,10 +2318,18 @@ function sheetCompra(id){
 }
 
 /* ───── render ───── */
+/* Los extras que hay en memoria pertenecen a UN día. Si por lo que sea la
+   lista cargada no es la del día que se está mirando, no se pinta: antes se
+   pintaba igual, y el refresco de hoy aparecía en ayer sumando calorías a un
+   día en el que nadie se lo bebió. Con esto, enseñar el día equivocado deja de
+   ser posible aunque la recarga falle. */
+function extrasDelDia(){
+  return (EXTRA_LOG_DIA === isoDe(DIA)) ? EXTRA_LOG[P] : [];
+}
 function pintarHero(){
   const d=PERFILES[P], h=HOY[P];
   const extra=EXTRAS[P].reduce((a,x)=>a+x.ing.reduce((b,[n,q])=>b+q*ING[n][0]/100,0),0);
-  const sueltos=EXTRA_LOG[P].reduce((a,x)=>a+x.kcal*x.n2,0);
+  const sueltos=extrasDelDia().reduce((a,x)=>a+x.kcal*x.n2,0);
   const kcal=Math.round(extra)+sueltos+h.reduce((s,m)=>s+(m.estado&&m.estado!=='saltado'?nutre(m.r,P).kcal:0),0);
   const prot=h.reduce((s,m)=>s+(m.estado&&m.estado!=='saltado'?nutre(m.r,P).prot:0),0);
   const reg=h.filter(m=>m.estado).length, pct=Math.min(1,kcal/d.kcalMax), C=2*Math.PI*32;
@@ -2525,7 +2538,7 @@ ${/* Un día pasado se abre DESPLEGADO. Plegar lo registrado tiene sentido
     ${pend.length || DIA<0?'':`<div class="qr" style="border-top:0"><div class="thumb sm t-off" style="color:var(--muted)">↑</div>
       <div class="tx"><b style="color:var(--muted); font-size:13.5px">Solo queda lo de arriba</b></div></div>`}
     ${pend.map(fila).join('')}
-    ${EXTRA_LOG[P].map((x,i)=>`<div class="qr on alt" onclick="quitarExtra(${i})">
+    ${extrasDelDia().map((x,i)=>`<div class="qr on alt" onclick="quitarExtra(${i})">
       <div class="thumb sm t-fruta">${x.e}</div>
       <div class="tx"><div class="when">Fuera del plan${x.alc?' · alcohol':''}</div><b>${x.n}${x.n2>1?' ×'+x.n2:''}</b></div>
       <div class="kc">${x.kcal*x.n2}</div><div class="check">↔</div></div>`).join('')}
@@ -2697,7 +2710,7 @@ ${/* Un día pasado se abre DESPLEGADO. Plegar lo registrado tiene sentido
   const dep = e.tipo==='profesional' ? !!ACC.paseo : (!!ACC.sesion && (P!=='c'||!!ACC.paseo));
   $('#bloques').innerHTML=[
     bloque(`Comida <span class="r" onclick="ir('menu')">Ver menú ›</span>`, htmlComida,
-           `${nComidas} comidas registradas · ${EXTRA_LOG[P].length} extras`,
+           `${nComidas} comidas registradas · ${extrasDelDia().length} extras`,
            !HOY_SIN_PLAN && nComidas===5, 'comida'),
     bloque('Deporte', htmlDeporte, 'Sesión hecha y pasos al día', dep, 'deporte'),
     bloque('Medicación', htmlMed, `Todo tomado${DIA===0?' hoy':''} · ${meds.length} de ${meds.length}`,

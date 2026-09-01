@@ -1510,10 +1510,16 @@ function escucharCasa(){
    escribir en la base. Se veían bien y desaparecían al cerrar. */
 
 /* 1 · fuera del plan: la cerveza, el picoteo, el café de media mañana. */
+/* UNA LÍNEA POR BEBIDA Y DÍA, no una por toque.
+   Cada vez que se tocaba «refresco» se insertaba OTRA fila. En pantalla se veía
+   «×2» —la app lo sumaba en memoria— pero en la base había dos apuntes de uno,
+   y al volver a entrar salían como dos cosas distintas. La cantidad la manda la
+   pantalla ya sumada y aquí se pisa la fila anterior. */
 async function guardarExtra(x){
-  return await escribir({tabla:'extra_logs', fila:{
-    profile_id:SESION.id, fecha:diaISO(), nombre:x.n,
-    kcal:x.kcal|0, cantidad:x.n2|1, es_alcohol:!!x.alc}});
+  return await escribir({tabla:'extra_logs', conflicto:'profile_id,fecha,nombre',
+    fila:{
+      profile_id:SESION.id, fecha:diaISO(), nombre:x.n,
+      kcal:x.kcal|0, cantidad:x.n2 || 1, es_alcohol:!!x.alc}});
 }
 async function quitarExtraBD(nombre){
   return await escribir({tabla:'extra_logs', tipo:'borrar',
@@ -1522,7 +1528,10 @@ async function quitarExtraBD(nombre){
 async function hidratarExtras(){
   const {data} = await TYC.db.from('extra_logs')
     .select('nombre, kcal, cantidad, es_alcohol').eq('fecha', diaISO());
-  EXTRA_LOG[SESION.perfil].length = 0;
+  /* Se deja constancia de A QUÉ DÍA pertenece esta lista: la pantalla se niega
+     a pintar extras de un día distinto del que se está mirando. */
+  EXTRA_LOG_DIA = diaISO();
+  EXTRA_LOG.c.length = 0; EXTRA_LOG.t.length = 0;
   for (const x of (data || []))
     EXTRA_LOG[SESION.perfil].push({n:x.nombre, e:x.es_alcohol?'🍺':'➕',
       kcal:+x.kcal, n2:x.cantidad, alc:x.es_alcohol});

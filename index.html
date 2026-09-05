@@ -494,7 +494,7 @@ const DIAS_ATRAS=[0,-1,-2].map(o=>{const f=fechaDe(o);
 
 /* Saber qué versión corre en cada móvil deja de ser adivinar. Cuando algo
    «no se actualiza», este número lo dice en un vistazo. */
-const VERSION_APP = 'v51 · 5 sep 2026';
+const VERSION_APP = 'v52 · 5 sep 2026';
 const TYC_CONECTADO = () => typeof TYC !== 'undefined' && !!TYC.db && !TYC.demo;
 
 /* Descarta el service worker y las cachés y recarga: la salida de emergencia
@@ -2126,8 +2126,11 @@ function sheetCerrar(k){
   /* Solo hay ticket si la compra fue en un sitio que manda ticket digital Y
      ese ticket ha llegado. Si fuiste a Lidl, no lo hay: no se puede ofrecer. */
   const hayTicket = !!COMPRAS.find(c=>c.nueva) && (COMPRA_EN_CURSO.comercio==='Mercadona');
-  openSheet(`<h3>Cerrar la compra · ${L.n}</h3>
-    <div class="meta" style="margin-bottom:16px">Abierta desde el ${L.abierta} · ${Math.min(L.cogidos,n)} de ${n} cogidos</div>
+  openSheet(`<h3>Registrar la compra · ${L.n}</h3>
+    <div class="meta" style="margin-bottom:10px">${Math.min(L.cogidos,n)} de ${n} cogidos</div>
+    <div class="banner info" style="margin-bottom:14px"><b class="t">La lista no se cierra</b>
+      Lo que has cogido entra en la despensa y sale de la lista. Lo que no,
+      se queda ahí para la próxima. No se crean listas nuevas.</div>
     ${hayTicket
       ? `<div class="banner info"><b class="t">Hay un ticket de Mercadona sin usar</b>
           Del ${ENTRANTE.fecha}, ${eur(ENTRANTE.total)}. Si lo uso para cerrar, las cantidades y los precios
@@ -2142,8 +2145,8 @@ function sheetCerrar(k){
             <span class="chip">${CONCILIA.noHabia.length}</span></div>
           <div class="ing"><span class="grow">Precios que se corrigen</span>
             <span class="chip acc">${CONCILIA.precios}</span></div></div>
-        <button class="cta" style="margin-top:14px" onclick="sheetConciliacion()">Cerrar con el ticket</button>
-        <button class="act" style="width:100%; margin-top:8px" onclick="sheetOtroSuper()">Cerrar sin ticket · solo el total</button>`
+        <button class="cta" style="margin-top:14px" onclick="sheetConciliacion()">Registrar con el ticket</button>
+        <button class="act" style="width:100%; margin-top:8px" onclick="sheetOtroSuper()">Registrar sin ticket · solo el total</button>`
       : `<div class="banner"><b class="t">Sin ticket digital</b>
           Las cantidades saldrán de lo que marcaste en el súper, que ya las calculó la app.
           Lo único que falta es lo que pagaste.</div>
@@ -2261,7 +2264,7 @@ function sheetOtroSuper(k){
       El gasto será exacto. La despensa entra con las cantidades que marcaste, corregidas donde hiciera falta.
       No se aprenden precios por producto —los de ${COMPRA_EN_CURSO.comercio} no valen para Mercadona—
       pero sí <b>cuánto se desvía esta cadena en total</b>, que es lo que sirve para prever el mes.</div>
-    <button class="cta" style="margin-top:14px" onclick="cerrarSinTicket('${k}',${est})">Cerrar la compra</button>`);
+    <button class="cta" style="margin-top:14px" onclick="cerrarSinTicket('${k}',${est})">Registrar la compra</button>`);
 }
 /* Comprar fuera de las cuatro cadenas conocidas no es un caso raro: hay que
    poder nombrar el súper y que la app empiece a aprender cuánto se desvía. */
@@ -3458,6 +3461,56 @@ function regenerar(){
   $('#gen-info').innerHTML=`Generada aplicando las 8 restricciones duras y las 10 blandas ·
     ${r.intentos} ${r.intentos===1?'intento':'intentos'} hasta encontrar una semana válida.`;
 }
+/* PREGUNTAR SOLO POR LO QUE CAMBIA LA DECISIÓN.
+   Cuadrar una despensa entera a mano es media hora que nadie tiene, y encima
+   sobra: da igual que el pimentón esté desviado. Lo único que importa es lo que
+   la app DEJA DE COMPRAR porque cree que ya lo tenéis. Eso son dos o tres
+   alimentos por lista, no sesenta. Se pregunta por ellos, uno cada vez, y la
+   despensa se cuadra sola en dos o tres semanas sin recontar nada. */
+const CONFIRMADOS = 'tyc_confirmado_v1';
+function leerConfirmados(){ try { return JSON.parse(localStorage.getItem(CONFIRMADOS)||'{}'); } catch { return {}; } }
+function confirmarStock(n){ const c=leerConfirmados(); c[n]=Date.now();
+  try { localStorage.setItem(CONFIRMADOS, JSON.stringify(c)); } catch(e){} }
+
+/* Un alimento es dudoso si el menú lo necesita, la app cree que hay bastante
+   —y por eso NO lo compra— y nadie lo ha confirmado en dos semanas. */
+function stockDudoso(){
+  const need = necesidades(), c = leerConfirmados(), quince = 15*86400000, out = [];
+  for (const n in need){
+    const hay = DESPENSA[n] ? DESPENSA[n][0] : 0;
+    if (hay < need[n]) continue;                       // se compra igual: da lo mismo
+    if (c[n] && Date.now() - c[n] < quince) continue;  // preguntado hace poco
+    if (!PRECIO[n]) continue;                          // sin precio no cambia el gasto
+    out.push({n, hay, necesita: need[n], ahorro: need[n]*PRECIO[n]/1000});
+  }
+  return out.sort((a,b) => b.ahorro - a.ahorro);
+}
+async function respuestaStock(n, cuanto){
+  const hay = DESPENSA[n] ? DESPENSA[n][0] : 0;
+  const nuevo = cuanto==='sobra' ? hay : cuanto==='poco' ? Math.round(hay*0.25) : 0;
+  confirmarStock(n);
+  if (nuevo !== Math.round(hay)){
+    DESPENSA[n][0] = nuevo;
+    if (AJUSTAR_DESPENSA) await AJUSTAR_DESPENSA(n, nuevo);
+  }
+  render();
+}
+function tarjetaDudoso(){
+  const d = stockDudoso()[0];
+  if (!d) return '';
+  return `<div class="card" style="border-color:var(--acc)">
+    <div class="row" style="margin-bottom:8px"><div class="thumb t-lacteo">🤔</div>
+      <div class="grow"><div class="when" style="color:var(--acc-txt)">Antes de comprar</div>
+        <div class="name" style="margin:2px 0 3px">¿Te queda ${d.n.toLowerCase()}?</div>
+        <div class="meta">La app cree que hay ${kg(d.hay)} y por eso no lo pone en la lista.
+          Si no queda, son ${eur(d.ahorro)} que faltarían esta semana.</div></div></div>
+    <div class="row" style="gap:8px">
+      <button class="act" style="flex:1" onclick="respuestaStock('${d.n.replace(/'/g,"\\'")}','sobra')">De sobra</button>
+      <button class="act" style="flex:1" onclick="respuestaStock('${d.n.replace(/'/g,"\\'")}','poco')">Queda poco</button>
+      <button class="act" style="flex:1" onclick="respuestaStock('${d.n.replace(/'/g,"\\'")}','nada')">No queda</button></div>
+    <div class="note" style="margin-top:8px">Una pregunta cada vez, solo de lo que cambia la compra.
+      Así no hay que recontar la despensa entera.</div></div>`;
+}
 function pintarCompra(){
   const lista=listaVista();
   /* El total de la lista es lo que cuesta lo que hace falta, igual que las
@@ -3471,6 +3524,7 @@ function pintarCompra(){
     const caros=Object.values(lista).flat().sort((a,b)=>b.precioReal-a.precioReal).slice(0,3);
     $('#compra-body').innerHTML=`
       ${avisoTicket()}
+      ${tarjetaDudoso()}
       <div class="card">
         <div class="row" style="gap:8px; margin-bottom:12px">
           <div style="flex:1; background:var(--surface-2); border-radius:14px; padding:11px">

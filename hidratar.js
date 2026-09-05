@@ -1784,7 +1784,11 @@ async function guardarConservaBD(c){
     await TYC.db.from('preserves').insert({household_id:SESION.household,
       ingredient_id:ing.id, metodo:metodoBD,
       cantidad_origen:c.origen || c.g, cantidad_final:c.g,
-      caducidad_nueva:c.cad, ubicacion:c.ubic || null});
+      /* La columna no admite vacío: sin fecha, la fila se rechaza entera. Si
+         por lo que sea no llega, se pone seis meses, que es lo más corto de
+         los métodos que guardamos. Lo encontró la base real, no yo. */
+      caducidad_nueva:c.cad || isoLocal(new Date(Date.now() + 182*86400000)),
+      ubicacion:c.ubic || null});
     /* Lo conservado sigue estando, pero con otra caducidad y en otro sitio. */
     await TYC.db.from('pantry').update({cantidad:c.g, caducidad:c.cad,
       ubicacion:c.ubic || null, nota:c.metodo,

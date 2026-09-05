@@ -494,7 +494,7 @@ const DIAS_ATRAS=[0,-1,-2].map(o=>{const f=fechaDe(o);
 
 /* Saber qué versión corre en cada móvil deja de ser adivinar. Cuando algo
    «no se actualiza», este número lo dice en un vistazo. */
-const VERSION_APP = 'v55 · 5 sep 2026';
+const VERSION_APP = 'v56 · 5 sep 2026';
 const TYC_CONECTADO = () => typeof TYC !== 'undefined' && !!TYC.db && !TYC.demo;
 
 /* Descarta el service worker y las cachés y recarga: la salida de emergencia
@@ -3192,7 +3192,9 @@ function conservar(n, g, id){
       <button class="cta" style="margin-top:14px" onclick="closeSheet()">Hecho</button>`);
   }
   const final=Math.round(g*c.merma);
-  const d=new Date(2026,7,19); d.setMonth(d.getMonth()+c.meses);
+  /* Desde HOY, no desde el 19 de agosto de 2026, que estaba escrito a mano y
+     hacía que todo lo congelado caducara con semanas de antelación. */
+  const d=fechaDe(0); d.setMonth(d.getMonth()+c.meses);
   const cad=isoLocal(d);
   CONSERVAS_HECHAS.push({n, metodo:c.m, e:c.e, origen:g, g:final, ubic:c.ubic, cad, fecha:'hoy'});
   if(GUARDAR_CONSERVA) GUARDAR_CONSERVA({n, g:final, origen:g, metodo:c.id, cad, ubic:c.ubic});

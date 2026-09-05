@@ -1193,7 +1193,7 @@ let CERRAR_LISTA  = null;
 let GUARDAR_OFICINA = null;
 /* Los ganchos de registro. Los rellena hidratar.js cuando hay base de datos;
    sin ella la app sigue funcionando en local, pero avisando de que no guarda. */
-let BORRAR_COMIDA=null, AJUSTAR_DESPENSA=null, MOTIVO_DEMO='';
+let BORRAR_COMIDA=null, AJUSTAR_DESPENSA=null, REHACER_LISTA=null, MOTIVO_DEMO='';
 const FALLOS_PINTADO={};
 let GUARDAR_COMIDA=null, GUARDAR_MED=null, GUARDAR_PESO=null, GUARDAR_CINTURA=null,
     GUARDAR_CIERRE=null, GUARDAR_CHECK=null, GUARDAR_ENTRENO=null, GUARDAR_CARDIO=null,

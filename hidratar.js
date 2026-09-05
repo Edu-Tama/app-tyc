@@ -195,6 +195,59 @@ async function hidratarCompra(){
   return Object.values(LISTA_ID).filter(Boolean).length;
 }
 
+/* REHACER LA LISTA DESDE CERO.
+   La lista solo sabía CRECER: `completarLista` añade lo que falta y no quita
+   nunca nada, «por si acaso». Con seis semanas de menús cambiados, compras a
+   medias y listas encadenadas, lo que queda no es una lista de la compra: es
+   todo lo que alguna vez hizo falta desde el 24 de agosto, con marcas de
+   compras que ya se hicieron.
+
+   Esto la vuelve a calcular: menú de la semana menos lo que hay en casa. Se
+   respetan las marcas de lo que siga haciendo falta —por si estás en mitad del
+   súper— y desaparece lo demás. */
+async function rehacerListaBD(){
+  const {data: ings} = await TYC.db.from('ingredients').select('id, nombre');
+  const idIng = Object.fromEntries((ings || []).map(i => [i.nombre, i.id]));
+  const nombreDe = Object.fromEntries((ings || []).map(i => [i.id, i.nombre]));
+  const lista = listaCompra();
+  let borrados = 0, puestos = 0;
+
+  /* Lo marcado se recuerda por NOMBRE y de TODAS las listas antes de tocar
+     nada: un artículo puede cambiar de lista al recalcularse —de fresco a
+     grande— y si las marcas se recogen lista por lista, se pierden por el
+     camino. */
+  const marca = {};
+  for (const tipo of Object.keys(LISTAS)){
+    const id = LISTA_ID[tipo]; if (!id) continue;
+    const {data: viejos} = await TYC.db.from('shopping_items')
+      .select('ingredient_id, cogido, no_habia, motivo_falta, cantidad_real, marcado_por, marcado_at')
+      .eq('shopping_list_id', id);
+    for (const v of viejos || []) if (v.cogido || v.no_habia) marca[nombreDe[v.ingredient_id]] = v;
+    borrados += (viejos || []).length;
+  }
+
+  for (const [tipo, L] of Object.entries(LISTAS)){
+    const id = LISTA_ID[tipo];
+    if (!id) continue;
+    await TYC.db.from('shopping_items').delete().eq('shopping_list_id', id);
+
+    const filas = L.secciones.flatMap(sec => (lista[sec] || []).map(i => {
+      const m = marca[i.n] || {};
+      return {shopping_list_id: id, ingredient_id: idIng[i.n],
+        cantidad: Math.round(i.g), unidad: 'g', seccion_super: sec,
+        envases: i.envases, formato_g: i.formato,
+        cogido: !!m.cogido, no_habia: !!m.no_habia,
+        motivo_falta: m.motivo_falta || null, cantidad_real: m.cantidad_real ?? null,
+        marcado_por: m.marcado_por || null, marcado_at: m.marcado_at || null};
+    })).filter(f => f.ingredient_id);
+    if (filas.length) await TYC.db.from('shopping_items').insert(filas);
+    puestos += filas.length;
+  }
+
+  await hidratarCompra();
+  return {borrados, puestos};
+}
+
 async function completarLista(idIng, lista){
   const nuevas = [];
   /* Qué hay YA en cada lista abierta. Mirar solo ITEM_ID no basta: después de
@@ -1852,6 +1905,7 @@ async function arrancarApp(){
     GUARDAR_EXCEPCION = guardarExcepcionBD;
     QUITAR_EXCEPCION  = quitarExcepcionBD;
     GUARDAR_DESPENSA  = guardarDespensaBD;
+    REHACER_LISTA     = rehacerListaBD;
     AJUSTAR_DESPENSA  = ajustarDespensaBD;
     GUARDAR_CONSERVA  = guardarConservaBD;
     GUARDAR_SEMANA2   = guardarSemana2;

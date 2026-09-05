@@ -494,7 +494,7 @@ const DIAS_ATRAS=[0,-1,-2].map(o=>{const f=fechaDe(o);
 
 /* Saber qué versión corre en cada móvil deja de ser adivinar. Cuando algo
    «no se actualiza», este número lo dice en un vistazo. */
-const VERSION_APP = 'v49 · 5 sep 2026';
+const VERSION_APP = 'v50 · 5 sep 2026';
 const TYC_CONECTADO = () => typeof TYC !== 'undefined' && !!TYC.db && !TYC.demo;
 
 /* Descarta el service worker y las cachés y recarga: la salida de emergencia
@@ -1653,6 +1653,8 @@ function sheetAjustes(){
     <div class="ing"><span class="grow">Datos</span>
       <span style="font-weight:650; color:${TYC_CONECTADO()?'var(--good-ink)':'var(--crit)'}">
         ${TYC_CONECTADO()?'conectados a Supabase':'de ejemplo · sin conexión'}</span></div>
+    ${TYC_CONECTADO()?'':`<div class="note" style="margin:2px 0 0; color:var(--crit)">
+      Motivo: <b>${MOTIVO_DEMO || 'sin detalle'}</b>. Nada de lo que marques se guarda.</div>`}
     <button class="act" style="width:100%; margin-top:12px" onclick="forzarActualizacion()">
       ↻ Buscar actualización</button>
 
@@ -2448,6 +2450,17 @@ const firma = id => POR[id] ? `<div class="note" style="margin:1px 0 0">Lo marc�
 
 function pintarAvisos(){
   const partes=[];
+  /* EL AVISO DE «DATOS DE EJEMPLO» SE REPINTA SIEMPRE.
+     Lo insertaba caerADemo() una sola vez… en el mismo sitio que esta función
+     reescribe en cada repintado. O sea que aparecía un instante y al primer
+     toque desaparecía. Cristina lleva una semana con la app desconectada y sin
+     nada en pantalla que se lo dijera. */
+  if(typeof TYC!=='undefined' && TYC.demo)
+    partes.push(`<div class="banner tap" style="margin-bottom:11px; border-color:var(--crit)"
+        onclick="comprobarGuardado()">
+      <b class="t">⚠ La app NO está conectada</b>
+      Lo que ves son datos de ejemplo y nada de lo que marques se guarda.
+      ${MOTIVO_DEMO?'Motivo: <b>'+MOTIVO_DEMO+'</b>. ':''}Toca aquí para ver qué pasa.</div>`);
   if(DIA<0) partes.push(`<div class="banner" style="margin-bottom:11px"><b class="t">⏪ ${DIAS_ATRAS[-DIA]}</b>
     Puedes completar lo que falte. Pasadas 48 horas el día se cierra como «sin registrar», que también es un dato.</div>`);
   $('#aviso-modo').innerHTML=partes.join('');

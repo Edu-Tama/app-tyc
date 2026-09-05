@@ -1803,9 +1803,16 @@ async function arrancarApp(){
   try {
     SESION = {id:session.user.id, email:session.user.email, perfil:'c'};
     limpiarEjemplo();
-    const yo = await hidratarPerfil();
-    const cat = await hidratarCatalogo();
-    const nd  = await hidratarDespensa();
+    /* Estas tres van fuera del bucle tolerante porque sin ellas no hay app.
+       Pero si fallan hay que decir CUÁL y POR QUÉ: «datos sin conexión» a
+       secas es lo que ha tenido a Cristina una semana a ciegas. */
+    let yo, cat, nd;
+    try { yo  = await hidratarPerfil(); }
+    catch(e){ throw new Error('tu perfil · ' + (e.message || e)); }
+    try { cat = await hidratarCatalogo(); }
+    catch(e){ throw new Error('el catálogo de recetas · ' + (e.message || e)); }
+    try { nd  = await hidratarDespensa(); }
+    catch(e){ throw new Error('la despensa · ' + (e.message || e)); }
     /* Cada bloque va por su cuenta: que falle el menú no debe dejar la
        medicación o la despensa con datos de ejemplo. Antes un solo error
        tiraba toda la hidratación al modo demostración. */
@@ -1888,6 +1895,11 @@ function avisoParcial(fallos){
    pantalla vacía sin explicación. */
 function caerADemo(motivo){
   TYC.demo = true;
+  /* El motivo deja de vivir solo en un banner que se pierde al desplazar: se
+     guarda para poder enseñarlo en Ajustes y en la comprobación. «Datos sin
+     conexión» sin decir POR QUÉ no le sirve a nadie. */
+  MOTIVO_DEMO = String(motivo || 'sin detalle');
+  try { localStorage.setItem('tyc_motivo_demo', MOTIVO_DEMO + ' · ' + new Date().toISOString()); } catch(e){}
   console.warn('T&C · modo demostración:', motivo);
   ocultarAcceso(); sembrarDia(HORA); render();
   const av = document.getElementById('aviso-modo');
@@ -1949,6 +1961,20 @@ window.sheetSalir = sheetSalir;
    comprueba que la fila está. */
 async function comprobarGuardado(){
   openSheet('<h3>Comprobando…</h3><div class="meta">Escribiendo una marca de prueba.</div>');
+  /* Si la app está con datos de ejemplo, no hay nada que probar: la respuesta
+     es el motivo por el que no llegó a conectarse. */
+  if (TYC.demo){
+    let guardado = '';
+    try { guardado = localStorage.getItem('tyc_motivo_demo') || ''; } catch(e){}
+    return openSheet(`<h3>La app no está conectada</h3>
+      <div class="meta" style="margin-bottom:12px">${VERSION_APP}</div>
+      <div class="banner" style="border-color:var(--bad)"><b class="t">Datos de ejemplo</b>
+        Nada de lo que marques se guarda. Lo que ves no son vuestros datos.</div>
+      <div class="ing" style="margin-top:12px"><span class="grow">Motivo</span></div>
+      <div class="note" style="margin:2px 0 12px"><b>${MOTIVO_DEMO || guardado || 'sin detalle'}</b></div>
+      <button class="cta" onclick="location.reload()">Reintentar</button>
+      <button class="opt" style="margin-top:8px" onclick="sheetSalir()">Salir de la sesión y volver a entrar</button>`);
+  }
   const clave = 'prueba_' + Date.now();
   const linea = (ok, t, d) => `<div class="qr">
     <div class="thumb sm ${ok?'t-verdura':'t-off'}" style="${ok?'':'color:var(--bad)'}">${ok?'✓':'✗'}</div>

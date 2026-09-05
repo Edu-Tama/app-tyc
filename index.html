@@ -494,7 +494,7 @@ const DIAS_ATRAS=[0,-1,-2].map(o=>{const f=fechaDe(o);
 
 /* Saber qué versión corre en cada móvil deja de ser adivinar. Cuando algo
    «no se actualiza», este número lo dice en un vistazo. */
-const VERSION_APP = 'v53 · 5 sep 2026';
+const VERSION_APP = 'v54 · 5 sep 2026';
 const TYC_CONECTADO = () => typeof TYC !== 'undefined' && !!TYC.db && !TYC.demo;
 
 /* Descarta el service worker y las cachés y recarga: la salida de emergencia
@@ -1064,6 +1064,44 @@ function loQueSeCocina(sem){
   dias.forEach(d=>{ (platos[d.comida]=platos[d.comida]||{dias:[],k:d.comida}).dias.push(d.d+' '+d.n); });
   return Object.values(platos).map(p=>({...p, r:R[p.k], raciones:p.dias.length*2}));
 }
+/* EL GUION DE LA TANDA, CALCULADO DESDE LOS PLATOS DE VERDAD.
+   Los pasos eran un texto fijo del prototipo —«lentejas a la olla, sofríe para
+   el chili, cuece 6 huevos»— que no miraba el menú. Debajo salía la lista de
+   platos reales, y las dos cosas se contradecían en la misma pantalla.
+
+   Esto lo monta de verdad: se arranca por lo que más tiempo pasa solo —horno y
+   olla, que cocinan mientras haces otra cosa— y se van encajando los demás por
+   sus minutos ACTIVOS, que son los únicos que ocupan a una persona. El total
+   no es la suma de los platos: es el tiempo que de verdad estás en la cocina. */
+function guionTanda(platos){
+  if(!platos.length) return {pasos:[], min:0, activos:0};
+  const iconoDe = m => /horno/i.test(m) ? '🔥' : /airfryer/i.test(m) ? '🍟'
+    : /olla|hervi/i.test(m) ? '🍲' : /thermomix/i.test(m) ? '🌀' : '🍳';
+  /* Primero lo que más tiempo pasa cocinándose solo. */
+  const orden = [...platos].sort((a,b) => (b.r.tot - b.r.act) - (a.r.tot - a.r.act));
+  const pasos = [];
+  let t = 0, finMax = 0;
+
+  const horno = orden.filter(p => /horno|airfryer/i.test(p.r.metodo || ''));
+  if(horno.length){
+    pasos.push({t:'0 min', icon:'🔥',
+      q:'Enciende el ' + (/airfryer/i.test(horno[0].r.metodo) ? 'airfryer' : 'horno') +
+        ' — lo primero, mientras preparas lo demás'});
+    t = 3;
+  }
+  for(const p of orden){
+    const primero = (p.r.pasos && p.r.pasos[0]) ? String(p.r.pasos[0]).replace(/\.$/,'') : p.r.n;
+    pasos.push({t: t + ' min', icon: iconoDe(p.r.metodo || ''),
+      q: `<b>${p.r.n}</b> · ${p.raciones} raciones — ${primero}` +
+         (p.r.tot > p.r.act ? ` <span style="color:var(--muted)">(${p.r.tot - p.r.act} min solo)</span>` : '')});
+    finMax = Math.max(finMax, t + p.r.tot);
+    t += Math.max(4, p.r.act);
+  }
+  const fin = Math.max(t, finMax);
+  pasos.push({t: fin + ' min', icon:'📦', q:'Reparte en tápers y etiqueta con el día'});
+  pasos.push({t: (fin + 8) + ' min', icon:'🧼', q:'Friega mientras se enfría. A la nevera cuando temple'});
+  return {pasos, min: fin + 8, activos: t};
+}
 function sheetTanda(sem){
   sem = sem || TABM;
   const T = TANDAS[sem] || TANDAS.s1, esta = sem==='s1';
@@ -1090,10 +1128,13 @@ function sheetTanda(sem){
       <div class="kc"><span class="chip ${p.r.tot>25?'acc':''}">${p.r.tot} min</span></div></div>`).join('')}
     ${alDia.length?`<div class="note">${alDia.length===1?'Esa receta se hace':'Esas '+alDia.length+' recetas se hacen'}
       en ${alDia.reduce((a,p)=>a+p.r.tot,0)} minutos el mismo día: no compensa adelantarla${alDia.length===1?'':'s'}.</div>`:''}
-    ${enTanda.length?`<div class="sec-h">El guion, todo en paralelo · ~${Math.round(min*0.6)} min reales</div>
-    ${TANDA.pasos.map(p=>`<div class="ing" style="align-items:flex-start">
-      <span style="width:52px; font-weight:750; color:var(--acc-txt); font-size:12.5px">${p.t}</span>
-      <span class="grow">${p.icon} ${p.q}</span></div>`).join('')}`
+    ${enTanda.length?(()=>{const g=guionTanda(enTanda); return `
+    <div class="sec-h">El guion · ~${g.min} min, de los que estás ocupado ${g.activos}</div>
+    ${g.pasos.map(p=>`<div class="ing" style="align-items:flex-start">
+      <span style="width:56px; font-weight:750; color:var(--acc-txt); font-size:12.5px">${p.t}</span>
+      <span class="grow">${p.icon} ${p.q}</span></div>`).join('')}
+    <div class="note" style="margin-top:6px">Sale de los platos de vuestro menú: se arranca por lo que
+      más tiempo pasa solo y se encaja el resto por encima.</div>`})()
     :`<div class="banner"><b class="t">No queda nada que cocinar por adelantado</b>
       Todas las comidas de la semana se resuelven en 25 minutos o menos el mismo día. La tanda no hace falta.</div>`}
     <div class="sec-h">Si ${esta?'hoy':'ese día'} no puede ser</div>

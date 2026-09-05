@@ -1761,14 +1761,30 @@ async function guardarConservaBD(c){
     .select('id').eq('nombre', c.n).maybeSingle();
   if (!ing) return {error:'ingrediente desconocido'};
 
-  if (c.metodo === 'regalado'){
+  /* El método que usa la pantalla es una frase para leer —«Congelar en
+     raciones»—; la base guarda una palabra de una lista cerrada. Se mandaba la
+     frase tal cual y la base rechazaba la fila. Segundo fallo en la misma
+     función, y también en silencio. */
+  const METODO_BD = {
+    congelar:'congelado_raciones', crema:'congelado_crema', frasco:'esterilizado',
+    encurtido:'encurtido', secar:'secado', mermelada:'mermelada', confitado:'confitado',
+    'Congelar en raciones':'congelado_raciones', 'Conserva en frasco':'esterilizado',
+    'Encurtido en vinagre':'encurtido', 'Secar o deshidratar':'secado',
+  };
+  const metodoBD = METODO_BD[c.metodo] || 'congelado_raciones';
+
+  if (c.metodo === 'regalado' || c.metodo === 'regalar'){
     await TYC.db.from('pantry').delete().eq('ingredient_id', ing.id);
     await TYC.db.from('pantry_movements').insert({household_id:SESION.household,
       ingredient_id:ing.id, cantidad:-c.g, origen:'ajuste', motivo:'regalado'});
   } else {
+    /* La tabla guarda cuánto había y cuánto queda, no una «cantidad» suelta:
+       escribir en una columna que no existe hacía que cada conserva se
+       rechazara en silencio. Lo encontró la comprobación contra la base real. */
     await TYC.db.from('preserves').insert({household_id:SESION.household,
-      ingredient_id:ing.id, metodo:c.metodo, cantidad:c.g,
-      caducidad_nueva:c.cad, nota:c.ubic || null});
+      ingredient_id:ing.id, metodo:metodoBD,
+      cantidad_origen:c.origen || c.g, cantidad_final:c.g,
+      caducidad_nueva:c.cad, ubicacion:c.ubic || null});
     /* Lo conservado sigue estando, pero con otra caducidad y en otro sitio. */
     await TYC.db.from('pantry').update({cantidad:c.g, caducidad:c.cad,
       ubicacion:c.ubic || null, nota:c.metodo,

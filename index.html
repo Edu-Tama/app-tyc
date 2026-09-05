@@ -494,7 +494,7 @@ const DIAS_ATRAS=[0,-1,-2].map(o=>{const f=fechaDe(o);
 
 /* Saber qué versión corre en cada móvil deja de ser adivinar. Cuando algo
    «no se actualiza», este número lo dice en un vistazo. */
-const VERSION_APP = 'v54 · 5 sep 2026';
+const VERSION_APP = 'v55 · 5 sep 2026';
 const TYC_CONECTADO = () => typeof TYC !== 'undefined' && !!TYC.db && !TYC.demo;
 
 /* Descarta el service worker y las cachés y recarga: la salida de emergencia
@@ -3195,7 +3195,7 @@ function conservar(n, g, id){
   const d=new Date(2026,7,19); d.setMonth(d.getMonth()+c.meses);
   const cad=isoLocal(d);
   CONSERVAS_HECHAS.push({n, metodo:c.m, e:c.e, origen:g, g:final, ubic:c.ubic, cad, fecha:'hoy'});
-  if(GUARDAR_CONSERVA) GUARDAR_CONSERVA({n, g:final, origen:g, metodo:c.m, cad, ubic:c.ubic});
+  if(GUARDAR_CONSERVA) GUARDAR_CONSERVA({n, g:final, origen:g, metodo:c.id, cad, ubic:c.ubic});
   DESPENSA[n+' · '+c.m.toLowerCase()]=[final, cad];
   UBIC[n+' · '+c.m.toLowerCase()]=c.ubic;
   PRECIO[n+' · '+c.m.toLowerCase()]=PRECIO[n]||0;

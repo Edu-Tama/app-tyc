@@ -494,7 +494,7 @@ const DIAS_ATRAS=[0,-1,-2].map(o=>{const f=fechaDe(o);
 
 /* Saber qué versión corre en cada móvil deja de ser adivinar. Cuando algo
    «no se actualiza», este número lo dice en un vistazo. */
-const VERSION_APP = 'v47 · 1 sep 2026';
+const VERSION_APP = 'v49 · 5 sep 2026';
 const TYC_CONECTADO = () => typeof TYC !== 'undefined' && !!TYC.db && !TYC.demo;
 
 /* Descarta el service worker y las cachés y recarga: la salida de emergencia
@@ -1591,6 +1591,53 @@ function guardarPeso(){
   if(GUARDAR_PESO) GUARDAR_PESO(kg); else (P==='c'?PESO_C:PESO_T).push(kg);
   closeSheet(); pintarQuick(); pintarSalud(); pintarPeso();
 }
+/* CUADRAR LA DESPENSA CON EL ARMARIO ABIERTO.
+   Ningún inventario se mantiene solo: lo que entra por envases y sale por
+   gramos se desvía siempre. Se enseñan los que más bulto tienen, que son los
+   que más pesan en la lista de la compra, y se corrige lo que chirríe. Lo que
+   no se toca, no se cambia. */
+function sheetRecuento(){
+  const filas = Object.keys(DESPENSA)
+    .map(n => ({n, g: DESPENSA[n][0]}))
+    .filter(x => x.g > 0)
+    .sort((a,b) => b.g - a.g)
+    .slice(0, 10);
+  openSheet(`<h3>Cuadrar la despensa</h3>
+    <div class="meta" style="margin-bottom:14px">Los diez que más bulto tienen. Abre el armario y
+      corrige solo lo que no cuadre; lo que dejes en blanco no se toca.</div>
+    ${filas.map((x,i) => `<div class="ing" ${i?'':'style="border-top:0"'}>
+      <span class="grow">${x.n}<small style="display:block; color:var(--muted)">la app cree que hay ${kg(x.g)}</small></span>
+      <input id="rec-${i}" type="number" inputmode="decimal" placeholder="${Math.round(x.g)}"
+        style="width:88px; text-align:right" />
+      <span style="color:var(--muted); font-size:12.5px; padding-left:6px">g</span></div>`).join('')}
+    <button class="cta" style="margin-top:14px"
+      onclick="guardarRecuento(${JSON.stringify(filas.map(x=>x.n)).replace(/"/g,'&quot;')})">Guardar lo corregido</button>
+    <div class="note" style="margin-top:8px">Cada corrección se apunta como ajuste, no como compra
+      ni como comida: así el gasto y las calorías no se ensucian.</div>`);
+}
+async function guardarRecuento(nombres){
+  const cambios = [];
+  nombres.forEach((n,i) => {
+    const el = document.getElementById('rec-'+i);
+    const v = el && el.value !== '' ? +el.value : null;
+    if (v != null && !isNaN(v) && Math.round(v) !== Math.round(DESPENSA[n][0])) cambios.push([n, v]);
+  });
+  if (!cambios.length){ closeSheet(); return; }
+  openSheet('<h3>Cuadrando…</h3><div class="meta">'+cambios.length+' alimentos</div>');
+  const hechos = [];
+  for (const [n, g] of cambios){
+    if (AJUSTAR_DESPENSA) { const r = await AJUSTAR_DESPENSA(n, g); hechos.push([n, g, r && r.error]); }
+    DESPENSA[n][0] = g;
+  }
+  render();
+  openSheet(`<h3>Despensa cuadrada</h3>
+    <div class="meta" style="margin-bottom:12px">${hechos.filter(h=>!h[2]).length} de ${hechos.length} corregidos</div>
+    ${hechos.map(([n,g,err]) => `<div class="qr">
+      <div class="thumb sm ${err?'t-off':'t-verdura'}" style="${err?'color:var(--bad)':''}">${err?'✗':'✓'}</div>
+      <div class="tx"><b>${n}</b><div class="note" style="margin:1px 0 0">${err || 'ahora: '+kg(g)}</div></div></div>`).join('')}
+    <div class="note" style="margin-top:10px">La lista de la compra se recalcula con esto.</div>
+    <button class="opt" style="margin-top:8px" onclick="closeSheet()">Cerrar</button>`);
+}
 function sheetAjustes(){
   REGISTROS = null;                     // se relee cada vez que se abre
   openSheet(`<h3>Ajustes</h3>
@@ -1608,8 +1655,24 @@ function sheetAjustes(){
         ${TYC_CONECTADO()?'conectados a Supabase':'de ejemplo · sin conexión'}</span></div>
     <button class="act" style="width:100%; margin-top:12px" onclick="forzarActualizacion()">
       ↻ Buscar actualización</button>
-    <div class="ing"><span class="grow">Sincronización</span><span style="font-weight:650; color:var(--good-ink)">✓ al día</span></div>
-    <div class="ing"><span class="grow">Modo sin cobertura</span><span style="font-weight:650">activo · 12 cambios en cola</span></div>`);
+
+    ${/* DOS BOTONES QUE DEBERÍAN HABER ESTADO DESDE EL PRIMER DÍA.
+          Cristina estuvo dos días marcando comidas contra una pared y no había
+          forma de saberlo desde el móvil ni de arreglarlo sin entrar en los
+          ajustes del navegador. */''}
+    <button class="opt" onclick="sheetRecuento()">⚖️ <span class="grow">Cuadrar la despensa<small>Corregir a ojo lo que más se ha desviado · sin esto el inventario no cuadra</small></span>›</button>
+
+    <div class="sec-h" style="margin-top:18px">Sesión</div>
+    <div class="ing"><span class="grow">Entraste como</span>
+      <span style="font-weight:650">${SESION.email || '—'}</span></div>
+    <button class="act" style="width:100%; margin-top:10px" onclick="comprobarGuardado()">
+      🧪 Comprobar que se está guardando</button>
+    <div class="note" style="margin:6px 0 0">Escribe una marca de prueba, la lee de vuelta y la
+      borra. Si algo falla, te dice qué.</div>
+    <button class="act" style="width:100%; margin-top:12px; border-color:var(--crit); color:var(--crit)"
+      onclick="sheetSalir()">Salir de la sesión</button>
+    <div class="note" style="margin:6px 0 14px">Hay que volver a entrar con el correo y la contraseña.
+      Úsalo si la app deja de guardar.</div>`);
 }
 const DIA_LARGO={L:'lunes',M:'martes',X:'miércoles',J:'jueves',V:'viernes',S:'sábados',D:'domingos'};
 /* El calendario del mes: se marcan los días de oficina de golpe, que es como os
@@ -2724,6 +2787,17 @@ ${/* Un día pasado se abre DESPLEGADO. Plegar lo registrado tiene sentido
     acc.length ? bloque((acc.some(a=>!a.when.startsWith('Caduca'))?'Preparativos · para mañana':'Preparativos')
       +' <span class="chip" style="margin-left:8px; font-size:10px; padding:3px 8px; text-transform:none; letter-spacing:0">🏠 de los dos</span>',
       htmlPrep, '', false) : '',
+    /* LA SEMANA QUE VIENE NO SE PREPARA SOLA, PERO SE PIDE.
+       Nadie disparaba el menú de la semana siguiente, así que el domingo no
+       hubo ni lista ni tanda. Desde el sábado, si no está hecha, se ve. */
+    (DIA===0 && [6,0].includes(fechaDe(0).getDay()) && !MENU2.some(d=>d&&d.desayuno))
+      ? bloque('La semana que viene', `<div class="qr" style="border-top:0" onclick="prepararSemana()">
+        <div class="thumb sm t-legumbre">🗓</div>
+        <div class="tx"><div class="when">Todavía sin menú</div>
+          <b>Preparar la semana del ${rotuloSemana(1)}</b>
+          <div class="note" style="margin:1px 0 0">Se genera con lo que hay en casa. Al confirmarla
+            se añade a la lista lo que falte y queda la tanda del domingo.</div></div>
+        <span class="chip acc">Preparar</span></div>`, '', false) : '',
     HORA<22 ? bloque('Cierre del día', `<div class="qr" style="border-top:0" onclick="sheetCierre()">
         <div class="thumb sm t-lacteo">🌙</div>
         <div class="tx"><div class="when">A partir de las 22:00</div><b>¿Cómo ha ido hoy?</b></div>
@@ -3348,6 +3422,12 @@ function confirmarSemana(){
       La tanda del ${textoTanda(1).toLowerCase()} y la lista de la compra se calculan sobre esta semana.
       Se puede seguir cambiando platos sueltos.</div>
     <button class="cta" style="margin-top:14px" onclick="closeSheet()">Hecho</button>`);
+}
+/* Un solo sitio para «ponme la semana que viene delante»: si no hay nada, la
+   genera; si ya hay algo, la enseña para revisarla. */
+function prepararSemana(){
+  ir('menu'); TABM='s2';
+  if(!MENU2.some(d=>d&&d.desayuno)) regenerar(); else pintarMenu();
 }
 function regenerar(){
   const r=generarSemana();

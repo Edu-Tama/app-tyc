@@ -1398,23 +1398,25 @@ async function cerrarCompraBD(datos){
       motivo: 'ticket', referencia_id: tk ? tk.id : null});
   }
 
-  /* 3 · la lista se cierra, y lo que no se compró NO se pierde: pasa a una
-     lista nueva. Si no, «lo compro el jueves» equivale a olvidarlo. */
-  await cerrarListaBD(tipo);
-  if (datos.pendientes && datos.pendientes.length){
-    const {data: nueva} = await TYC.db.from('shopping_lists')
-      .insert({household_id: SESION.household, tipo, estado: 'abierta'})
-      .select('id').maybeSingle();
-    if (nueva){
-      LISTA_ID[tipo] = nueva.id;
-      const filas = datos.pendientes.map(i => ({
-        shopping_list_id: nueva.id, ingredient_id: idIng[i.n],
-        cantidad: Math.round(i.g), unidad: 'g', seccion_super: i.sec,
-        envases: i.envases, formato_g: i.formato
-      })).filter(f => f.ingredient_id);
-      if (filas.length) await TYC.db.from('shopping_items').insert(filas);
-    }
+  /* 3 · LA LISTA NO SE CIERRA: se le quita lo comprado.
+     Antes cada compra cerraba la lista y abría otra con lo pendiente. En doce
+     días eso dejó SIETE listas encadenadas, cada una pariendo la siguiente, y
+     14 artículos arrastrados que nadie compró nunca. La lista no es un
+     documento que se archiva: es el estado de lo que falta en casa. Lo
+     comprado sale de ella y entra en la despensa; lo que no, se queda donde
+     estaba, con su marca de «no había» si la tenía. */
+  if (listaId && cogidos.length){
+    const ids = cogidos.map(c => idIng[c.n]).filter(Boolean);
+    if (ids.length)
+      await TYC.db.from('shopping_items')
+        .delete().eq('shopping_list_id', listaId).in('ingredient_id', ids);
   }
+  /* Y lo que sigue pendiente vuelve a quedar sin marcar: la compra de hoy ya
+     está registrada, y arrastrar «cogido» de una compra vieja engaña. */
+  if (listaId)
+    await TYC.db.from('shopping_items')
+      .update({cogido:false, cantidad_real:null, marcado_por:null, marcado_at:null})
+      .eq('shopping_list_id', listaId).eq('cogido', true);
 
   /* Y a partir de aquí, la despensa y la lista que se ven son las nuevas. */
   await hidratarDespensa();
@@ -1637,6 +1639,42 @@ async function hidratarExcepciones(){
 }
 
 /* 3 · lo que entra sin ticket: huerta, regalo, la frutería de la esquina. */
+/* CUADRAR LA DESPENSA CON LA REALIDAD.
+   guardarDespensaBD SUMA lo que entra. Para un recuento hace falta lo otro:
+   decir «de esto hay 400 g» y que la app se ajuste, apuntando la diferencia
+   como lo que es —un ajuste, no una compra ni una comida—. Sin esta pieza
+   ningún inventario cuadra nunca: se desvía y no hay forma de volver. */
+async function ajustarDespensaBD(nombre, gReal){
+  const {data: ing} = await TYC.db.from('ingredients')
+    .select('id').eq('nombre', nombre).maybeSingle();
+  if (!ing) return {error:'ingrediente desconocido'};
+
+  const {data: filas} = await TYC.db.from('pantry')
+    .select('id, cantidad').eq('ingredient_id', ing.id)
+    .order('caducidad', {ascending:true});
+  const actual = (filas || []).reduce((s, f) => s + (+f.cantidad), 0);
+  const delta = Math.round(gReal - actual);
+  if (!delta) return {data:'sin cambios'};
+
+  if (!filas || !filas.length){
+    await TYC.db.from('pantry').insert({household_id:SESION.household,
+      ingredient_id:ing.id, cantidad:gReal, unidad:'g', origen:'otra_tienda',
+      precio_referencia:(typeof PRECIO !== 'undefined' ? PRECIO[nombre] : null) || null});
+  } else {
+    /* Todo el ajuste va a la primera fila (la que caduca antes) y las demás se
+       dejan como están: partir un ajuste entre lotes sería inventarse de dónde
+       sobra o falta. */
+    const primera = filas[0];
+    await TYC.db.from('pantry').update({cantidad: Math.max(0, +primera.cantidad + delta),
+      actualizado_at:new Date().toISOString()}).eq('id', primera.id);
+  }
+
+  await TYC.db.from('pantry_movements').insert({household_id:SESION.household,
+    ingredient_id:ing.id, cantidad:delta, origen:'ajuste', motivo:'ajuste_mensual'});
+  await hidratarDespensa();
+  return {data:{delta}};
+}
+
 async function guardarDespensaBD(a){
   const {data: ing} = await TYC.db.from('ingredients')
     .select('id').eq('nombre', a.n).maybeSingle();
@@ -1755,6 +1793,12 @@ async function arrancarApp(){
 
   const {data:{session}} = await TYC.db.auth.getSession();
   if (!session) return pantallaAcceso();
+  /* Que haya sesión guardada en el móvil no quiere decir que valga. Se le
+     pregunta al servidor: si ya no te reconoce, se pide entrar otra vez EN VEZ
+     de dejar la app funcionando a medias, dejando marcar comidas que nunca se
+     van a guardar. */
+  if (!(await sesionValida()))
+    return pantallaAcceso('Tu sesión ha caducado. Vuelve a entrar con tu correo.');
 
   try {
     SESION = {id:session.user.id, email:session.user.email, perfil:'c'};
@@ -1801,6 +1845,7 @@ async function arrancarApp(){
     GUARDAR_EXCEPCION = guardarExcepcionBD;
     QUITAR_EXCEPCION  = quitarExcepcionBD;
     GUARDAR_DESPENSA  = guardarDespensaBD;
+    AJUSTAR_DESPENSA  = ajustarDespensaBD;
     GUARDAR_CONSERVA  = guardarConservaBD;
     GUARDAR_SEMANA2   = guardarSemana2;
     GUARDAR_CADENA    = guardarCadena;
@@ -1870,4 +1915,118 @@ async function entrar(){
     /Invalid login/i.test(error.message) ? 'Correo o contraseña incorrectos' : error.message);
   arrancarApp();
 }
-async function salir(){ await TYC.db.auth.signOut(); location.reload(); }
+async function salir(){
+  try { await TYC.db.auth.signOut(); } catch(e){}
+  /* signOut() borra la sesión guardada. Si por lo que sea no pudiera, se borra
+     a mano: el objetivo es que al recargar la app pida el correo, pase lo que
+     pase. Es la salida de emergencia que no existía. */
+  try {
+    for (const k of Object.keys(localStorage))
+      if (/^sb-|supabase/.test(k)) localStorage.removeItem(k);
+  } catch(e){}
+  location.reload();
+}
+window.salir = salir;
+
+/* Antes de salir, avisar de lo que se perdería. */
+function sheetSalir(){
+  const pend = leerCola().length + leerFallos().length;
+  openSheet(`<h3>Salir de la sesión</h3>
+    <div class="meta" style="margin-bottom:14px">${SESION.email || ''}</div>
+    ${pend ? `<div class="banner" style="border-color:var(--bad)">
+      <b class="t">${pend} ${pend===1?'cosa sin guardar':'cosas sin guardar'}</b>
+      Se perderían al salir. Míralas antes.</div>
+      <button class="opt" onclick="sheetPendientes()">Ver qué hay pendiente</button>` : ''}
+    <div class="note" style="margin:12px 0">Todo lo registrado sigue en la base: salir no borra nada
+      tuyo. Al volver a entrar tendrás que poner el correo y la contraseña.</div>
+    <button class="cta" style="background:var(--crit)" onclick="salir()">Salir ahora</button>
+    <button class="opt" style="margin-top:8px" onclick="closeSheet()">Mejor no</button>`);
+}
+window.sheetSalir = sheetSalir;
+
+/* ¿SE ESTÁ GUARDANDO? La pregunta que costó dos días de comidas perdidas.
+   Escribe de verdad, lee de vuelta y borra. No se fía de que no haya error:
+   comprueba que la fila está. */
+async function comprobarGuardado(){
+  openSheet('<h3>Comprobando…</h3><div class="meta">Escribiendo una marca de prueba.</div>');
+  const clave = 'prueba_' + Date.now();
+  const linea = (ok, t, d) => `<div class="qr">
+    <div class="thumb sm ${ok?'t-verdura':'t-off'}" style="${ok?'':'color:var(--bad)'}">${ok?'✓':'✗'}</div>
+    <div class="tx"><b>${t}</b>${d?`<div class="note" style="margin:1px 0 0">${d}</div>`:''}</div></div>`;
+  const pasos = [];
+  let todoBien = true;
+
+  /* 1 · ¿la base sabe quién eres AHORA? No vale la sesión guardada en el
+        móvil: hay que preguntárselo al servidor. */
+  let quien = null, motivo = '';
+  try {
+    const {data, error} = await TYC.db.auth.getUser();
+    if (error) motivo = error.message; else quien = data && data.user;
+  } catch(e){ motivo = e.message || String(e); }
+  pasos.push(linea(!!quien, quien ? 'Tu sesión es válida' : 'Tu sesión NO es válida',
+                   quien ? quien.email : (motivo || 'el servidor no te reconoce')));
+  if (!quien) todoBien = false;
+
+  if (quien){
+    /* 2 · escribir de verdad */
+    const {error: eW} = await TYC.db.from('shared_checks').insert({
+      household_id: SESION.household, fecha: hoyISO(), clave, estado: 'hecho',
+      marcado_por: SESION.id, marcado_at: new Date().toISOString()});
+    pasos.push(linea(!eW, eW ? 'No se puede escribir' : 'Escribe bien',
+                     eW ? eW.message : ''));
+    if (eW) todoBien = false;
+
+    /* 3 · leerlo de vuelta: que no haya error no significa que esté */
+    if (!eW){
+      const {data: leido} = await TYC.db.from('shared_checks')
+        .select('clave').eq('clave', clave).limit(1);
+      const hay = (leido || []).length > 0;
+      pasos.push(linea(hay, hay ? 'Y se vuelve a leer' : 'Se escribió pero no se puede leer',
+                       hay ? '' : 'la base lo acepta pero no te lo devuelve'));
+      if (!hay) todoBien = false;
+      await TYC.db.from('shared_checks').delete().eq('clave', clave);
+    }
+  }
+
+  /* 4 · lo que haya atascado */
+  const pend = leerCola().length + leerFallos().length;
+  if (pend) pasos.push(linea(false, pend + (pend===1?' cosa sin guardar':' cosas sin guardar'),
+                             'tócalas en el aviso de arriba para verlas'));
+
+  openSheet(`<h3>${todoBien && !pend ? 'Se está guardando bien' : 'Aquí está el problema'}</h3>
+    <div class="meta" style="margin-bottom:12px">${VERSION_APP} · ${SESION.email || ''}</div>
+    ${pasos.join('')}
+    ${!quien ? `<div class="banner" style="margin-top:12px; border-color:var(--bad)">
+      <b class="t">Tu sesión ha caducado</b>
+      Todo lo que marques ahora mismo se pierde. Sal de la sesión y vuelve a entrar.</div>
+      <button class="cta" style="background:var(--crit); margin-top:8px" onclick="sheetSalir()">Salir de la sesión</button>`
+    : `<button class="opt" style="margin-top:12px" onclick="closeSheet()">Cerrar</button>`}`);
+}
+window.comprobarGuardado = comprobarGuardado;
+
+/* LA SESIÓN SE COMPRUEBA CONTRA EL SERVIDOR, NO CONTRA EL MÓVIL.
+   getSession() solo mira lo que hay guardado en el teléfono, y eso sigue ahí
+   aunque haya dejado de valer. Por eso la app dejaba marcar comidas durante
+   dos días sin enterarse de que ya no era nadie para la base. */
+let SESION_CADUCADA = false;
+async function sesionValida(){
+  try {
+    const {data, error} = await TYC.db.auth.getUser();
+    return !error && !!(data && data.user);
+  } catch(e){ return false; }
+}
+function avisarSesionCaducada(){
+  SESION_CADUCADA = true;
+  const el = document.getElementById('aviso-cola');
+  if (!el) return;
+  el.insertAdjacentHTML('afterbegin',
+    `<div class="banner tap" style="margin-bottom:11px; border-color:var(--bad)" onclick="sheetSalir()">
+      <b class="t">Tu sesión ha caducado</b>
+      Lo que marques ahora NO se guarda. Toca aquí para volver a entrar.</div>`);
+}
+/* Y se vuelve a comprobar cada vez que se abre la app, que es justo cuando
+   caduca sin avisar. */
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState !== 'visible' || !TYC.db || TYC.demo) return;
+  if (!(await sesionValida()) && !SESION_CADUCADA) avisarSesionCaducada();
+});

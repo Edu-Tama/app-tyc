@@ -1193,7 +1193,7 @@ let CERRAR_LISTA  = null;
 let GUARDAR_OFICINA = null;
 /* Los ganchos de registro. Los rellena hidratar.js cuando hay base de datos;
    sin ella la app sigue funcionando en local, pero avisando de que no guarda. */
-let BORRAR_COMIDA=null;
+let BORRAR_COMIDA=null, AJUSTAR_DESPENSA=null;
 let GUARDAR_COMIDA=null, GUARDAR_MED=null, GUARDAR_PESO=null, GUARDAR_CINTURA=null,
     GUARDAR_CIERRE=null, GUARDAR_CHECK=null, GUARDAR_ENTRENO=null, GUARDAR_CARDIO=null,
     GUARDAR_PUNT=null, GUARDAR_COMPRA=null, REABRIR_LISTA=null, GUARDAR_GASTO=null,
@@ -1344,6 +1344,29 @@ function ajusteDia(kcal, prot, o){
   return {f: +f.toFixed(3), kcal: Math.round(k), prot: Math.round(p)};
 }
 
+/* CUÁNTO APROVECHA UN PLATO LO QUE YA HAY EN CASA.
+   Devuelve entre 0 y 1: la parte de lo que necesita que ya está en la despensa.
+   Sin esto, el generador montaba menús sin mirar el armario, la lista volvía a
+   pedir skyr con 850 g en la nevera, y en una semana se acumularon 51 kg. */
+function aprovecha(k){
+  let hay = 0, total = 0;
+  for (const [n, c, u] of R[k].ing){
+    if (ING[n][4] === 'f') continue;             // aceite, especias: no cuentan
+    const g = gramos(n, escala(n,c,u,'c'), u) + gramos(n, escala(n,c,u,'t'), u);
+    total += g;
+    hay += Math.min(g, DESPENSA[n] ? DESPENSA[n][0] : 0);
+  }
+  return total ? hay / total : 0;
+}
+/* Elegir al azar, pero entre los que mejor aprovechan lo que hay. Se queda con
+   el tercio superior para que siga habiendo variedad: si cogiera siempre el
+   mejor, comeríais lo mismo hasta vaciar la nevera. */
+function rndAprovecha(arr){
+  if (!arr || !arr.length) return null;
+  const ord = [...arr].sort((a, b) => aprovecha(b) - aprovecha(a));
+  const top = ord.slice(0, Math.max(3, Math.ceil(ord.length * 0.35)));
+  return top[Math.floor(Math.random() * top.length)];
+}
 function generar(opts={}){
   const usos = {}, semana = [];
   const inc = k => usos[k] = (usos[k]||0)+1;
@@ -1357,7 +1380,7 @@ function generar(opts={}){
     while (intento++ < 400 && !elegido){
       const cand = {};
       // A5: de lunes a viernes la comida va en túper
-      cand.comida = rnd(pool('comida').filter(k => libre(k,d) && (!LABORAL.includes(dia) || R[k].tupper >= 1)));
+      cand.comida = rndAprovecha(pool('comida').filter(k => libre(k,d) && (!LABORAL.includes(dia) || R[k].tupper >= 1)));
       // A9: si ese día hay alguien en la oficina, lo que se lleva tiene que poder llevarse.
       // No es lo mismo que aguantar en túper: una tostada aguanta en la nevera y
       // llega blanda a las 11.
@@ -1369,12 +1392,12 @@ function generar(opts={}){
       const hayOficina = fecha && (enOficina('c',fecha) || enOficina('t',fecha));
       const hayDesayunoFuera = fecha && (desayunoFuera('c',fecha) || desayunoFuera('t',fecha));
       // A6: miércoles y viernes, cena lista en ≤15 min
-      cand.cena = rnd(pool('cena').filter(k => libre(k,d) && k !== cand.comida &&
+      cand.cena = rndAprovecha(pool('cena').filter(k => libre(k,d) && k !== cand.comida &&
                      (!CENA_RAPIDA.includes(dia) || (R[k].lista||99) <= 15)));
-      cand.desayuno = rnd(pool('desayuno').filter(k => libre(k,d) && (!hayDesayunoFuera || R[k].port >= 1)));
+      cand.desayuno = rndAprovecha(pool('desayuno').filter(k => libre(k,d) && (!hayDesayunoFuera || R[k].port >= 1)));
       const snacks = pool('snack').filter(k => libre(k,d) && (!hayOficina || R[k].port >= 1));
-      cand.media = rnd(snacks);
-      cand.merienda = rnd(snacks.filter(k => k !== cand.media));
+      cand.media = rndAprovecha(snacks);
+      cand.merienda = rndAprovecha(snacks.filter(k => k !== cand.media));
       if (Object.values(cand).some(x => !x)) continue;
 
       const tot = p => MOM.reduce((a,k) => {
